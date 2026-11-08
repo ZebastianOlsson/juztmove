@@ -94,9 +94,9 @@ h1.h1sm{font-size:24px;line-height:1.1}
 .checkin{border-left:4px solid var(--mob)}.linkbtn{background:none;border:0;padding:0;text-align:left;text-decoration:underline;cursor:pointer;font:inherit}
 .ci-opt{justify-content:flex-start;text-align:left;width:100%}.ci-opt[aria-pressed="true"]{border-color:var(--ink);background:var(--accent-soft)}
 .ci-part{flex-wrap:wrap;gap:6px}
-:root{--c-s:#0E7A5A;--c-r:#C2410C;--c-m:#5B4BB7;--h0:#E9ECE6;--h1:#C4E3D5;--h2:#86C7AB;--h3:#3E9A75;--h4:#0E6B4F}
-:root[data-theme="dark"]{--c-s:#2AA87B;--c-r:#DA7235;--c-m:#8E7EE2;--h0:#222C28;--h1:#1F4637;--h2:#26694F;--h3:#2E9A72;--h4:#5FD3A6}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c-s:#2AA87B;--c-r:#DA7235;--c-m:#8E7EE2;--h0:#222C28;--h1:#1F4637;--h2:#26694F;--h3:#2E9A72;--h4:#5FD3A6}}
+:root{--c-s:#0E7A5A;--c-r:#C2410C;--c-m:#5B4BB7;--c-o:#8A918D;--h0:#E9ECE6;--h1:#C4E3D5;--h2:#86C7AB;--h3:#3E9A75;--h4:#0E6B4F}
+:root[data-theme="dark"]{--c-s:#2AA87B;--c-r:#DA7235;--c-m:#8E7EE2;--c-o:#8F9692;--h0:#222C28;--h1:#1F4637;--h2:#26694F;--h3:#2E9A72;--h4:#5FD3A6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c-s:#2AA87B;--c-r:#DA7235;--c-m:#8E7EE2;--c-o:#8F9692;--h0:#222C28;--h1:#1F4637;--h2:#26694F;--h3:#2E9A72;--h4:#5FD3A6}}
 h4{margin:6px 0 0;font-size:14px;font-weight:700}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:10px}
 .tiles .k{font-family:var(--display);font-size:28px;font-weight:700;line-height:1.05}
@@ -179,7 +179,7 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .day.today{outline:2px solid var(--ink)}
 .day .dn{font-family:var(--display);font-size:15px;font-weight:700;text-transform:uppercase}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--line)}
-.dot.s{background:var(--accent)} .dot.r{background:var(--run)} .dot.m{background:var(--mob)}
+.dot.s{background:var(--accent)} .dot.r{background:var(--run)} .dot.m{background:var(--mob)} .dot.o{background:var(--c-o)}
 .day .tag{font-size:11px;line-height:1.1}
 .day .done{font-size:16px;color:var(--good)}
 .list{display:flex;flex-direction:column}
@@ -649,10 +649,17 @@ const RUN_EASY=['r-fartlek','r-lat','r-lugn','r-lang','r-5d','r-5f'], RUN_PROG=[
 function rpeTarget(r){if(r.track==='nyb'||RUN_EASY.includes(r.id))return 5;if(RUN_PROG.includes(r.id))return 6.5;return 7}
 function passTypeLabel(r){return r.track==='nyb'?'Gång/jogg':RUN_EASY.includes(r.id)?'Lätt pass':RUN_PROG.includes(r.id)?'Progressivt':r.id==='r-backe'||r.id==='r-5c'?'Backe':'Intervaller'}
 function parseTenK(v){const n=String(v||'').replace(',','.').match(/\d+(\.\d+)?/g);if(!n)return null;const m=Math.max(...n.map(Number));return m>=25&&m<=120?m:null}
-function v10Base(){const st=S.settings;if(+st.v10)return +st.v10;const t=parseTenK(st.tenK);if(t)return 600/t;return ({nyb:7.5,'5k':10.5,'10k':12})[st.runLevel||'10k']}
+/* 5 km-tid i minuter (t.ex. 30, 29,5 eller 28:30). Rimligt intervall 14–60 min. */
+function parseFiveK(v){const raw=String(v||'').trim();const ms=raw.match(/^(\d{1,2})[:.](\d{2})$/);if(ms){const m=+ms[1]+ +ms[2]/60;return m>=14&&m<=60?m:null}
+  const n=raw.replace(',','.').match(/\d+(\.\d+)?/g);if(!n)return null;const m=Math.max(...n.map(Number));return m>=14&&m<=60?m:null}
+/* Riegel: T10 = T5 × 2^1,06 */
+const RIEGEL=Math.pow(2,1.06);
+function fiveKto10(t){return t*RIEGEL}
+function v10FromFiveK(t){return Math.round(600/fiveKto10(t)*100)/100}
+function v10Base(){const st=S.settings;if(+st.v10)return +st.v10;const t=parseTenK(st.tenK);if(t)return 600/t;const f=parseFiveK(st.fiveK);if(f)return 600/fiveKto10(f);return ({nyb:7.5,'5k':10.5,'10k':12})[st.runLevel||'10k']}
 function comebackOn(){const c=S.settings.comebackUntil;return !!c&&c>=today()}
 function v10(){return v10Base()*(comebackOn()?0.95:1)}
-function runBase(){const V=v10();return {jog:V*0.70,hard:V,v10:V,from:+S.settings.v10?'plan':parseTenK(S.settings.tenK)?'tenk':'start'}}
+function runBase(){const V=v10();return {jog:V*0.70,hard:V,v10:V,from:+S.settings.v10?'plan':parseTenK(S.settings.tenK)?'tenk':parseFiveK(S.settings.fiveK)?'fivek':'start'}}
 function speedHint(){return runBase()}
 const fmtK=x=>(Math.round(x*10)/10).toFixed(1).replace('.',',');
 const pace=k=>{const s=Math.round(3600/k);return Math.floor(s/60)+':'+pad(s%60)};
@@ -1515,7 +1522,7 @@ let OB=null;
 const OB_STEPS=['me','goal','steps','days','split','strength','run','issues','sit','preview'];
 function obDefaults(){const st=S.settings;return {sex:st.sex||'',goal:st.goal||'balans',stepsNow:st.stepsNow??2,days:(st.strength||0)+(st.cardio||0)||4,minutes:st.minutes||45,
   strength:st.strength??2,cardio:st.cardio??2,level:st.level||2,equip:st.equip||'gym',follow:st.mode==='program'?'dp':'',runLevel:st.runLevel||'5k',
-  runWhere:st.runPref||'auto',runStyle:st.runStyle||'intervaller',issues:[...(st.issues||[])],sit:st.sit||'mycket',knee:st.kneeFocus?1:0,plan:null}}
+  runWhere:st.runPref||'auto',runStyle:st.runStyle||'intervaller',fiveK:String(st.fiveK||''),tenK:String(st.tenK||''),nybJog:+st.nybJog||'',issues:[...(st.issues||[])],sit:st.sit||'mycket',knee:st.kneeFocus?1:0,plan:null}}
 function splitFromGoal(goal,d){
   if(d<=0)return [0,0];
   const m={rumpa:d>=4?d-1:d,form:Math.min(2,d),rorelse:Math.round(d/2),styrka:d>=4?d-1:d,muskler:d>=4?d-1:d,kondition:Math.min(2,Math.floor(d/3)),balans:Math.max(1,Math.round(d*0.6))}[goal]??Math.round(d/2);
@@ -1527,6 +1534,11 @@ function obOpt(key,val,label,sub,multi){
   return `<button class="opt" type="button" data-ob="${key}" data-val="${esc(val)}" ${multi?'data-multi="1"':''} aria-pressed="${on}"><strong>${esc(label)}</strong>${sub?`<span class="small muted">${esc(sub)}</span>`:''}</button>`;
 }
 function stepper(key,label,min,max){return `<div class="row between"><span>${label}</span><div class="row" style="gap:6px"><button class="btn ghost sm" type="button" data-obstep="${key}" data-d="-1" aria-label="Färre">−</button><strong class="num" style="min-width:24px;text-align:center">${OB.a[key]}</strong><button class="btn ghost sm" type="button" data-obstep="${key}" data-d="1" aria-label="Fler">+</button></div></div>`}
+function obRunTime(a){
+  if(a.runLevel==='nyb')return `<div class="eyebrow" style="margin-top:12px">Vilken fart joggar du lugnt i? (km/h)</div><div class="chips wrap">${[[6,'6'],[7,'7'],[8,'8'],['','Vet inte']].map(([v,l])=>`<button class="chip" type="button" data-ob="nybJog" data-val="${v}" aria-pressed="${a.nybJog===v}">${l}</button>`).join('')}</div><p class="small muted" style="margin:4px 0 0">Valfritt. Vet du inte börjar appen på 7 km/h och du kan ändra det sedan.</p>`;
+  const five=a.runLevel==='5k',key=five?'fiveK':'tenK';
+  return `<label class="f" for="obTime" style="margin-top:12px">Din ${five?'5':'10'} km-tid (minuter, t.ex. ${five?30:50})<input id="obTime" type="text" inputmode="decimal" autocomplete="off" data-obtime="${key}" value="${esc(a[key]||'')}" placeholder="Valfritt"></label>
+    <div class="row" style="gap:6px;align-items:center"><button class="btn ghost sm" type="button" data-obtimeclear="${key}">Vet inte</button><span class="small muted">Lämnas tomt börjar appen på en standardfart för nivån.</span></div>`}
 function renderOB(){
   const a=OB.a, step=OB_STEPS[OB.i];
   if(step==='run'&&a.cardio===0){OB.i+=OB._dir||1;return renderOB()}
@@ -1551,6 +1563,7 @@ function renderOB(){
     ${DP_SEQ.length?`<div class="eyebrow" style="margin-top:12px">Följer du redan ett program?</div><div class="opts">${obOpt('follow','dp','Ja, mitt eget program','Appen fortsätter där du är')}${obOpt('follow','','Nej, gör pass åt mig')}</div>`:''}`;
   if(step==='run') body=`<h1>Om din löpning</h1>
     <div class="eyebrow">Vad klarar du idag?</div><div class="opts">${obOpt('runLevel','nyb','Inte 5 km än','Vi börjar med gång och jogg')}${obOpt('runLevel','5k','Runt 5 km','Mot 10 km')}${obOpt('runLevel','10k','10 km eller mer','Intervaller och tempo')}</div>
+    ${obRunTime(a)}
     <div class="eyebrow" style="margin-top:12px">Var springer du?</div><div class="opts">${obOpt('runWhere','ute','Ute')}${obOpt('runWhere','band','Löpband')}${obOpt('runWhere','auto','Båda','Band på vintern, ute annars')}</div>
     <div class="eyebrow" style="margin-top:12px">Vad gillar du mest?</div><div class="opts">${obOpt('runStyle','intervaller','Intervaller och korta pass')}${obOpt('runStyle','lugnt','Lugna, längre pass')}</div>`;
   if(step==='issues') body=`<h1>Något som krånglar?</h1><p class="muted">Övningar som belastar området väljs bort. Välj inget om allt känns bra.</p><div class="opts">
@@ -1587,6 +1600,11 @@ function obSave(){
     weekPlan:a.plan,strength:a.plan.filter(x=>x==='s').length,cardio:a.plan.filter(x=>x==='r').length,
     mode:a.follow==='dp'&&DP_SEQ.length?'program':'gen',genCur:null,splitIdx:0,runStep:st.runStep||0,onb:{at:today()}});
   if(a.issues.includes('gravid')){st.level=1;if(st.runLevel!=='nyb')st.runLevel='nyb'}
+  if(a.cardio>0){
+    if(st.runLevel==='nyb'){st.nybJog=+a.nybJog||null}
+    else if(st.runLevel==='5k'){const raw=String(a.fiveK||'').trim(),f=parseFiveK(raw);if(f&&(raw!==String(st.fiveK||'')||!+st.v10)){st.fiveK=raw;st.v10=v10FromFiveK(f)}}
+    else {const raw=String(a.tenK||'').trim(),t=parseTenK(raw);if(t&&(raw!==String(st.tenK||'')||!+st.v10)){st.tenK=raw;st.v10=Math.round(600/t*100)/100}}
+  }
   markDirty('settings');sugCache=null;sugIdx=0;OB=null;closeSheet();toast('Ditt schema är klart');
 }
 function bindOB(root){
@@ -1597,7 +1615,11 @@ function bindOB(root){
     const y=$('#sheet').scrollTop;renderOB();$('#sheet').scrollTop=y});
   root.querySelectorAll('[data-obstep]').forEach(b=>b.onclick=()=>{const k=b.dataset.obstep,a=OB.a;a[k]=Math.max(0,Math.min(k==='strength'?6:5,a[k]+ +b.dataset.d));if(a.strength+a.cardio>7)a[k]--;a.plan=null;renderOB()});
   root.querySelectorAll('[data-obday]').forEach(b=>b.onclick=()=>{const i=+b.dataset.obday,p=OB.a.plan;p[i]={m:'s',s:'r',r:'m'}[p[i]];renderOB()});
-  root.querySelectorAll('[data-obnext]').forEach(b=>b.onclick=()=>{OB._dir=1;if(OB.i===OB_STEPS.length-1)return obSave();if(OB_STEPS[OB.i]==='split')OB.a.plan=null;OB.i++;renderOB();$('#sheet').scrollTop=0});
+  root.querySelectorAll('[data-obtime]').forEach(i=>i.oninput=()=>{OB.a[i.dataset.obtime]=i.value});
+  root.querySelectorAll('[data-obtimeclear]').forEach(b=>b.onclick=()=>{OB.a[b.dataset.obtimeclear]='';const i=$('#obTime');if(i)i.value=''});
+  root.querySelectorAll('[data-obnext]').forEach(b=>b.onclick=()=>{OB._dir=1;
+    if(OB_STEPS[OB.i]==='run'){const a=OB.a,five=a.runLevel==='5k',raw=String((five?a.fiveK:a.tenK)||'').trim();
+      if(a.runLevel!=='nyb'&&raw&&!(five?parseFiveK(raw):parseTenK(raw))){toast(five?'Skriv 5 km-tiden i minuter, t.ex. 30':'Skriv 10 km-tiden i minuter, t.ex. 50');return}}if(OB.i===OB_STEPS.length-1)return obSave();if(OB_STEPS[OB.i]==='split')OB.a.plan=null;OB.i++;renderOB();$('#sheet').scrollTop=0});
   root.querySelectorAll('[data-obback]').forEach(b=>b.onclick=()=>{OB._dir=-1;OB.i=Math.max(0,OB.i-1);renderOB()});
 }
 function adaptSteps(){
@@ -1686,9 +1708,56 @@ function viewPast(){
    <section class="card stack"><h3>Pass den här dagen</h3>
     ${L.length?`<div class="list">${L.map(logRow).join('')}</div>`:'<p class="small muted" style="margin:0">Inget loggat.</p>'}
     <div class="lab" style="font-weight:600;font-size:14px;margin-top:4px">Lägg till ett pass</div>
-    <div class="row" style="gap:6px">${sw?`<button class="btn" type="button" data-pastworkout="${sw.i}|${k}">Styrkepass med vikter</button>`:''}<button class="btn ghost" type="button" data-quicklog="styrka|${k}">Styrka</button><button class="btn ghost" type="button" data-quicklog="löpning|${k}">Löpning</button><button class="btn ghost" type="button" data-quicklog="rörlighet|${k}">Rörlighet</button></div>
+    <div class="row" style="gap:6px">${sw?`<button class="btn" type="button" data-pastworkout="${sw.i}|${k}">Styrkepass med vikter</button>`:''}<button class="btn ghost" type="button" data-quicklog="styrka|${k}">Styrka</button><button class="btn ghost" type="button" data-quicklog="löpning|${k}">Löpning</button><button class="btn ghost" type="button" data-quicklog="rörlighet|${k}">Rörlighet</button><button class="btn ghost" type="button" data-otherlog="${k}">Annan träning</button></div>
     ${sw?`<p class="small muted" style="margin:0">”Med vikter” öppnar ${esc(wTitle(sw))}, ditt nästa styrkepass, så att du kan fylla i set och vikter.</p>`:''}</section>
    <button class="btn ghost" type="button" data-dayoff="0">Tillbaka till idag</button></div>`;
+}
+/* ---------- Annan träning (extra, påverkar inte schemakön) ---------- */
+const OTHER_ACT=[['lutgang','Lutande gång (band)'],['cykel','Cykel'],['simning','Simning'],['padel','Padel/racket'],['yoga','Yoga/pilates'],['promenad','Långpromenad'],['annat','Annat']];
+const OTHER_TITLE={lutgang:'Lutande gång',cykel:'Cykel',simning:'Simning',padel:'Padel/racket',yoga:'Yoga/pilates',promenad:'Långpromenad',annat:'Annan träning'};
+const decStr=x=>String(x).replace('.',',');
+function otherExtra(l){return [l.min?decStr(l.min)+' min':'',+l.kmh?fmtK(+l.kmh)+' km/h':'',l.incline!=null&&l.incline!==''?decStr(l.incline)+' %':'',+l.intensity?l.intensity+'/10':''].filter(Boolean).join(' · ')}
+let oth=null;
+function showOtherLog(k,preset){const p=typeof preset==='string'?{act:preset}:(preset||{});
+  oth={k:k||today(),act:p.act||'lutgang',min:p.min!=null?String(p.min):'',int:0,kmh:p.kmh!=null?decStr(p.kmh):'5',inc:p.inc!=null?decStr(p.inc):'10',title:''};renderOtherLog()}
+function othRead(){if(!oth)return;const g=id=>{const e=document.getElementById(id);return e?e.value:null};
+  const m=g('othMin'),t=g('othT'),v=g('othKmh'),i=g('othInc');if(m!=null)oth.min=m;if(t!=null)oth.title=t;if(v!=null)oth.kmh=v;if(i!=null)oth.inc=i}
+function renderOtherLog(){const {k,act}=oth,dt=new Date(k+'T12:00:00'),lut=act==='lutgang';
+  openSheet(`<header class="top"><div><div class="date cap">${esc(k===today()?'Idag':dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'}))}</div><h1>Annan träning</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+   <div class="stack"><p class="small muted" style="margin:0">Räknas som extra träning. Schemat och dagens pass påverkas inte.</p>
+   <section class="card stack">
+    <div class="setfield"><div class="lab">Vad gjorde du?</div><div class="chips wrap">${OTHER_ACT.map(([v,l])=>`<button class="chip" type="button" data-othact="${v}" aria-pressed="${act===v}">${esc(l)}</button>`).join('')}</div></div>
+    ${act==='annat'?`<label class="f" for="othT">Beskriv kort<input id="othT" type="text" autocomplete="off" placeholder="t.ex. Klättring" value="${esc(oth.title)}"></label>`:''}
+    <label class="f" for="othMin">Minuter<input id="othMin" type="text" inputmode="decimal" autocomplete="off" placeholder="t.ex. 30" value="${esc(oth.min)}"></label>
+    ${lut?`<div class="grid2"><label class="f" for="othKmh">Fart (km/h)<input id="othKmh" type="text" inputmode="decimal" autocomplete="off" value="${esc(oth.kmh)}"></label><label class="f" for="othInc">Lutning (%)<input id="othInc" type="text" inputmode="decimal" autocomplete="off" value="${esc(oth.inc)}"></label></div>`:''}
+    <div class="setfield"><div class="lab">Hur jobbigt var det? (1–10, valfritt)</div><div class="chips wrap">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" type="button" data-othint="${n}" aria-pressed="${oth.int===n}">${n}</button>`).join('')}</div></div>
+   </section></div>`);
+  stickyBar(`<button class="btn ghost" type="button" data-close>Avbryt</button><button class="btn" type="button" data-othsave>Spara</button>`);
+}
+function saveOtherLog(){othRead();const {k,act}=oth;const num=x=>{const v=parseFloat(String(x||'').replace(',','.'));return isNaN(v)?null:v};
+  const min=num(oth.min);if(!(min>0)){toast('Skriv hur många minuter');return}
+  const title=act==='annat'?(String(oth.title||'').trim()||OTHER_TITLE.annat):OTHER_TITLE[act];
+  const e={type:'annat',date:k,activity:act,title,min:Math.round(min*10)/10};
+  if(oth.int)e.intensity=oth.int;
+  if(act==='lutgang'){const v=num(oth.kmh),i=num(oth.inc);if(v>0)e.kmh=v;if(i!=null&&i>=0)e.incline=i}
+  if(k<today())e.retro=1;
+  addLog(e);oth=null;closeSheet();toast(title+' sparat')}
+function showMoreAfter(k){
+  openSheet(`<header class="top"><div><div class="date">Passet är sparat</div><h1>Lägga till något mer?</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+   <div class="stack"><p class="small muted" style="margin:0">Till exempel lutande gång på bandet efter passet. Det räknas som extra och påverkar inte schemat.</p>
+   <section class="card stack">
+    <button class="btn ghost" type="button" data-othquick="15|${k}">Lutande gång 15 min</button>
+    <button class="btn ghost" type="button" data-othquick="20|${k}">Lutande gång 20 min</button>
+    <button class="btn ghost" type="button" data-otherlog="${k}">Annat…</button>
+   </section></div>`);
+  stickyBar(`<button class="btn" type="button" data-close>Nej tack, klart</button>`);
+}
+function bindOther(root){
+  root.querySelectorAll('[data-otherlog]').forEach(b=>b.onclick=()=>showOtherLog(b.dataset.otherlog||today(),b.dataset.otheract||''));
+  root.querySelectorAll('[data-othquick]').forEach(b=>b.onclick=()=>{const [m,k]=b.dataset.othquick.split('|');showOtherLog(k,{act:'lutgang',min:+m,kmh:5,inc:10})});
+  root.querySelectorAll('[data-othact]').forEach(b=>b.onclick=()=>{othRead();oth.act=b.dataset.othact;const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y});
+  root.querySelectorAll('[data-othint]').forEach(b=>b.onclick=()=>{const n=+b.dataset.othint;oth.int=oth.int===n?0:n;root.querySelectorAll('[data-othint]').forEach(x=>x.setAttribute('aria-pressed',String(+x.dataset.othint===oth.int)))});
+  root.querySelectorAll('[data-othsave]').forEach(b=>b.onclick=saveOtherLog);
 }
 let qlog=null;
 function showQuickLog(type,k){qlog={type,k,feel:6};renderQuickLog()}
@@ -1779,7 +1848,7 @@ function viewToday(){
       <div class="row"><span class="pill run">${r.where==='band'?'Löpband':r.where==='ute'?'Utomhus':'Ute eller band'}</span><span class="pill line">${catTxt}</span><span class="small muted num">ca ${r.min} min</span></div>
       <p style="margin:0">${esc(r.desc)}</p>
       ${(()=>{const ne=needEasy();return (ne.loadHigh?`<div class="note waitnote">Belastningen senaste veckan är ${Math.round(ne.ratio*100)} % av ditt snitt – över 130 %. Ta ett lättare pass idag.</div>`:'')+(ne.twoHard?'<div class="note waitnote">Två tunga pass i rad – dags för ett lätt pass.</div>':'')})()}
-      <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':'Startvärde – ange din 10 km-tid under Inställningar.'}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
+      <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Inställningar.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
       ${doneRun?`<div class="donebox">✓ Klart för idag · ${[doneRun.min?String(doneRun.min).replace('.',',')+' min':'',doneRun.km?String(doneRun.km).replace('.',',')+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · ')}</div>`:''}
       <details class="plan" ${doneRun?'':'open'}><summary>Så här kör du – minut för minut</summary>${runTable(r)}<p class="small muted" style="margin:8px 0 0">Byt fart på bandet direkt när en ny del börjar – timern säger till. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p></details>
       ${''&&r.where==='band'&&(S.settings.runLevel||'10k')==='10k'?`<div class="note num">Jogg ca <strong>${sp.jog.toFixed(1).replace('.',',')} km/h</strong> · hårda bitar ca <strong>${sp.hard.toFixed(1).replace('.',',')} km/h</strong>${sp.from?' (från ditt senaste pass)':' (justera efter känsla)'}${prev?` · förra gången detta pass: ${prev.rpe?prev.rpe+'/10':esc(prev.feel||'')}`:''}</div>`:''}
@@ -1837,6 +1906,7 @@ function viewToday(){
      <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.walk}" data-toggle="walk" aria-label="Promenad klar">${d.walk?'✓':''}</button><div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
      <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.mob}" data-toggle="mob" aria-label="Rörlighet klar">${d.mob?'✓':''}</button><div class="grow"><strong>Rörlighet</strong><div class="small muted">${esc(mobToday.t)}, ${mobToday.min} min</div></div><button class="btn ghost sm" type="button" data-mob="${mobToday.id}">Starta</button></div>
      <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.steps>=goal}" disabled aria-label="Stegmål nått">${d.steps>=goal?'✓':''}</button><div class="grow"><strong>${goal.toLocaleString('sv-SE')} steg</strong><div class="small muted num">${Math.max(0,goal-d.steps).toLocaleString('sv-SE')} kvar</div></div></div>
+     <div style="padding-top:8px"><button class="btn ghost sm" type="button" data-otherlog="${k}">+ Annan träning</button></div>
    </section>
    ${done.filter(l=>!inHero.has(l)).length?`<section class="card"><h3>${inHero.size?'Mer loggat idag':'Loggat idag'}</h3><div class="list">${done.filter(l=>!inHero.has(l)).map(logRow).join('')}</div></section>`:''}
    <p class="small muted">Sparas ${cloud==='moln'?'i ditt konto och syns på alla enheter':'i den här webbläsaren'}.</p>
@@ -1919,8 +1989,8 @@ function showRunEdit(ts){
   stickyBar(`<button class="btn ghost" type="button" data-close>Avbryt</button><button class="btn run" type="button" data-saveedit="${l.ts}">Spara</button>`);
 }
 function logRow(l){
-  const icon=l.type==='styrka'?'s':l.type==='löpning'?'r':'m';
-  const extra=l.type==='löpning'?[l.km?String(l.km).replace('.',',')+' km':'',l.min?String(l.min).replace('.',',')+' min':'',l.avg?fmtK(+l.avg)+' km/h snitt':l.hard?fmtK(+l.hard)+' km/h':'',l.rpe?l.rpe+'/10':''].filter(Boolean).join(' · '):l.type==='styrka'?`${l.vol?Math.round(l.vol).toLocaleString('sv-SE')+' kg totalt · ':''}${l.min||'?'} min`:`${l.min||''} min`;
+  const icon=l.type==='styrka'?'s':l.type==='löpning'?'r':l.type==='annat'?'o':'m';
+  const extra=l.type==='annat'?otherExtra(l):l.type==='löpning'?[l.km?String(l.km).replace('.',',')+' km':'',l.min?String(l.min).replace('.',',')+' min':'',l.avg?fmtK(+l.avg)+' km/h snitt':l.hard?fmtK(+l.hard)+' km/h':'',l.rpe?l.rpe+'/10':''].filter(Boolean).join(' · '):l.type==='styrka'?`${l.vol?Math.round(l.vol).toLocaleString('sv-SE')+' kg totalt · ':''}${l.min||'?'} min`:`${l.min||''} min`;
   return `<div class="li" style="cursor:default"><span class="dot ${icon}" style="margin-top:6px"></span><div class="grow"><strong>${esc(l.type==='styrka'?svTitle(l.title):l.title)}</strong><div class="small muted num">${esc(l.date)} · ${esc(extra)}</div></div>${l.type==='löpning'&&l.ts?`<button class="btn ghost sm" type="button" data-editrun="${l.ts}" aria-label="Komplettera passet">${CLAUDE_SAMPLE?'📷 ':''}Komplettera</button>`:''}</div>`;
 }
 let weekOff=0;
@@ -2180,7 +2250,7 @@ function exHistory(){const h={};S.log.filter(l=>l.type==='styrka').forEach(l=>(l
 /* ---------- Framsteg: statistik, grafer och milstolpar ---------- */
 let progP='12v', progTip={};
 const PERIODS=[['4v','4 veckor',28],['12v','12 veckor',84],['ar','I år',0],['allt','Allt',-1]];
-const DEF_MIN={styrka:45,'löpning':30,'rörlighet':10};
+const DEF_MIN={styrka:45,'löpning':30,'rörlighet':10,annat:30};
 const logMin=l=>+l.min||DEF_MIN[l.type]||20;
 const isPass=l=>l.type==='styrka'||l.type==='löpning';
 function weekStart(d){const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
@@ -2204,28 +2274,34 @@ function prList(){const h={};S.log.filter(l=>l.type==='styrka').slice().sort((a,
 const fmtNum=(v,dec=0)=>(Math.round(v*10**dec)/10**dec).toLocaleString('sv-SE');
 const fmtHM=m=>m>=60?Math.floor(m/60)+' h '+(Math.round(m%60)?Math.round(m%60)+' min':''):Math.round(m)+' min';
 function tenKTime(){const v=v10();if(!v)return '';const s=Math.round(36000/v);return Math.floor(s/60)+':'+pad(s%60)}
+function fiveKTime(){const v=v10();if(!v)return '';const s=Math.round(36000/v/RIEGEL);return Math.floor(s/60)+':'+pad(s%60)}
+function runInfoHTML(){const st=S.settings,V=v10();
+  if(st.runLevel==='nyb')return `Joggen i gång/jogg-passen planeras i ca <strong>${fmtK(+st.nybJog||7)} km/h</strong>${+st.nybJog?'':' (standard)'}. Gå direkt om det blir för jobbigt – målet är att kunna prata.`;
+  const pre=st.runLevel==='5k'?`Appen räknar med 5 km på ca <strong>${fiveKTime()}</strong>.`:`Appen räknar med 10 km på ca <strong>${tenKTime()}</strong>.`;
+  return `${pre} Lätt jogg ca ${fmtK(V*0.75)} km/h · intervaller ca ${fmtK(V)} km/h. Farten justeras efter hur passen känns.`}
+function runSumTxt(){const st=S.settings;return st.runLevel==='nyb'?' · gång och jogg'+(+st.nybJog?' · jogg '+fmtK(+st.nybJog)+' km/h':''):st.runLevel==='5k'?' · 5 km ca '+fiveKTime():' · 10 km ca '+tenKTime()}
 function delta(a,b,unit){if(!b&&!a)return '';const d=a-b;if(!b)return `<span class="dl up">nytt</span>`;if(Math.abs(d)<0.5)return `<span class="dl">som förra</span>`;
   return `<span class="dl ${d>0?'up':'down'}">${d>0?'▲':'▼'} ${fmtNum(Math.abs(d),unit==='km'?1:0)}${unit?' '+unit:''}</span>`}
 
 /* Staplad stapel per vecka: styrka / löpning / rörlighet */
 function weekBars(weeks){
   const W=320,H=150,L=28,R=6,T=10,B=22,n=weeks.length,bw=(W-L-R)/n,gap=Math.min(8,bw*0.3);
-  const max=Math.max(60,...weeks.map(w=>w.s+w.r+w.m)),top=Math.ceil(max/60)*60,yi=v=>T+(H-T-B)*(1-v/top);
+  const max=Math.max(60,...weeks.map(w=>w.s+w.r+w.m+(w.o||0))),top=Math.ceil(max/60)*60,yi=v=>T+(H-T-B)*(1-v/top);
   const step=top<=180?60:top<=360?120:240;let g='';
   for(let v=0;v<=top;v+=step)g+=`<line x1="${L}" x2="${W-R}" y1="${yi(v)}" y2="${yi(v)}" stroke="var(--line)"/><text x="${L-4}" y="${yi(v)+3}" text-anchor="end" font-size="9" fill="var(--muted)">${v/60}h</text>`;
   const bars=weeks.map((w,i)=>{const x=L+i*bw+gap/2,bwi=bw-gap;let y=yi(0),out='';
-    const segs=[['s','var(--c-s)'],['r','var(--c-r)'],['m','var(--c-m)']].filter(([k])=>w[k]>0);
+    const segs=[['s','var(--c-s)'],['r','var(--c-r)'],['m','var(--c-m)'],['o','var(--c-o)']].filter(([k])=>w[k]>0);
     segs.forEach(([k,c],j)=>{const h=Math.max(0,yi(0)-yi(w[k]))-(j<segs.length-1?0:0);const y0=y-h;const last=j===segs.length-1;
       out+=last?`<path d="M${x} ${y} V${y0+Math.min(4,h)} Q${x} ${y0} ${x+Math.min(4,bwi/2)} ${y0} H${x+bwi-Math.min(4,bwi/2)} Q${x+bwi} ${y0} ${x+bwi} ${y0+Math.min(4,h)} V${y} Z" fill="${c}"/>`
         :`<rect x="${x}" y="${y0}" width="${bwi}" height="${Math.max(0,h-2)}" fill="${c}"/>`;y=y0});
-    const tip=`Vecka ${w.nr}: ${fmtHM(w.s+w.r+w.m)}${w.s?` · styrka ${fmtHM(w.s)}`:''}${w.r?` · löpning ${fmtHM(w.r)}${w.km?' ('+fmtNum(w.km,1)+' km)':''}`:''}${w.m?` · rörlighet ${fmtHM(w.m)}`:''}${!(w.s+w.r+w.m)?' – inget loggat':''}`;
+    const tot=w.s+w.r+w.m+(w.o||0);const tip=`Vecka ${w.nr}: ${fmtHM(tot)}${w.s?` · styrka ${fmtHM(w.s)}`:''}${w.r?` · löpning ${fmtHM(w.r)}${w.km?' ('+fmtNum(w.km,1)+' km)':''}`:''}${w.m?` · rörlighet ${fmtHM(w.m)}`:''}${w.o?` · övrigt ${fmtHM(w.o)}`:''}${!tot?' – inget loggat':''}`;
     return out+`<rect x="${L+i*bw}" y="${T}" width="${bw}" height="${H-T-B}" fill="transparent" data-tip="${esc(tip)}" data-tipfor="wkTip" style="cursor:pointer"><title>${esc(tip)}</title></rect>`+
       ((i%2===(n-1)%2)?`<text x="${L+i*bw+bw/2}" y="${H-7}" text-anchor="middle" font-size="9" fill="var(--muted)">v${w.nr}</text>`:'')}).join('');
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Träningstid per vecka">${g}${bars}</svg>`;
 }
 function weekData(n){const ws=weekStart(new Date());return [...Array(n)].map((_,i)=>{const s=addDays(ws,-7*(n-1-i)),e=addDays(s,6),a=dkey(s),b=dkey(e);
   const L=S.log.filter(l=>l.date>=a&&l.date<=b);const sum=t=>L.filter(l=>l.type===t).reduce((x,l)=>x+logMin(l),0);
-  return {nr:isoWeek(s),a,b,s:sum('styrka'),r:sum('löpning'),m:sum('rörlighet'),km:L.filter(l=>l.type==='löpning').reduce((x,l)=>x+(+l.km||0),0),pass:L.filter(isPass).length,vol:L.filter(l=>l.type==='styrka').reduce((x,l)=>x+logVol(l),0),
+  return {nr:isoWeek(s),a,b,s:sum('styrka'),r:sum('löpning'),m:sum('rörlighet'),o:sum('annat'),km:L.filter(l=>l.type==='löpning').reduce((x,l)=>x+(+l.km||0),0),pass:L.filter(isPass).length,vol:L.filter(l=>l.type==='styrka').reduce((x,l)=>x+logVol(l),0),
     steps:[...Array(7)].map((_,j)=>+(S.days[dkey(addDays(s,j))]?.steps)||0)}})}
 
 /* Aktivitetskalender: 16 veckor × 7 dagar */
@@ -2262,7 +2338,7 @@ function viewProgress(){
   const weeks=weekData(12),tw=weeks[11],lw=weeks[10];
   const stk=streaks(),{prs,hist}=prList(),ms=milestoneData(stk);
   const goal=S.settings.stepGoal;
-  const twMin=tw.s+tw.r+tw.m,lwMin=lw.s+lw.r+lw.m;
+  const twMin=tw.s+tw.r+tw.m+tw.o,lwMin=lw.s+lw.r+lw.m+lw.o;
   const pPass=PL.filter(isPass).length,pMin=PL.reduce((a,l)=>a+logMin(l),0),pKm=PL.filter(l=>l.type==='löpning').reduce((a,l)=>a+(+l.km||0),0),pVol=PL.filter(l=>l.type==='styrka').reduce((a,l)=>a+logVol(l),0);
   const pPR=prs.filter(p=>p.d>=from).length;
   /* Insikter i text */
@@ -2285,7 +2361,7 @@ function viewProgress(){
   const mgRows=Object.entries(mg).sort((a,b)=>b[1]-a[1]);const least=mgRows.filter(r=>r[0]!=='Vader').slice(-1)[0];
   /* Programmet */
   const pi=DP_SEQ.findIndex(w=>w.i===S.settings.lastProg),pw=DP_SEQ[pi];
-  const legend=`<div class="legend small">${[['s','Styrka'],['r','Löpning'],['m','Rörlighet']].map(([k,t])=>`<span><i style="background:var(--c-${k})"></i>${t}</span>`).join('')}</div>`;
+  const legend=`<div class="legend small">${[['s','Styrka'],['r','Löpning'],['m','Rörlighet'],['o','Övrigt']].map(([k,t])=>`<span><i style="background:var(--c-${k})"></i>${t}</span>`).join('')}</div>`;
   const empty=!S.log.length;
   return `<header class="top"><div><div class="date">Din träning i siffror</div><h1>Framsteg</h1></div></header>
   <div class="stack">
@@ -2302,10 +2378,10 @@ function viewProgress(){
        <div><div class="small muted">Löpning</div><div class="k2 num">${fmtNum(tw.km,1)} km</div>${delta(tw.km,lw.km,'km')}</div><div><div class="small muted">Lyft</div><div class="k2 num">${tw.vol>=1000?fmtNum(tw.vol/1000,1)+' t':fmtNum(tw.vol)+' kg'}</div>${delta(tw.vol/1000,lw.vol/1000,'t')}</div></div></section>
    <section class="card stack"><div class="row between"><h3>Aktivitet</h3><span class="small muted">${stk.cur?`${stk.cur} dagar i rad`:''}</span></div>
      ${heatmap()}<div class="row between small muted"><span id="hmTip">Tryck på en dag för att se vad du gjorde.</span><span class="hmleg">Mindre ${[0,1,2,3,4].map(i=>`<i style="background:var(--h${i})"></i>`).join('')} Mer</span></div></section>
-   <section class="card stack"><h3>Träningstid per vecka</h3>${legend}${weekBars(weeks)}<div class="small muted" id="wkTip">Tryck på en vecka för detaljer. Snitt senaste 4 veckorna: ${fmtHM(weeks.slice(-4).reduce((a,w)=>a+w.s+w.r+w.m,0)/4)||'0 min'}.</div></section>
+   <section class="card stack"><h3>Träningstid per vecka</h3>${legend}${weekBars(weeks)}<div class="small muted" id="wkTip">Tryck på en vecka för detaljer. Snitt senaste 4 veckorna: ${fmtHM(weeks.slice(-4).reduce((a,w)=>a+w.s+w.r+w.m+w.o,0)/4)||'0 min'}.</div></section>
    ${stepsCard()}
    ${R.length?`<section class="card stack"><div class="row between"><h3>Löpning</h3><span class="pill run">${PR_.length} pass · ${esc(per[1].toLowerCase())}</span></div>
-     <div class="tiles"><div><div class="k num">${tenKTime()}</div><div class="small muted">beräknad 10 km</div></div><div><div class="k num">${longest?fmtNum(+longest.km,1):'–'}</div><div class="small muted">längsta, km</div></div><div><div class="k num">${fastest?fmtK(+fastest.avg):'–'}</div><div class="small muted">snabbaste snitt, km/h</div></div></div>
+     <div class="tiles"><div><div class="k num">${S.settings.runLevel==='5k'?fiveKTime():tenKTime()}</div><div class="small muted">beräknad ${S.settings.runLevel==='5k'?'5':'10'} km</div></div><div><div class="k num">${longest?fmtNum(+longest.km,1):'–'}</div><div class="small muted">längsta, km</div></div><div><div class="k num">${fastest?fmtK(+fastest.avg):'–'}</div><div class="small muted">snabbaste snitt, km/h</div></div></div>
      <p class="small muted" style="margin:0">Den beräknade tiden bygger på farten appen planerar dina pass efter, och den uppdateras när du loggar. ${fastest?`Snabbaste passet: ${esc(fastest.title)} ${esc(fastest.date)}.`:''}</p>
      <h4>Kilometer per vecka</h4>${kmBars(weeks)}
      ${runSpeedBlock()}</section>`:''}
@@ -2563,7 +2639,8 @@ function finishWorkout(){
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
   if(w.p==='DP'&&S.settings.mode==='program'&&w.i.replace(/-latt$/,'')===programNext().i){S.settings.lastProg=w.i;markDirty('settings')}
-  active=null; sugIdx=0; sugCache=null; closeSheet(); toast('Passet är sparat');
+  const fdate=active.date||today();
+  active=null; sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate);
 }
 let restT=null,restLeft=0;
 function startRest(sec){restLeft=sec;$('#restTimer').classList.add('on');tickRest();clearInterval(restT);restT=setInterval(()=>{restLeft--;tickRest();if(restLeft<=0){stopRest();try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast('Vilan är slut')}},1000)}
@@ -2752,16 +2829,19 @@ function showSettings(){
    <div class="setfield"><div class="lab">Övningar du undviker</div>${avoidList().length?`<div class="list">${avoidList().map(n=>`<div class="li" style="cursor:default;align-items:center;padding:8px 0"><div class="grow">${esc(n)}</div><button class="btn ghost sm" type="button" data-unavoid="${esc(n)}">Ta med igen</button></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Inga. Tryck ”Byt ut övningen” i ett pass för att välja bort en övning.</p>'}</div>`;
   const sSum=`${+st.strength||0} pass/vecka${lib||gen?' · '+(MODE_SV[gen?'gen':st.mode]||''):''} · ${EQUIP_SV[st.equip||'gym']}`;
   /* Löpning */
-  const V=v10(),runInfo=`Appen räknar med 10 km på ca <strong>${tenKTime()}</strong>. Lätt jogg ca ${fmtK(V*0.75)} km/h · intervaller ca ${fmtK(V)} km/h. Farten justeras efter hur passen känns.`;
+  const runInfo=runInfoHTML(), lvl=st.runLevel||'10k';
+  const timeField=lvl==='nyb'?sOpt('nybJog','Vilken fart joggar du lugnt i? (km/h)',[[6,'6'],[7,'7'],[8,'8'],['','Vet inte']],+st.nybJog||'')
+   :lvl==='5k'?`<label class="setfield"><span class="lab">Din 5 km-tid (minuter)</span><input type="text" inputmode="decimal" autocomplete="off" data-setin="fiveK" value="${esc(st.fiveK||'')}" placeholder="t.ex. 30"></label>`
+   :`<label class="setfield"><span class="lab">Din 10 km-tid (minuter)</span><input type="text" inputmode="text" autocomplete="off" data-setin="tenK" value="${esc(st.tenK||'')}" placeholder="t.ex. 48"></label>`;
   const run=`${sStep('cardio','Löppass per vecka',+st.cardio||0,0,4)}
    ${sOpt('runPref','Var springer du?',[['auto','Band vintertid, ute annars'],['band','Alltid löpband'],['ute','Alltid ute']],st.runPref||'auto')}
    ${sOpt('runLevel','Nivå',[['nyb','Inte 5 km än'],['5k','Runt 5 km'],['10k','10 km eller mer']],st.runLevel||'10k')}
    ${sOpt('runStyle','Helst',[['intervaller','Intervaller och korta pass'],['lugnt','Lugna, längre pass']],st.runStyle||'intervaller')}
-   <label class="setfield"><span class="lab">Din 10 km-tid (minuter)</span><input type="text" inputmode="text" autocomplete="off" data-setin="tenK" value="${esc(st.tenK||'')}" placeholder="t.ex. 48"></label>
+   ${timeField}
    <p class="small muted" id="runInfo" style="margin:0">${runInfo}</p>
    <div class="setfield"><div class="lab">Nedvarvning på bandet</div><div class="grid2"><label class="f">Fart (km/h)<input type="text" inputmode="decimal" autocomplete="off" data-setin="coolKmh" value="${fmtK(+st.coolKmh||5)}"></label><label class="f">Lutning (%)<input type="text" inputmode="decimal" autocomplete="off" data-setin="coolInc" value="${String(st.coolInc??1).replace('.',',')}"></label></div></div>
    ${sTog('comeback','Comeback efter uppehåll eller skada',comebackOn(),`Alla farter −5 % i 3 veckor${comebackOn()?` (till ${esc(shortDate(st.comebackUntil))})`:''}.`)}`;
-  const rSum=`${+st.cardio||0} pass/vecka · ${RUNPREF_SV[st.runPref||'auto']}${st.runLevel==='nyb'?' · gång och jogg':' · 10 km ca '+tenKTime()}`;
+  const rSum=`${+st.cardio||0} pass/vecka · ${RUNPREF_SV[st.runPref||'auto']}${runSumTxt()}`;
   /* Rörlighet */
   const iss=st.issues||[],mr=mobRoutines();
   const mob=`${sOpt('mobPref','Längd på rörlighetspassen',[['kort','Korta (under 10 min)'],['','Blandat'],['lång','Längre (10–15 min)']],st.mobPref||'')}
@@ -2824,6 +2904,8 @@ function applySetting(k,v,silent){
     case 'equip':st.equip=v;st.genCur=null;break;
     case 'kneeFocus':st.kneeFocus=!!v;st.genCur=null;break;
     case 'runPref':case 'runLevel':case 'runStyle':st[k]=v;break;
+    case 'fiveK':{const raw=String(v).trim();if(!raw)break;const f=parseFiveK(raw);if(!f){toast('Skriv tiden i minuter, t.ex. 30');return}st.fiveK=raw;st.v10=v10FromFiveK(f);break}
+    case 'nybJog':st.nybJog=+v||null;break;
     case 'tenK':{const raw=String(v).trim();if(!raw)break;const tk=parseTenK(raw);if(!tk){toast('Skriv tiden i minuter, t.ex. 48');return}st.tenK=raw;st.v10=Math.round(600/tk*100)/100;break}
     case 'coolKmh':{const n=num(v);if(n>0)st.coolKmh=n;break}
     case 'coolInc':{const n=num(v);if(n!=null&&n>=0)st.coolInc=n;break}
@@ -2839,7 +2921,7 @@ function applySetting(k,v,silent){
     default:return;
   }
   markDirty('settings');sugCache=null;sugIdx=0;setSavedAt=Date.now();
-  if(silent){const s=document.getElementById('setStatus');if(s)s.textContent='Sparat ✓';const ri=document.getElementById('runInfo');if(ri&&(k==='tenK')){const V=v10();ri.innerHTML=`Appen räknar med 10 km på ca <strong>${tenKTime()}</strong>. Lätt jogg ca ${fmtK(V*0.75)} km/h · intervaller ca ${fmtK(V)} km/h. Farten justeras efter hur passen känns.`}}
+  if(silent){const s=document.getElementById('setStatus');if(s)s.textContent='Sparat ✓';const ri=document.getElementById('runInfo');if(ri&&(k==='tenK'||k==='fiveK')){ri.innerHTML=runInfoHTML();const sm=document.querySelector('details[data-sec="r"] summary .small');if(sm)sm.textContent=`${+st.cardio||0} pass/vecka · ${RUNPREF_SV[st.runPref||'auto']}${runSumTxt()}`}}
   else showSettings();
   clearTimeout(applySetting._t);applySetting._t=setTimeout(()=>{const s=document.getElementById('setStatus');if(s)s.textContent='Ändringar sparas direkt'},2500);
 }
@@ -2866,7 +2948,7 @@ function bind(root){
   const pe=root.querySelector('#progEx');if(pe)pe.onchange=()=>{progEx=pe.value;render()};
   root.querySelectorAll('[data-libmode]').forEach(b=>b.onclick=()=>{libMode=b.dataset.libmode;render()});
   bindCheckin(root);
-  bindPast(root);
+  bindPast(root);bindOther(root);
   bindSettings(root);
   root.querySelectorAll('[data-weekoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.weekoff;weekOff=v===0?0:Math.max(0,Math.min(3,weekOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{dayOff=+b.dataset.peek;go('idag')});
