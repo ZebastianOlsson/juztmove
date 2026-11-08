@@ -5,8 +5,9 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 src = (root / 'src' / 'index.src.html').read_text(encoding='utf-8')
 head = '''<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icons/favicon-32.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-32.png?v=5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=5">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5">
 <meta name="apple-mobile-web-app-title" content="JuztMove">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script src="config.js"></script>'''
