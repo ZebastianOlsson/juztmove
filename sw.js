@@ -1,6 +1,6 @@
 // Gör appen installerbar och användbar offline. Sidan hämtas alltid färskt när det finns nät.
-const CACHE = 'juztmove-v7';
-const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-192.png?v=7', './icons/icon-512.png?v=7', './apple-touch-icon.png?v=7', './apple-touch-icon-precomposed.png', './icons/favicon-32.png?v=7'];
+const CACHE = 'juztmove-v8';
+const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-192.png?v=8', './icons/icon-512.png?v=8', './apple-touch-icon.png?v=8', './apple-touch-icon-precomposed.png', './icons/favicon-32.png?v=8'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
