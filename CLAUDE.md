@@ -20,3 +20,5 @@ Publiceras med GitHub Pages från `main` (roten). Inloggning och data: Supabase 
 
 ## Arbetsflöde
 Ändra `src/index.src.html` → `python src/build.py` → testa → commit med kort svensk beskrivning → push till `main`. GitHub Pages publicerar inom 1–2 minuter.
+
+**Pusha alltid direkt till `main`** (`git push origin HEAD:main`), även om sessionen anger en annan arbetsbranch. Skapa inga pull requests om jag inte uttryckligen ber om det. Hämta `origin/main` först och kontrollera att inget annat än dina egna commits följer med.
