@@ -450,35 +450,52 @@ async function initSupabase(){
   if(/access_token=/.test(location.hash)){const p=new URLSearchParams(location.hash.slice(1));
     try{const tmp={access_token:p.get('access_token'),refresh_token:p.get('refresh_token'),expires_in:p.get('expires_in')};
       const user=await fetch(sbCfg().supabaseUrl+'/auth/v1/user',{headers:{apikey:sbCfg().supabaseAnonKey,Authorization:'Bearer '+tmp.access_token}}).then(r=>r.json());
-      sbStore({...tmp,user})}catch(e){}
+      sbStore({...tmp,user});if(p.get('type')==='recovery')loginState.mode='newpw'}catch(e){}
     try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
   const x=await sbSession(); if(x&&x.user){SBUSER=x.user;await loadSB()}
+  if(loginState.mode==='newpw')showNewPw();
 }
-let loginState={step:'email',email:''};
+let loginState={mode:'login',email:''};
+/* Inloggning med e-post och lösenord – inga mejl behövs (”Confirm email” avstängt i Supabase).
+   Glömt lösenord: ett mejl med länk, länken öppnar appen där man väljer nytt lösenord. */
 function showLogin(){
-  const st=loginState;
-  openSheet(`<header class="top"><div><div class="date">JuztMove</div><h1>Logga in</h1></div>${S.settings.onb?'<button class="btn ghost sm" type="button" data-close>Stäng</button>':''}</header>
+  const st=loginState,su=st.mode==='signup';
+  if(st.mode==='newpw')return showNewPw();
+  openSheet(`<header class="top"><div><div class="date">JuztMove</div><h1>${su?'Skapa konto':'Logga in'}</h1></div>${S.settings.onb?'<button class="btn ghost sm" type="button" data-close>Stäng</button>':''}</header>
    <div class="stack login">
-    <section class="card stack">${st.step==='email'?`
-      <p style="margin:0">Logga in med din e-post så sparas din träning i molnet och följer med till nya telefoner. Inget lösenord – du får en kod i mejlen.</p>
+    <section class="card stack">
+      <p style="margin:0">${su?'Skapa ett konto så sparas din träning i molnet och följer med till nya telefoner.':'Logga in så hämtas din träning och allt sparas i molnet.'}</p>
       <label class="f" for="lgEmail">E-post<input id="lgEmail" type="email" inputmode="email" autocomplete="email" value="${esc(st.email)}" placeholder="namn@exempel.se"></label>
-      <button class="btn" type="button" data-lgsend>Skicka kod</button>`:`
-      <p style="margin:0">Vi har skickat en kod till <strong>${esc(st.email)}</strong>. Skriv in den här – eller tryck på länken i mejlet.</p>
-      <label class="f" for="lgCode">Kod<input id="lgCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></label>
-      <button class="btn" type="button" data-lgverify>Logga in</button><button class="linkbtn" type="button" data-lgback>Ändra e-post eller skicka ny kod</button>`}
+      <label class="f" for="lgPw">Lösenord${su?' (minst 6 tecken)':''}<input id="lgPw" type="password" autocomplete="${su?'new-password':'current-password'}"></label>
+      <button class="btn" type="button" data-lggo>${su?'Skapa konto':'Logga in'}</button>
+      <button class="linkbtn" type="button" data-lgmode="${su?'login':'signup'}">${su?'Har du redan ett konto? Logga in':'Ny här? Skapa ett konto'}</button>
+      ${su?'':'<button class="linkbtn small muted" type="button" data-lgforgot>Glömt lösenordet?</button>'}
     </section>
     <section class="card stack"><p class="small muted" style="margin:0">Vill du testa först? Du kan använda appen utan konto – då sparas allt bara på den här telefonen och du kan logga in senare.</p>
       <button class="btn ghost sm" type="button" data-lgskip>Fortsätt utan konto</button></section>
    </div>`);
 }
-async function lgSend(){const email=($('#lgEmail').value||'').trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Skriv en giltig e-postadress');return}
-  loginState.email=email;try{await sbFetch('/auth/v1/otp?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:JSON.stringify({email,create_user:true})},false)}catch(e){toast('Kunde inte skicka: '+e.message);return}
-  loginState.step='code';showLogin()}
-async function lgVerify(){const token=($('#lgCode').value||'').replace(/\s/g,'');if(!token){toast('Skriv in koden från mejlet');return}
-  try{const j=await sbFetch('/auth/v1/verify',{method:'POST',body:JSON.stringify({type:'email',email:loginState.email,token})},false);sbStore(j)}catch(e){toast('Fel kod eller för gammal – skicka en ny');return}
-  closeSheet();toast('Inloggad – din träning sparas i molnet');
-  // Finns lokal träning och tomt konto laddas den upp, annars hämtas kontots data
+const lgErr=m=>/invalid login|invalid_credentials/i.test(m)?'Fel e-post eller lösenord':/already registered|already exists/i.test(m)?'Det finns redan ett konto med den e-posten – logga in i stället':/password/i.test(m)?'Lösenordet måste vara minst 6 tecken':/not confirmed/i.test(m)?'Kontot är inte bekräftat än – kolla mejlen':m;
+async function lgGo(){
+  const email=($('#lgEmail').value||'').trim(),password=$('#lgPw').value||'';loginState.email=email;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Skriv en giltig e-postadress');return}
+  if(password.length<6){toast('Lösenordet måste vara minst 6 tecken');return}
+  try{
+    if(loginState.mode==='signup'){const j=await sbFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})},false);
+      if(!j||!j.access_token){toast('Kolla mejlen och bekräfta kontot, logga sedan in här');loginState.mode='login';showLogin();return}sbStore(j)}
+    else{const j=await sbFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})},false);sbStore(j)}
+  }catch(e){toast(lgErr(e.message));return}
+  closeSheet();toast(loginState.mode==='signup'?'Kontot är skapat – din träning sparas i molnet':'Inloggad');
   await loadSB()}
+async function lgForgot(){const email=($('#lgEmail').value||'').trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Skriv din e-post först');return}
+  try{await sbFetch('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:JSON.stringify({email})},false)}catch(e){toast('Kunde inte skicka: '+e.message);return}
+  toast('Kolla mejlen – tryck på länken för att välja nytt lösenord')}
+function showNewPw(){openSheet(`<header class="top"><div><div class="date">JuztMove</div><h1>Nytt lösenord</h1></div></header>
+  <div class="stack login"><section class="card stack"><label class="f" for="npw">Nytt lösenord (minst 6 tecken)<input id="npw" type="password" autocomplete="new-password"></label>
+  <button class="btn" type="button" data-npw>Spara lösenord</button></section></div>`)}
+async function saveNewPw(){const pw=$('#npw').value||'';if(pw.length<6){toast('Minst 6 tecken');return}
+  try{await sbFetch('/auth/v1/user',{method:'PUT',body:JSON.stringify({password:pw})})}catch(e){toast('Kunde inte spara: '+e.message);return}
+  loginState.mode='login';closeSheet();toast('Lösenordet är bytt – använd det när du loggar in i appen')}
 function afterLogin(){if(!S.settings.onb&&!$('#sheet').classList.contains('open'))setTimeout(()=>{if(!S.settings.onb&&!$('#sheet').classList.contains('open'))showOnboarding()},600)}
 let CLAUDE_SAMPLE=false;
 async function initCloud(){
@@ -2782,9 +2799,11 @@ function bind(root){
   root.querySelectorAll('[data-movenext]').forEach(b=>b.onclick=()=>{moveIdx++;render()});
   root.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>{sugFocus=b.dataset.focus;sugIdx=0;sugCache=null;render()});
   root.querySelectorAll('[data-next]').forEach(b=>b.onclick=()=>{sugIdx++;render()});
-  root.querySelectorAll('[data-lgsend]').forEach(b=>b.onclick=lgSend);
-  root.querySelectorAll('[data-lgverify]').forEach(b=>b.onclick=lgVerify);
-  root.querySelectorAll('[data-lgback]').forEach(b=>b.onclick=()=>{loginState.step='email';showLogin()});
+  root.querySelectorAll('[data-lggo]').forEach(b=>b.onclick=lgGo);
+  root.querySelectorAll('[data-lgmode]').forEach(b=>b.onclick=()=>{loginState.email=($('#lgEmail')?.value||'').trim();loginState.mode=b.dataset.lgmode;showLogin()});
+  root.querySelectorAll('[data-lgforgot]').forEach(b=>b.onclick=lgForgot);
+  root.querySelectorAll('[data-npw]').forEach(b=>b.onclick=saveNewPw);
+  {const pw=root.querySelector('#lgPw');if(pw)pw.onkeydown=e=>{if(e.key==='Enter')lgGo()}}
   root.querySelectorAll('[data-lgskip]').forEach(b=>b.onclick=()=>{S.settings.skipLogin=true;lsSave();closeSheet();if(!S.settings.onb)showOnboarding()});
   root.querySelectorAll('[data-login]').forEach(b=>b.onclick=()=>{loginState={step:'email',email:''};showLogin()});
   root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';closeSheet();toast('Utloggad – data finns kvar på telefonen')});
