@@ -9,7 +9,7 @@ Publiceras med GitHub Pages från `main` (roten). Inloggning och data: Supabase 
 - `index.html` – genererad, ändra aldrig för hand.
 - `config.js` – Supabase-URL och publishable key (publik nyckel, får ligga här). Ändra inte.
 - `sw.js` – service worker. Höj `CACHE`-versionen när ikoner eller manifest ändras.
-- `icons/`, `manifest.webmanifest` – appikon (loggan = tre aktivitetsringar grön/orange/lila med ett J).
+- `icons/`, `manifest.webmanifest` – appikon (loggan = tre aktivitetsringar grön/orange/lila med JM i mitten).
 
 ## Regler som inte får brytas
 1. **Användarnas sparade data får aldrig gå sönder.** Lägg bara till nya fält, byt aldrig namn på eller ta bort befintliga (settings, days-ÅÅÅÅ-MM, log-ÅÅÅÅ-MM, library). Data från molnet kan vara fryst – klona (JSON) innan den ändras.
