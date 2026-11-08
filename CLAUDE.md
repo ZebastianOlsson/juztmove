@@ -3,6 +3,8 @@
 Träningsapp (PWA) för vardagsrörelse, styrka, löpning och rörlighet. Allt UI är på svenska.
 Publiceras med GitHub Pages från `main` (roten). Inloggning och data: Supabase (e-post + lösenord, tabellen `user_docs` med RLS – se `supabase/schema.sql`).
 
+Läs PRODUKT.md innan du bygger nya funktioner eller ändrar flöden.
+
 ## Filer
 - `src/index.src.html` – **källkoden. Ändra bara här.** Innehåller platshållarna `__BUILD__`, `__LIBRARY__`, `__PUBLIC_HEAD__`.
 - `src/build.py` – bygger `index.html` i roten. Kör `python src/build.py` efter varje ändring och committa både källan och `index.html`.
