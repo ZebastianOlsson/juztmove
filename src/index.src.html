@@ -1425,9 +1425,9 @@ function recentGenNames(n){const s=new Set();S.log.filter(l=>l.type==='styrka').
 function effIssues(){const i=[...(S.settings.issues||[])];if(i.includes('gravid'))i.push('hopp','mage');return i}
 function pickEx(filter,used,recent){
   const lv=S.settings.level||2, issues=effIssues();
-  const ok=e=>matches(e,filter)&&equipOk(e)&&e.lv<=lv&&!e.st.some(t=>issues.includes(t))&&!used.has(e.n)&&!isAvoided(e.n)&&!avoidGroups().includes(MUSCLE_GROUP[e.m]);
+  const ok=e=>matches(e,filter)&&equipOk(e)&&e.lv<=lv&&!e.st.some(t=>issues.includes(t))&&!used.has(e.n)&&!isAvoided(e.n)&&!groupAvoided(e.n);
   let c=EXDB.filter(ok);
-  if(!c.length) c=EXDB.filter(e=>matches(e,filter)&&equipOk(e)&&!used.has(e.n)&&!e.st.some(t=>issues.includes(t))&&!isAvoided(e.n)&&!avoidGroups().includes(MUSCLE_GROUP[e.m]));
+  if(!c.length) c=EXDB.filter(e=>matches(e,filter)&&equipOk(e)&&!used.has(e.n)&&!e.st.some(t=>issues.includes(t))&&!isAvoided(e.n)&&!groupAvoided(e.n));
   if(!c.length) return null;
   const fresh=c.filter(e=>!recent.has(e.n));
   const pool=fresh.length?fresh:c;
@@ -1522,7 +1522,7 @@ let OB=null;
 const OB_STEPS=['me','goal','steps','days','split','strength','run','issues','sit','preview'];
 function obDefaults(){const st=S.settings;return {sex:st.sex||'',goal:st.goal||'balans',stepsNow:st.stepsNow??2,days:(st.strength||0)+(st.cardio||0)||4,minutes:st.minutes||45,
   strength:st.strength??2,cardio:st.cardio??2,level:st.level||2,equip:st.equip||'gym',follow:st.mode==='program'?'dp':'',runLevel:st.runLevel||'5k',
-  runWhere:st.runPref||'auto',runStyle:st.runStyle||'intervaller',fiveK:String(st.fiveK||''),tenK:String(st.tenK||''),nybJog:+st.nybJog||'',issues:[...(st.issues||[])],sit:st.sit||'mycket',knee:st.kneeFocus?1:0,plan:null}}
+  runWhere:st.runPref||'auto',runStyle:st.runStyle||'intervaller',fiveK:String(st.fiveK||''),tenK:String(st.tenK||''),nybJog:+st.nybJog||'',issues:[...(st.issues||[])],sit:st.sit||'mycket',knee:st.kneeFocus?1:0,avoidGroups:[...(st.avoidGroups||[])],plan:null}}
 function splitFromGoal(goal,d){
   if(d<=0)return [0,0];
   const m={rumpa:d>=4?d-1:d,form:Math.min(2,d),rorelse:Math.round(d/2),styrka:d>=4?d-1:d,muskler:d>=4?d-1:d,kondition:Math.min(2,Math.floor(d/3)),balans:Math.max(1,Math.round(d*0.6))}[goal]??Math.round(d/2);
@@ -1560,7 +1560,8 @@ function renderOB(){
   if(step==='strength') body=`<h1>Om din styrketräning</h1>
     <div class="eyebrow">Erfarenhet</div><div class="opts">${obOpt('level',1,'Nybörjare','Lite eller ingen vana')}${obOpt('level',2,'Tränar ibland','Kan grundövningarna')}${obOpt('level',3,'Van','Tränat regelbundet i flera år')}</div>
     <div class="eyebrow" style="margin-top:12px">Var tränar du?</div><div class="opts">${obOpt('equip','gym','Gym')}${obOpt('equip','hantlar','Hemma med hantlar')}${obOpt('equip','kropp','Bara kroppsvikt')}</div>
-    ${DP_SEQ.length?`<div class="eyebrow" style="margin-top:12px">Följer du redan ett program?</div><div class="opts">${obOpt('follow','dp','Ja, mitt eget program','Appen fortsätter där du är')}${obOpt('follow','','Nej, gör pass åt mig')}</div>`:''}`;
+    ${DP_SEQ.length?`<div class="eyebrow" style="margin-top:12px">Följer du redan ett program?</div><div class="opts">${obOpt('follow','dp','Ja, mitt eget program','Appen fortsätter där du är')}${obOpt('follow','','Nej, gör pass åt mig')}</div>`:''}
+    <div class="eyebrow" style="margin-top:12px">Något du inte vill träna?</div><p class="small muted" style="margin:0 0 6px">Valfritt. Övningarna tas bort ur dina pass.</p>${avoidChips(g=>`data-ob="avoidGroups" data-val="${g}" data-multi="1"`,a.avoidGroups)}`;
   if(step==='run') body=`<h1>Om din löpning</h1>
     <div class="eyebrow">Vad klarar du idag?</div><div class="opts">${obOpt('runLevel','nyb','Inte 5 km än','Vi börjar med gång och jogg')}${obOpt('runLevel','5k','Runt 5 km','Mot 10 km')}${obOpt('runLevel','10k','10 km eller mer','Intervaller och tempo')}</div>
     ${obRunTime(a)}
@@ -1595,7 +1596,7 @@ function renderOB(){
 }
 function obSave(){
   const a=OB.a, st=S.settings;
-  Object.assign(st,{sex:a.sex||'',goal:a.goal,stepsNow:a.stepsNow,minutes:a.minutes,level:a.level,equip:a.equip,runLevel:a.runLevel,runPref:a.runWhere,runStyle:a.runStyle,issues:a.issues,sit:a.sit,kneeFocus:!!a.knee,cycle:a.issues.includes('mens'),
+  Object.assign(st,{sex:a.sex||'',goal:a.goal,stepsNow:a.stepsNow,minutes:a.minutes,level:a.level,equip:a.equip,runLevel:a.runLevel,runPref:a.runWhere,runStyle:a.runStyle,issues:a.issues,sit:a.sit,kneeFocus:!!a.knee,avoidGroups:[...a.avoidGroups],cycle:a.issues.includes('mens'),
     stepGoal:[5000,7500,10000,12000][a.stepsNow],adaptSteps:a.stepsNow<2,moveGoal:{mycket:10,varierat:8,lite:6}[a.sit],
     weekPlan:a.plan,strength:a.plan.filter(x=>x==='s').length,cardio:a.plan.filter(x=>x==='r').length,
     mode:a.follow==='dp'&&DP_SEQ.length?'program':'gen',genCur:null,splitIdx:0,runStep:st.runStep||0,onb:{at:today()}});
@@ -2065,11 +2066,25 @@ let exGroup='';
 const avoidList=()=>S.settings.avoid||[];
 const isAvoided=n=>{const a=avoidList();if(!a.length)return false;const l=String(n).toLowerCase();return a.some(x=>x.toLowerCase()===l)};
 const avoidGroups=()=>S.settings.avoidGroups||[];
-const groupAvoided=n=>{const g=avoidGroups();if(!g.length)return false;const m=muscleOf(n);return !!m&&g.includes(m)};
+/* Finare undergrupper som kan väljas bort utan att tappa hela huvudgruppen.
+   Att välja bort huvudgruppen (Rygg/Armar) tar fortfarande bort undergruppen också. */
+const AVOID_CHIPS=['Ben','Bröst','Rygg','Trapezius','Axlar','Armar','Underarmar','Vader','Bål','Nacke'];
+function subGroupOf(n){
+  const e=EXDB.find(x=>x.n===n);
+  if(e){if(e.m==='traps')return 'Trapezius';if(e.m==='forearms')return 'Underarmar'}
+  const f=String(n);
+  if(/neck|nacke/i.test(f))return 'Nacke';
+  if(e)return null;
+  if(/shrug|upright row|trap bar shrug/i.test(f)&&!/trap bar deadlift/i.test(f))return 'Trapezius';
+  if(/wrist curl|forearm|handledscurl|reverse curl|omvänd curl|grip|farmer/i.test(f))return 'Underarmar';
+  return null;
+}
+const groupAvoided=n=>{const g=avoidGroups();if(!g.length)return false;const m=muscleOf(n);if(m&&g.includes(m))return true;const sg=subGroupOf(n);return !!sg&&g.includes(sg)};
+const avoidChips=(attr,cur)=>`<div class="chips wrap">${AVOID_CHIPS.map(g=>`<button class="chip" type="button" ${attr(g)} aria-pressed="${cur.includes(g)}">${g}</button>`).join('')}</div>`;
 const strHash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
 function subFor(name,used){
   const key=animKeyRaw(name),grp=muscleOf(name);
-  const base=EXDB.filter(e=>e.n!==name&&!isAvoided(e.n)&&!avoidGroups().includes(MUSCLE_GROUP[e.m])&&!used.has(e.n)&&equipOk(e));
+  const base=EXDB.filter(e=>e.n!==name&&!isAvoided(e.n)&&!groupAvoided(e.n)&&!used.has(e.n)&&equipOk(e));
   let c=base.filter(e=>key&&animKeyRaw(e.n)===key&&(!grp||MUSCLE_GROUP[e.m]===grp));
   if(!c.length&&grp)c=base.filter(e=>MUSCLE_GROUP[e.m]===grp&&(key?ANIM_GROUP[animKeyRaw(e.n)]===ANIM_GROUP[key]:true));
   if(!c.length&&grp)c=base.filter(e=>MUSCLE_GROUP[e.m]===grp);
@@ -2191,7 +2206,8 @@ function viewFind(){
     <div class="chips wrap">${BUILD_FOCUS.map(([f,l])=>`<button class="chip" type="button" data-genbuild="${esc(f)}">${esc(l)}</button>`).join('')}</div></section>`;
   if(!WORKOUTS.length)return build;
   const q=libQ.toLowerCase(),DD=doneDates();
-  let res=WORKOUTS.filter(w=>(!avoidGroups().length||!w.g.every(g=>avoidGroups().includes(g)))&&(!findProg||w.p===findProg)&&(!findGroup||w.g.includes(findGroup))&&(!findLen||estMinutes(w)<=findLen)&&(!q||(w.t+' '+wTitle(w)+' '+w.x.map(e=>e[0]).join(' ')).toLowerCase().includes(q)));
+  const AG=avoidGroups();
+  let res=WORKOUTS.filter(w=>(!AG.length||!(w.g.every(g=>AG.includes(g))||w.x.every(e=>String(e[0]).split(' / ').every(groupAvoided))))&&(!findProg||w.p===findProg)&&(!findGroup||w.g.includes(findGroup))&&(!findLen||estMinutes(w)<=findLen)&&(!q||(w.t+' '+wTitle(w)+' '+w.x.map(e=>e[0]).join(' ')).toLowerCase().includes(q)));
   res=res.slice().sort((a,b)=>(DD.has(a.i)?1:0)-(DD.has(b.i)?1:0));
   const G=['','Ben','Bröst','Rygg','Axlar','Armar','Bål'];
   return build+`<section class="card stack"><h3>Välj ur biblioteket</h3>
@@ -2825,7 +2841,7 @@ function showSettings(){
    ${sOpt('level','Erfarenhet',[[1,'Nybörjare'],[2,'Tränar ibland'],[3,'Van']],st.level||2)}
    ${sOpt('equip','Var tränar du?',[['gym','Gym'],['hantlar','Hantlar hemma'],['kropp','Bara kroppsvikt']],st.equip||'gym')}
    ${sTog('kneeFocus','Knästarka benpass',!!st.kneeFocus,'Benpassen byggs med bakåtgång, step-downs och split squats med knät över tårna. Ger också knärutiner i rörligheten.')}
-   <div class="setfield"><div class="lab">Muskelgrupper du hoppar över</div><div class="chips wrap">${['Ben','Bröst','Rygg','Axlar','Armar','Vader','Bål','Nacke'].map(g=>`<button class="chip" type="button" data-avgrp="${g}" aria-pressed="${avoidGroups().includes(g)}">${g}</button>`).join('')}</div></div>
+   <div class="setfield"><div class="lab">Muskelgrupper du hoppar över</div>${avoidChips(g=>`data-avgrp="${g}"`,avoidGroups())}<p class="small muted" style="margin:6px 0 0">${avoidGroups().length?'Hoppar över: '+esc(AVOID_CHIPS.filter(g=>avoidGroups().includes(g)).concat(avoidGroups().filter(g=>!AVOID_CHIPS.includes(g))).join(', ')):'Inga – alla muskelgrupper tränas.'}</p></div>
    <div class="setfield"><div class="lab">Övningar du undviker</div>${avoidList().length?`<div class="list">${avoidList().map(n=>`<div class="li" style="cursor:default;align-items:center;padding:8px 0"><div class="grow">${esc(n)}</div><button class="btn ghost sm" type="button" data-unavoid="${esc(n)}">Ta med igen</button></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Inga. Tryck ”Byt ut övningen” i ett pass för att välja bort en övning.</p>'}</div>`;
   const sSum=`${+st.strength||0} pass/vecka${lib||gen?' · '+(MODE_SV[gen?'gen':st.mode]||''):''} · ${EQUIP_SV[st.equip||'gym']}`;
   /* Löpning */
