@@ -592,14 +592,23 @@ function plannedFor(date,ignoreOverride){
   const postponed=S.days[t]&&S.days[t].plan==='v'&&q.res!==t;
   return seqType(q.res===t||postponed?diff-1:diff);
 }
-function resolveDay(how){
-  const q=seqInit(), t=today(); if(q.res===t) return false;
+function resolveDay(how,t=today()){
+  const q=seqInit(); if(q.res===t) return false;
   const typ=(S.days[t]&&S.days[t].plan&&S.days[t].plan!=='v')?S.days[t].plan:seqType(0);
-  q.pos+=1; q.res=t; q.doneType=typ; day().did=how==='skip'?'skip':typ;
+  q.pos+=1; q.res=t; q.doneType=typ; day(t).did=how==='skip'?'skip':typ;
   markDirty('settings'); markDirty('days',monthOf(t)); return true;
 }
 function waitingInfo(){const q=seqInit(), t=today();if(!q.res||q.res===t)return null;const d=daysBetween(q.res,t);return d>=2?{since:addDays(new Date(q.res+'T12:00:00'),1),days:d-1}:null}
 function logsOn(k){return S.log.filter(l=>l.date===k)}
+/* Ångra "Hoppa över idag": settings.seqUndo={date,pos,res,doneType,plan} gäller bara samma dag. */
+function canUndoSkip(){const u=S.settings.seqUndo,d=S.days[today()];return !!(u&&u.date===today()&&typeof u.pos==='number'&&d&&d.did==='skip')}
+function undoSkip(){if(!canUndoSkip())return false;const u=S.settings.seqUndo,q=seqInit(),d=day();
+  q.pos=u.pos;q.res=u.res??null;q.doneType=u.doneType??null;delete d.did;if(u.plan)d.plan=u.plan;S.settings.seqUndo=null;
+  markDirty('settings');markDirty('days',monthOf(today()));return true}
+/* Kort text om vilket pass som kommer en viss dag framåt, t.ex. "Styrka (Bröst & biceps)" */
+function passLabel(off){const x=aheadInfo(off),n={s:'Styrka',r:'Löpning',m:'Rörlighet',v:'Vila'}[x.typ]||'Vila';
+  const what=x.typ==='s'?(x.w&&x.w.t?wTitle(x.w):x.focus||''):x.typ==='r'?(x.r?x.r.t:''):x.typ==='m'?(x.m?x.m.t:''):'';
+  return what?`${n} (${what})`:n}
 function recentStrength(n){return S.log.filter(l=>l.type==='styrka').slice(-n)}
 
 function rankWorkouts(focus){
@@ -1870,10 +1879,10 @@ function viewToday(){
   } else if(plan==='v'){
     const m=MOBILITY.find(x=>x.id==='mob-kontor')||MOBILITY[0];
     hero=`<section class="card hero mob stack" aria-labelledby="h-rest">
-      <span class="eyebrow">Vilodag</span><h2 id="h-rest">Vila idag – helt okej</h2>
-      <p style="margin:0">${d.did==='skip'?'Du hoppade över dagens pass. Imorgon fortsätter schemat med nästa dag.':`Passet (${({s:'styrka',r:'löpning',m:'rörlighet'})[seqType(0)]}) väntar till imorgon – ingenting hoppas över.`}</p>
+      <span class="eyebrow">Vilodag</span><h2 id="h-rest">${d.did==='skip'?'Du hoppade över idag':'Vila idag – helt okej'}</h2>
+      <p style="margin:0">${d.did==='skip'?`Helt okej. Imorgon: ${esc(passLabel(1))}.`:`Passet (${({s:'styrka',r:'löpning',m:'rörlighet'})[seqType(0)]}) väntar till imorgon – ingenting hoppas över.`}</p>
       <p class="small muted" style="margin:0">Rörelsepauser och steg räknas fortfarande – lite rörelse hjälper återhämtningen.</p>
-      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Lätt rörlighet (${m.min} min)</button>${d.did==='skip'?'':'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
+      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Lätt rörlighet (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
     </section>`;
   } else {
     const m=MOBILITY[new Date().getDate()%MOBILITY.length];
@@ -1885,7 +1894,8 @@ function viewToday(){
       ${seqInit().res===k?'<span class="pill mob">Dagen avbockad ✓</span>':'<button class="btn ghost sm" type="button" data-resolve>Klar med dagen ✓</button>'}</div>
       <details><summary>Sugen på att träna ändå?</summary><p class="small muted" style="margin:8px 0">Kör gärna ett extra pass. Det räknas som bonus – nästa planerade pass ligger kvar och programmet fortsätter i ordning.</p>
       <div class="row"><button class="btn ghost sm" type="button" data-dayplan="s">Styrka idag</button><button class="btn ghost sm" type="button" data-dayplan="r">Löpning idag</button></div></details>
-      ${d.plan?'<button class="btn ghost sm" type="button" data-undoplan>Återställ dagens plan</button>':''}
+      ${d.plan&&seqInit().res===k?'<button class="btn ghost sm" type="button" data-undoplan>Återställ dagens plan</button>':''}
+      ${seqInit().res===k?'':skipBox()}
     </section>`;
   }
   const iss=S.settings.issues||[], pel=iss.includes('bäckenbotten')||iss.includes('gravid');
@@ -1894,7 +1904,7 @@ function viewToday(){
      <button class="btn ghost sm" type="button" data-settings>Inställningar</button></header>
    <div class="stack">
    ${dayNav()}
-   ${wait&&plan!=='v'?`<div class="note waitnote" role="status"><strong>Väntar sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Det blev inget de senaste ${wait.days===1?'dagen':wait.days+' dagarna'}, så schemat står kvar på samma dag. Kör passet idag, skjut upp eller hoppa över det.</div>`:''}
+   ${wait&&plan!=='v'?`<div class="note waitnote" role="status"><strong>Väntar sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Det blev inget de senaste ${wait.days===1?'dagen':wait.days+' dagarna'}, så schemat står kvar på samma dag. Kör passet idag, skjut upp eller hoppa över det.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
    ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
    ${backupDue()?backupCard():''}
    ${movesCard()}
@@ -1980,8 +1990,9 @@ async function doBackup(){try{await navigator.clipboard.writeText(JSON.stringify
 function lowToggle(){const d=day(),lab=S.settings.cycle?'Mens eller låg energi idag':'Låg energi idag';
   return `<div class="row between" style="flex-wrap:nowrap"><span class="small muted">${d.low?'Lättare variant idag – lyssna på kroppen.':''}</span><button class="chip" type="button" data-low aria-pressed="${!!d.low}">${lab}</button></div>`}
 function skipBox(){
-  return `<details><summary>Kan du inte träna idag?</summary><p class="small muted" style="margin:8px 0"><strong>Skjut upp:</strong> passet väntar och kommer tillbaka imorgon. <strong>Hoppa över:</strong> schemat går vidare till nästa dag. Gör du inget alls väntar passet kvar tills du bockar av eller hoppar över det.</p>
-   <div class="row"><button class="btn ghost sm" type="button" data-dayplan="v">Skjut upp till imorgon</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över</button>${day().plan?'<button class="btn ghost sm" type="button" data-undoplan>Återställ</button>':''}</div></details>`;
+  return `<div class="skiprow stack" style="gap:6px;border-top:1px solid var(--line);padding-top:12px">
+   <div class="row"><button class="btn ghost sm" type="button" data-dayplan="v">Skjut upp till imorgon</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över idag</button>${day().plan?'<button class="btn ghost sm" type="button" data-undoplan>Återställ</button>':''}</div>
+   <p class="small muted" style="margin:0">Skjut upp: passet väntar till imorgon. Hoppa över: schemat går vidare och nästa pass kommer imorgon.</p></div>`;
 }
 function showRunEdit(ts){
   const l=S.log.find(x=>x.ts===+ts); if(!l) return;
@@ -2003,6 +2014,7 @@ function logRow(l){
 let weekOff=0;
 function viewWeek(){
   if(weekOff>0) return viewWeekAhead();
+  if(weekOff<0) return viewWeekPast();
   const t=weekTemplate(), mon=monday(new Date()), tk=today();
   const label={s:'Styrka',r:'Löp',m:'Rörlig',v:'Vila',skip:'Hoppad',none:'–'};
   const cells=t.map((x0,i)=>{const dt=addDays(mon,i),k=dkey(dt),L=logsOn(k),dd=S.days[k],chg=!!(dd&&dd.plan);let x=plannedFor(dt);
@@ -2030,9 +2042,10 @@ function viewWeek(){
    <section class="card"><h3>Senaste passen</h3><div class="list">${S.log.slice(-6).reverse().map(logRow).join('')||'<p class="muted small">Inget loggat än.</p>'}</div></section>
   </div>`;
 }
+function weekTitle(){return weekOff===0?'Den här veckan':weekOff===1?'Nästa vecka':weekOff===-1?'Förra veckan':weekOff<0?'För '+(-weekOff)+' veckor sedan':'Om '+weekOff+' veckor'}
 function weekNav(){const mon=addDays(monday(new Date()),7*weekOff);
-  return `<div class="daynav" role="group" aria-label="Byt vecka"><button class="btn ghost sm" type="button" data-weekoff="-1" ${weekOff<=0?'disabled':''} aria-label="Föregående vecka">‹</button>
-   <div class="dn2"><strong>${weekOff===0?'Den här veckan':weekOff===1?'Nästa vecka':'Om '+weekOff+' veckor'}</strong><span class="small muted">v${isoWeek(mon)} · ${esc(mon.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}–${esc(addDays(mon,6).toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</span></div>
+  return `<div class="daynav" role="group" aria-label="Byt vecka"><button class="btn ghost sm" type="button" data-weekoff="-1" ${weekOff<=-8?'disabled':''} aria-label="Föregående vecka">‹</button>
+   <div class="dn2"><strong>${weekTitle()}</strong><span class="small muted">v${isoWeek(mon)} · ${esc(mon.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}–${esc(addDays(mon,6).toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</span></div>
    <button class="btn ghost sm" type="button" data-weekoff="1" ${weekOff>=3?'disabled':''} aria-label="Nästa vecka">›</button></div>`}
 /* Lista över kommande pass mellan två datum, med vilket pass det blir */
 function upcomingList(a,b,title){const tk=today(),now=new Date(tk+'T12:00:00');const rows=[];
@@ -2058,6 +2071,34 @@ function viewWeekAhead(){
      <div><div class="k num">${c('r')}</div><div class="small muted">Löppass</div></div>
      <div><div class="k num">${c('m')+c('v')}</div><div class="small muted">Lugna dagar</div></div></div></section>
    ${upcomingList(dkey(mon),dkey(addDays(mon,6)),'Passen')}
+   <button class="btn ghost" type="button" data-weekoff="0">Tillbaka till den här veckan</button>
+  </div>`;
+}
+/* Tidigare veckor: vad som faktiskt gjordes, efter loggarna */
+function fmtDur(m){m=Math.round(m);if(m<60)return m+' min';const h=Math.floor(m/60),r=m%60;return h+' h'+(r?' '+r+' min':'')}
+function viewWeekPast(){
+  const mon=addDays(monday(new Date()),7*weekOff),tk=today();
+  const label={s:'Styrka',r:'Löp',m:'Rörl.',o:'Övrigt',skip:'Hoppad',none:'–'};
+  const keys=[...Array(7)].map((_,i)=>dkey(addDays(mon,i)));
+  const cells=keys.map((k,i)=>{const L=logsOn(k),dd=S.days[k],off=daysBetween(tk,k);
+    const has=t=>L.some(l=>l.type===t);
+    const x=has('styrka')?'s':has('löpning')?'r':(has('rörlighet')||dd?.mob)?'m':L.length?'o':dd?.did==='skip'?'skip':'none';
+    const ok=L.length>0||!!dd?.mob, can=off>=-14&&off<0;
+    return `<button type="button" class="day" ${can?`data-peek="${off}"`:'disabled'} aria-label="${DAYS_SV[i]}: ${label[x]}${can?'. Tryck för att visa dagen.':''}"><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag" ${x==='skip'?'style="font-size:9.5px;letter-spacing:-.02em;overflow-wrap:normal"':''}>${label[x]}</span>${ok?'<span class="done" aria-label="klart">✓</span>':''}${dd&&dd.steps?`<span class="tag muted num">${(dd.steps/1000).toFixed(1)}k</span>`:''}${dd&&dd.moves&&dd.moves.length?`<span class="tag muted num">${dd.moves.length} p</span>`:''}</button>`}).join('');
+  const wk=S.log.filter(l=>l.date>=keys[0]&&l.date<=keys[6]);
+  const cnt=t=>wk.filter(l=>l.type===t).length;
+  const steps=keys.reduce((a,k)=>a+(+S.days[k]?.steps||0),0);
+  const mins=wk.reduce((a,l)=>a+(parseFloat(String(l.min||0).replace(',','.'))||0),0);
+  return `<header class="top"><div><div class="date">Vecka ${isoWeek(mon)}</div><h1>${esc(weekTitle())}</h1></div><button class="btn ghost sm" type="button" data-settings>Ändra upplägg</button></header>
+  <div class="stack">${weekNav()}
+   <div class="week">${cells}</div>
+   <p class="small muted" style="margin:0">Så blev veckan, efter det du loggade. Tryck på en dag de senaste två veckorna för att se eller komplettera den.</p>
+   <section class="card"><div class="stat" style="grid-template-columns:repeat(2,1fr);row-gap:14px">
+     <div><div class="k num">${cnt('styrka')}</div><div class="small muted">Styrkepass</div></div>
+     <div><div class="k num">${cnt('löpning')}</div><div class="small muted">Löppass</div></div>
+     <div><div class="k num">${Math.round(steps/7).toLocaleString('sv-SE')}</div><div class="small muted">Snittsteg/dag</div></div>
+     <div><div class="k num">${mins?fmtDur(mins):'–'}</div><div class="small muted">Träningstid</div></div></div></section>
+   <section class="card"><h3>Veckans pass</h3><div class="list">${wk.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.ts||0)-(b.ts||0)).map(logRow).join('')||'<p class="muted small">Inget loggat den här veckan.</p>'}</div></section>
    <button class="btn ghost" type="button" data-weekoff="0">Tillbaka till den här veckan</button>
   </div>`;
 }
@@ -2972,7 +3013,7 @@ function bind(root){
   bindCheckin(root);
   bindPast(root);bindOther(root);
   bindSettings(root);
-  root.querySelectorAll('[data-weekoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.weekoff;weekOff=v===0?0:Math.max(0,Math.min(3,weekOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
+  root.querySelectorAll('[data-weekoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.weekoff;weekOff=v===0?0:Math.max(-8,Math.min(3,weekOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{dayOff=+b.dataset.peek;go('idag')});
   root.querySelectorAll('[data-progp]').forEach(b=>b.onclick=()=>{progP=b.dataset.progp;render()});
   root.querySelectorAll('[data-tip]').forEach(b=>b.onclick=()=>{const t=document.getElementById(b.dataset.tipfor);if(t){t.textContent=b.dataset.tip;t.classList.add('tipon')}root.querySelectorAll('[data-tipfor="'+b.dataset.tipfor+'"]').forEach(x=>x.classList.toggle('tipsel',x===b))});
@@ -3006,7 +3047,12 @@ function bind(root){
   root.querySelectorAll('[data-swap]').forEach(b=>b.onclick=()=>{swap=null;setDay(today(),{plan:b.dataset.swap})});
   root.querySelectorAll('[data-dayplan]').forEach(b=>b.onclick=()=>{swap=null;const v=b.dataset.dayplan;setDay(today(),{plan:v});toast(v==='v'?'Passet väntar till imorgon':'Dagens plan ändrad')});
   root.querySelectorAll('[data-undoplan]').forEach(b=>b.onclick=()=>{swap=null;const d=day();delete d.plan;markDirty('days',monthOf(today()));render()});
-  root.querySelectorAll('[data-skipday]').forEach(b=>b.onclick=()=>{swap=null;const d=day();delete d.plan;resolveDay('skip');render();toast('Hoppade över – imorgon fortsätter schemat med nästa dag')});
+  root.querySelectorAll('[data-skipday]').forEach(b=>b.onclick=()=>{swap=null;const d=day(),q=seqInit(),t=today();if(q.res===t)return;
+    S.settings.seqUndo={date:t,pos:q.pos,res:q.res??null,doneType:q.doneType??null,plan:d.plan||null};delete d.plan;
+    if(!resolveDay('skip')){S.settings.seqUndo=null;return render()}markDirty('settings');render();toast(`Hoppade över – imorgon: ${passLabel(1)}`)});
+  root.querySelectorAll('[data-skipundo]').forEach(b=>b.onclick=()=>{swap=null;if(undoSkip()){render();toast('Ångrat – dagens pass är tillbaka')}});
+  root.querySelectorAll('[data-skipwait]').forEach(b=>b.onclick=()=>{swap=null;if(!waitingInfo())return;const y=dkey(addDays(new Date(),-1));
+    if(resolveDay('skip',y)){render();toast(`Hoppade över det väntande passet – idag: ${passLabel(0)}`)}});
   root.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=()=>{resolveDay('m');render();toast('Dagen är avbockad')});
   root.querySelectorAll('[data-movetomorrow]').forEach(b=>b.onclick=()=>{swap=null;const t0=plannedFor(new Date()),tm=addDays(new Date(),1),t1=plannedFor(tm);
     setDay(dkey(tm),{plan:t0});setDay(today(),{plan:(t1==='m'||t1==='v')?'v':t1});toast('Dagens pass är flyttat till imorgon')});
