@@ -2044,11 +2044,20 @@ const kgTxt=v=>String(v??'').replace('.',',');
 function fmtLogSet(s){return Array.isArray(s[2])&&s[2].length?s[2].map(d=>`${kgTxt(d[0]||'–')}×${d[1]||'?'}`).join(' → '):`${kgTxt(s[0]||'–')} × ${s[1]||'?'}`}
 const exTop=e=>Math.max(0,...(e.sets||[]).map(x=>kgNum(x[0])));
 function prevExBefore(l,name){let best=null;S.log.forEach(o=>{if(o===l||o.type!=='styrka'||o.ts===l.ts)return;if(o.date>l.date||(o.date===l.date&&(o.ts||0)>=(l.ts||0)))return;
-  const e=(o.ex||[]).find(x=>x.n===name);if(e&&exTop(e)>0&&(!best||o.date>best.o.date||(o.date===best.o.date&&(o.ts||0)>(best.o.ts||0))))best={o,e}});return best}
+  const e=flatEx(o).find(x=>x.n===name);if(e&&exTop(e)>0&&(!best||o.date>best.o.date||(o.date===best.o.date&&(o.ts||0)>(best.o.ts||0))))best={o,e}});return best}
 function showStrengthLog(ts){
   const l=S.log.find(x=>x.ts===+ts);if(!l)return;SE=null;sheetCtx={t:'slog',ts:l.ts};
   const nSets=(l.ex||[]).reduce((a,e)=>a+(e.sets||[]).length,0),vol=+l.vol||logVol(l),tpl=l.wobj||WBYID[l.wid];
-  const exs=(l.ex||[]).map(e=>{const top=exTop(e),pv=prevExBefore(l,e.n),pt=pv?exTop(pv.e):0;let hi=-1;(e.sets||[]).forEach((s,j)=>{if(top&&kgNum(s[0])===top&&hi<0)hi=j});
+  const cmp=(name,top)=>{const pv=prevExBefore(l,name),pt=pv?exTop(pv.e):0;const mk=pt&&top?(top>pt?'▲':top<pt?'▼':'='):'';
+    return {pv,pt,mk,lab:mk==='▲'?'Tyngre än förra gången':mk==='▼'?'Lättare än förra gången':'Samma vikt som förra gången'}};
+  const mkSpan=c=>` <span class="small" title="${c.lab}" aria-label="${c.lab}">${c.mk}</span>`;
+  const exs=(l.ex||[]).map(e=>{
+    if(Array.isArray(e.parts)&&e.parts.length){const P=e.parts,n=Math.max(...P.map(p=>(p.sets||[]).length),0);
+      const C=P.map(p=>{const top=exTop(p),c=cmp(p.n,top);let hi=-1;(p.sets||[]).forEach((x,j)=>{if(top&&kgNum(x[0])===top&&hi<0)hi=j});return {...c,hi,top}});
+      const rows=[...Array(n)].map((_,j)=>`<div class="slsets">${P.map((p,k)=>p.sets&&p.sets[j]?esc(p.n)+' '+esc(fmtLogSet(p.sets[j]))+(C[k].hi===j&&C[k].mk?mkSpan(C[k]):''):'').filter(Boolean).join(' · ')}</div>`).join('');
+      const prevL=P.map((p,k)=>C[k].pv?`${esc(p.n)} ${esc(kgTxt(C[k].pt))} kg`:'').filter(Boolean);
+      return `<div class="slex"><div class="nm">${esc(e.n)}</div>${rows||'<span class="muted">Inga set</span>'}${prevL.length?`<div class="small muted">Förra gången, tyngst: ${prevL.join(' · ')}</div>`:''}</div>`}
+    const top=exTop(e),pv=prevExBefore(l,e.n),pt=pv?exTop(pv.e):0;let hi=-1;(e.sets||[]).forEach((s,j)=>{if(top&&kgNum(s[0])===top&&hi<0)hi=j});
     const mk=pt&&top?(top>pt?'▲':top<pt?'▼':'='):'',lab=mk==='▲'?'Tyngre än förra gången':mk==='▼'?'Lättare än förra gången':'Samma vikt som förra gången';
     return `<div class="slex"><div class="nm">${esc(e.n)}</div><div class="slsets">${(e.sets||[]).map((s,j)=>esc(fmtLogSet(s))+(j===hi&&mk?` <span class="small" title="${lab}" aria-label="${lab}">${mk}</span>`:'')).join(' · ')||'<span class="muted">Inga set</span>'}</div>
      ${pv?`<div class="small muted">Förra gången (${esc(shortDate(pv.o.date))}): tyngst ${esc(kgTxt(pt))} kg</div>`:''}</div>`}).join('');
@@ -2059,7 +2068,16 @@ function showStrengthLog(ts){
 }
 let SE=null; // redigering av loggat styrkepass
 function editStrengthLog(ts){const l=S.log.find(x=>x.ts===+ts);if(!l)return;const c=JSON.parse(JSON.stringify(l));
-  SE={ts:l.ts,ex:(c.ex||[]).map((e,k)=>({n:e.n,k,sets:(e.sets||[]).map(s=>Array.isArray(s[2])&&s[2].length?[String(s[0]??''),String(s[1]??''),s[2].map(d=>[String(d[0]??''),String(d[1]??'')])]:[String(s[0]??''),String(s[1]??'')])})),
+  const str=v=>String(v??'');
+  SE={ts:l.ts,ex:(c.ex||[]).map((e,k)=>{const P=String(e.n).split(' / ');
+    if(P.length>1){const parts=Array.isArray(e.parts)&&e.parts.length?e.parts:null,pn=parts?parts.map(p=>p.n):P;
+      /* Gamla superset-loggar utan parts: A får sparad vikt och första delen av reps, övriga tom vikt. */
+      const n=parts?Math.max((e.sets||[]).length,...parts.map(p=>(p.sets||[]).length)):(e.sets||[]).length;
+      return {n:pn.join(' / '),k,pn,sets:[...Array(n)].map((_,j)=>{const s=(e.sets||[])[j]||['',''],rp=str(s[1]).split('/');
+        return ['','',null,pn.map((_,q)=>parts?[str(parts[q].sets&&parts[q].sets[j]?parts[q].sets[j][0]:''),str(parts[q].sets&&parts[q].sets[j]?parts[q].sets[j][1]:'')]:[q?'':str(s[0]),rp.length===pn.length?rp[q]:(q?'':str(s[1]))])]})}}
+    return {n:e.n,k,sets:(e.sets||[]).map(s=>Array.isArray(s[2])&&s[2].length?[str(s[0]),str(s[1]),s[2].map(d=>[str(d[0]),str(d[1])])]
+      /* Gamla dropset-loggar utan drops: en rad per drop, första droppen får sparad vikt. */
+      :str(s[1]).includes('+')?[str(s[0]),str(s[1]),str(s[1]).split('+').map((r,q)=>[q?'':str(s[0]),r])]:[str(s[0]),str(s[1])])}}),
     min:l.min?kgTxt(l.min):'',date:l.date,pick:null,q:'',del:false};renderSE()}
 function seKeep(){const y=$('#sheet').scrollTop;renderSE();$('#sheet').scrollTop=y}
 function sePickList(q){const t=q.trim().toLowerCase();if(!t)return '';const hits=EXDB.filter(e=>e.n.toLowerCase().includes(t)).slice(0,6);
@@ -2068,6 +2086,10 @@ function sePickBox(lab){return `<div class="stack" style="gap:6px;margin-top:8px
 function renderSE(){
   const l=S.log.find(x=>x.ts===SE.ts);if(!l){SE=null;return closeSheet()}sheetCtx={t:'slog',ts:SE.ts};
   const exH=SE.ex.map((e,i)=>{const rows=e.sets.map((s,j)=>{const D=Array.isArray(s[2])?s[2]:null;
+      if(e.pn&&Array.isArray(s[3]))return s[3].map((d,k)=>`<span class="num muted" title="${esc(e.pn[k])}">${k?'':j+1}${LET[k]}</span>
+        <input type="text" inputmode="decimal" autocomplete="off" value="${esc(kgTxt(d[0]))}" placeholder="kg" data-seskg="${i}:${j}:${k}" aria-label="Vikt set ${j+1}, ${esc(e.pn[k])}">
+        <input type="text" inputmode="numeric" autocomplete="off" value="${esc(d[1])}" placeholder="reps" data-sesrp="${i}:${j}:${k}" aria-label="Reps set ${j+1}, ${esc(e.pn[k])}">
+        ${k===s[3].length-1?`<button class="rm" type="button" data-serm="${i}:${j}" aria-label="Ta bort set ${j+1}">×</button>`:'<span></span>'}`).join('');
       if(D)return D.map((d,k)=>`${k?'<span class="dar" aria-hidden="true">↳</span>':`<span class="num muted">${j+1}</span>`}
         <input type="text" inputmode="decimal" autocomplete="off" value="${esc(kgTxt(d[0]))}" placeholder="kg" data-sedkg="${i}:${j}:${k}" aria-label="Vikt set ${j+1}, drop ${k+1}">
         <input type="text" inputmode="numeric" autocomplete="off" value="${esc(d[1])}" placeholder="reps" data-sedrp="${i}:${j}:${k}" aria-label="Reps set ${j+1}, drop ${k+1}">
@@ -2076,10 +2098,10 @@ function renderSE(){
         <input type="text" inputmode="decimal" autocomplete="off" value="${esc(kgTxt(s[0]))}" placeholder="kg" data-sekg="${i}:${j}" aria-label="Vikt set ${j+1}">
         <input type="text" inputmode="numeric" autocomplete="off" value="${esc(s[1])}" placeholder="reps" data-serp="${i}:${j}" aria-label="Reps set ${j+1}">
         <button class="rm" type="button" data-serm="${i}:${j}" aria-label="Ta bort set ${j+1}">×</button>`}).join('');
-    return `<div class="ex"><div class="name">${i+1}. ${esc(e.n)}</div>
+    return `<div class="ex"><div class="name">${i+1}. ${esc(e.n)}</div>${e.pn?`<div class="small muted">${e.pn.map((pn,k)=>`${LET[k]}: ${esc(pn)}`).join(' · ')}</div>`:''}
       ${e.sets.length?`<div class="sets"><span class="h">Set</span><span class="h">Kg</span><span class="h">Reps</span><span></span>${rows}</div>`:'<p class="small muted" style="margin:6px 0 0">Inga set – övningen tas bort när du sparar.</p>'}
-      <div class="acts"><button class="btn ghost sm" type="button" data-seaddset="${i}">+ Set</button><button class="btn ghost sm" type="button" data-serename="${i}">Byt namn</button><button class="btn ghost sm" type="button" data-sermex="${i}">Ta bort övningen</button></div>
-      ${SE.pick===i?sePickBox('Nytt namn'):''}</div>`}).join('');
+      <div class="acts"><button class="btn ghost sm" type="button" data-seaddset="${i}">+ Set</button>${e.pn?e.pn.map((pn,k)=>`<button class="btn ghost sm" type="button" data-serename="${i}:${k}" aria-label="Byt namn på ${esc(pn)}">Byt namn ${LET[k]}</button>`).join(''):`<button class="btn ghost sm" type="button" data-serename="${i}">Byt namn</button>`}<button class="btn ghost sm" type="button" data-sermex="${i}">Ta bort övningen</button></div>
+      ${SE.pick===i?sePickBox(SE.pickK!=null&&e.pn?'Nytt namn för '+e.pn[SE.pickK]:'Nytt namn'):''}</div>`}).join('');
   openSheet(`<header class="top"><div><div class="date">Redigera loggat pass</div><h1 class="h1sm">${esc(svTitle(l.title)||'Styrkepass')}</h1></div></header>
    <div class="stack sledit"><section class="card stack"><div class="grid2">
      <label class="f" for="seDate">Datum<input id="seDate" type="date" value="${esc(SE.date)}" max="${today()}"></label>
@@ -2102,10 +2124,15 @@ function seSave(){
   const date=String(SE.date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today()){toast('Välj ett datum som inte ligger i framtiden');return}
   const min=parseFloat(String(SE.min).replace(',','.'));
   const orig=S.log[idx],c=JSON.parse(JSON.stringify(orig)),oldEx=c.ex||[];
-  const ex=SE.ex.map(e=>{const sets=e.sets.map(s=>{if(Array.isArray(s[2])){const D=s[2].filter(d=>d[0]!==''||d[1]!=='').map(d=>[d[0],d[1]]);if(!D.length)return null;const n=[D[0][0],D.some(d=>d[1]!=='')?D.map(d=>d[1]).join('+'):''];return [...n,D]}
+  const ex=SE.ex.map(e=>{const base=e.k!=null&&oldEx[e.k]?oldEx[e.k]:{};
+    if(e.pn){const kept=e.sets.filter(s=>Array.isArray(s[3])&&s[3].some(d=>d[0]!==''||d[1]!==''));if(!kept.length)return null;
+      const sets=kept.map(s=>[s[3][0][0],s[3].some(d=>d[1]!=='')?s[3].map(d=>d[1]).join('/'):'']);
+      const parts=e.pn.map((n,k)=>({...((base.parts||[])[k]||{}),n,sets:kept.map(s=>[s[3][k][0],s[3][k][1]]).filter(d=>d[0]!==''||d[1]!=='')}));
+      return {...base,n:e.n,sets,parts}}
+    const sets=e.sets.map(s=>{if(Array.isArray(s[2])){const D=s[2].filter(d=>d[0]!==''||d[1]!=='').map(d=>[d[0],d[1]]);if(!D.length)return null;const n=[D[0][0],D.some(d=>d[1]!=='')?D.map(d=>d[1]).join('+'):''];return [...n,D]}
       return s[0]!==''||s[1]!==''?[s[0],s[1]]:null}).filter(Boolean);
-    if(!sets.length)return null;const base=e.k!=null&&oldEx[e.k]?oldEx[e.k]:{};return {...base,n:e.n,sets}}).filter(Boolean);
-  c.ex=ex;c.vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+setVol(s),0),0);if(!isNaN(min)&&min>0)c.min=Math.round(min*10)/10;c.date=date;c.edited=Date.now();
+    if(!sets.length)return null;const o={...base,n:e.n,sets};if(o.parts&&!String(e.n).includes(' / '))delete o.parts;return o}).filter(Boolean);
+  c.ex=ex;c.vol=ex.reduce((a,e)=>a+exVol(e),0);if(!isNaN(min)&&min>0)c.min=Math.round(min*10)/10;c.date=date;c.edited=Date.now();
   S.log[idx]=c;markDirty('log',monthOf(orig.date));if(monthOf(date)!==monthOf(orig.date))markDirty('log',monthOf(date));
   if(orig.date===today()&&date!==today())unresolveToday();
   if(c.wobj)regW(c.wobj);sugCache=null;SE=null;showStrengthLog(c.ts);toast('Passet är uppdaterat')}
@@ -2117,14 +2144,16 @@ function bindSE(root){
   root.querySelectorAll('[data-serp]').forEach(x=>x.oninput=()=>{const [i,j]=ix(x.dataset.serp);SE.ex[i].sets[j][1]=x.value.trim()});
   root.querySelectorAll('[data-sedkg]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sedkg);const s=SE.ex[i].sets[j];s[2][k][0]=seClean(x.value);seSyncDrop(s)});
   root.querySelectorAll('[data-sedrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sedrp);const s=SE.ex[i].sets[j];s[2][k][1]=x.value.trim();seSyncDrop(s)});
+  root.querySelectorAll('[data-seskg]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.seskg);SE.ex[i].sets[j][3][k][0]=seClean(x.value)});
+  root.querySelectorAll('[data-sesrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sesrp);SE.ex[i].sets[j][3][k][1]=x.value.trim()});
   root.querySelectorAll('[data-serm]').forEach(b=>b.onclick=()=>{const [i,j]=ix(b.dataset.serm);SE.ex[i].sets.splice(j,1);seKeep()});
-  root.querySelectorAll('[data-seaddset]').forEach(b=>b.onclick=()=>{const e=SE.ex[+b.dataset.seaddset],ls=e.sets[e.sets.length-1];e.sets.push(ls&&Array.isArray(ls[2])?['','',ls[2].map(()=>['',''])]:['','']);seKeep()});
+  root.querySelectorAll('[data-seaddset]').forEach(b=>b.onclick=()=>{const e=SE.ex[+b.dataset.seaddset],ls=e.sets[e.sets.length-1];e.sets.push(e.pn?['','',null,e.pn.map(()=>['',''])]:ls&&Array.isArray(ls[2])?['','',ls[2].map(()=>['',''])]:['','']);seKeep()});
   root.querySelectorAll('[data-sermex]').forEach(b=>b.onclick=()=>{SE.ex.splice(+b.dataset.sermex,1);SE.pick=null;seKeep()});
-  root.querySelectorAll('[data-serename]').forEach(b=>b.onclick=()=>{const i=+b.dataset.serename;SE.pick=SE.pick===i?null:i;SE.q='';seKeep()});
+  root.querySelectorAll('[data-serename]').forEach(b=>b.onclick=()=>{const [i,k]=b.dataset.serename.split(':').map(Number);const kk=isNaN(k)?null:k;const same=SE.pick===i&&SE.pickK===kk;SE.pick=same?null:i;SE.pickK=same?null:kk;SE.q='';seKeep()});
   root.querySelectorAll('[data-seaddex]').forEach(b=>b.onclick=()=>{SE.pick='add';SE.q='';seKeep()});
   root.querySelectorAll('[data-sepickcancel]').forEach(b=>b.onclick=()=>{SE.pick=null;SE.q='';seKeep()});
   root.querySelectorAll('[data-sepickname]').forEach(b=>b.onclick=()=>{const n=b.dataset.sepickname.trim();if(!n)return;
-    if(SE.pick==='add')SE.ex.push({n,k:null,sets:[['',''],['',''],['','']]});else if(typeof SE.pick==='number'&&SE.ex[SE.pick])SE.ex[SE.pick].n=n;SE.pick=null;SE.q='';seKeep()});
+    if(SE.pick==='add')SE.ex.push({n,k:null,sets:[['',''],['',''],['','']]});else if(typeof SE.pick==='number'&&SE.ex[SE.pick]){const e=SE.ex[SE.pick];if(e.pn&&SE.pickK!=null){e.pn[SE.pickK]=n;e.n=e.pn.join(' / ')}else{e.n=n;if(e.pn&&!n.includes(' / '))e.pn=null}}SE.pick=null;SE.pickK=null;SE.q='';seKeep()});
   const dt=root.querySelector('#seDate');if(dt)dt.oninput=dt.onchange=()=>{SE.date=dt.value};
   const mn=root.querySelector('#seMin');if(mn)mn.oninput=()=>{SE.min=mn.value};
   root.querySelectorAll('[data-sedel]').forEach(b=>b.onclick=()=>{SE.del=true;seKeep()});
@@ -2406,7 +2435,7 @@ function viewExList(){
    <section class="card"><div class="small muted num" style="margin-bottom:4px">${res.length} övningar · tryck för instruktioner</div><div class="list">${res.map(e=>`<button class="li exrow" type="button" data-ex="${esc(e.n)}">${animSVG(exAnimKey(e.n),56)||'<span class="noanim" aria-hidden="true"></span>'}<div class="grow"><strong>${esc(e.n)}</strong>${isAvoided(e.n)?' <span class="pill line">Undviks</span>':''}<div class="small muted">${esc(MUSCLE_GROUP[e.m])} · ${[...e.eq].map(c=>EQ_SV[c]).join(', ')}</div></div><span class="chev" aria-hidden="true">›</span></button>`).join('')||'<p class="small muted">Ingen övning matchar.</p>'}</div></section>`;
 }
 function exStats(name){const pts=[];let last=null,n=0;
-  S.log.filter(l=>l.type==='styrka').forEach(l=>(l.ex||[]).forEach(e=>{if(!String(e.n).split(' / ').includes(name))return;n++;const kg=Math.max(0,...(e.sets||[]).map(s=>+s[0]||0));if(kg)pts.push({d:l.date,y:kg});last={d:l.date,sets:e.sets}}));
+  S.log.filter(l=>l.type==='styrka').forEach(l=>flatEx(l).forEach(e=>{if(!String(e.n).split(' / ').includes(name))return;n++;const kg=Math.max(0,...(e.sets||[]).map(s=>+s[0]||0));if(kg)pts.push({d:l.date,y:kg});last={d:l.date,sets:e.sets}}));
   return {pts,last,n}}
 function showExercise(name){
   sheetCtx={t:'ex',name};
@@ -2438,7 +2467,7 @@ function lineChart(series,unit){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Graf i ${unit}">${g}${lab}${lines}</svg>`;
 }
 let progEx='';
-function exHistory(){const h={};S.log.filter(l=>l.type==='styrka').forEach(l=>(l.ex||[]).forEach(e=>{const kg=Math.max(0,...(e.sets||[]).map(x=>+x[0]||0));if(!kg)return;(h[e.n]=h[e.n]||[]).push({d:l.date,y:kg})}));return h}
+function exHistory(){const h={};S.log.filter(l=>l.type==='styrka').forEach(l=>flatEx(l).forEach(e=>{const kg=Math.max(0,...(e.sets||[]).map(x=>+x[0]||0));if(!kg)return;(h[e.n]=h[e.n]||[]).push({d:l.date,y:kg})}));return h}
 /* ---------- Framsteg: statistik, grafer och milstolpar ---------- */
 let progP='12v', progTip={};
 const PERIODS=[['4v','4 veckor',28],['12v','12 veckor',84],['ar','I år',0],['allt','Allt',-1]];
@@ -2458,12 +2487,16 @@ const setDone=s=>!!(s&&(+s[0]||+s[1]||s[2]));
 /* Volym för ett loggat set: dropset (s[2] = [[kg,reps],...]) summeras över alla drops. */
 const setVol=s=>Array.isArray(s[2])&&s[2].length?s[2].reduce((a,d)=>a+(kgNum(d[0])||0)*(parseInt(d[1])||0),0):(+s[0]||0)*(parseInt(s[1])||0);
 const setTxt=(s,dash)=>Array.isArray(s[2])&&s[2].length?s[2].map(d=>`${String(d[0]||'–')}×${d[1]||'?'}`).join(' → '):`${dash?s[0]||'–':s[0]}×${s[1]||'?'}`;
-function logVol(l){if(+l.vol)return +l.vol;let v=0;(l.ex||[]).forEach(e=>(e.sets||[]).forEach(s=>{v+=setVol(s)}));return v}
+/* Supersets loggas med parts:[{n,sets}] per delövning. flatEx gör om en loggpost till enskilda övningar:
+   poster utan parts som förut, poster med parts → varje delövning för sig. */
+function flatEx(l){const out=[];(l&&l.ex||[]).forEach(e=>{if(Array.isArray(e.parts)&&e.parts.length)e.parts.forEach(p=>out.push({...p,sets:p.sets||[],of:e.n}));else out.push(e)});return out}
+const exVol=e=>Array.isArray(e.parts)&&e.parts.length?e.parts.reduce((a,p)=>a+(p.sets||[]).reduce((b,s)=>b+setVol(s),0),0):(e.sets||[]).reduce((a,s)=>a+setVol(s),0);
+function logVol(l){if(+l.vol)return +l.vol;let v=0;(l.ex||[]).forEach(e=>{v+=exVol(e)});return v}
 function activeDay(k){const d=S.days[k];return S.log.some(l=>l.date===k)||(d&&((+d.steps||0)>=S.settings.stepGoal||d.mob||d.walk||(d.moves||[]).length>=3))}
 function streaks(){let cur=0,d=new Date();if(!activeDay(dkey(d)))d=addDays(d,-1);while(activeDay(dkey(d))){cur++;d=addDays(d,-1)}
   const keys=new Set([...S.log.map(l=>l.date),...Object.keys(S.days)]);const sorted=[...keys].filter(activeDay).sort();let best=0,run=0,prev=null;
   sorted.forEach(k=>{run=prev&&dkey(addDays(new Date(prev+'T12:00:00'),1))===k?run+1:1;best=Math.max(best,run);prev=k});return {cur,best:Math.max(best,cur)}}
-function prList(){const h={};S.log.filter(l=>l.type==='styrka').slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(l=>(l.ex||[]).forEach(e=>{const kg=Math.max(0,...(e.sets||[]).map(x=>+x[0]||0));if(kg)(h[e.n]=h[e.n]||[]).push({d:l.date,kg})}));
+function prList(){const h={};S.log.filter(l=>l.type==='styrka').slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(l=>flatEx(l).forEach(e=>{const kg=Math.max(0,...(e.sets||[]).map(x=>+x[0]||0));if(kg)(h[e.n]=h[e.n]||[]).push({d:l.date,kg})}));
   const prs=[];Object.entries(h).forEach(([n,a])=>{let max=a[0].kg;const first=a[0].kg;a.slice(1).forEach(p=>{if(p.kg>max){prs.push({n,d:p.d,kg:p.kg,from:max,first});max=p.kg}})});
   return {prs:prs.sort((a,b)=>b.d.localeCompare(a.d)),hist:h}}
 const fmtNum=(v,dec=0)=>(Math.round(v*10**dec)/10**dec).toLocaleString('sv-SE');
@@ -2552,7 +2585,7 @@ function viewProgress(){
   const longest=R.reduce((a,l)=>(+l.km||0)>(+a?.km||0)?l:a,null),fastest=R.filter(l=>+l.avg&&(+l.km||0)>=3).reduce((a,l)=>+l.avg>(+a?.avg||0)?l:a,null);
   /* Muskelgrupper senaste 4 veckorna */
   const f28=dkey(addDays(new Date(),-27)),mg={};['Ben','Rygg','Bröst','Axlar','Armar','Bål','Vader'].forEach(g=>mg[g]=0);
-  S.log.filter(l=>l.type==='styrka'&&l.date>=f28).forEach(l=>(l.ex||[]).forEach(e=>{const g=muscleOf(e.n);if(g&&g in mg)mg[g]+=(e.sets||[]).filter(setDone).length||0}));
+  S.log.filter(l=>l.type==='styrka'&&l.date>=f28).forEach(l=>flatEx(l).forEach(e=>{const g=muscleOf(e.n);if(g&&g in mg)mg[g]+=(e.sets||[]).filter(setDone).length||0}));
   const mgRows=Object.entries(mg).sort((a,b)=>b[1]-a[1]);const least=mgRows.filter(r=>r[0]!=='Vader').slice(-1)[0];
   /* Programmet */
   const pi=DP_SEQ.findIndex(w=>w.i===S.settings.lastProg),pw=DP_SEQ[pi];
@@ -2759,11 +2792,11 @@ function ciHistoryCard(){const H=(S.settings.checkins||[]).slice().reverse();if(
 /* ---------- Sheets: pass, löpning, rörlighet, inställningar ---------- */
 function openSheet(html,after){const s=$('#sheet');$('#sheetBody').innerHTML=html;s.classList.add('open');s.scrollTop=0;s.scrollLeft=0;try{window.scrollTo(0,window.scrollY)}catch(e){};document.body.style.overflow='hidden';bind($('#sheetBody'));after&&after()}
 function closeSheet(){sheetCtx=null;$('#sheet').classList.remove('open');document.body.style.overflow='';const st=document.querySelector('.sticky');st&&st.remove();stopRest();render()}
-function lastSetsFor(name){for(let i=S.log.length-1;i>=0;i--){const e=(S.log[i].ex||[]).find(x=>x.n===name);if(e&&e.sets?.some(s=>s[0]))return e.sets}return null}
+function lastSetsFor(name){for(let i=S.log.length-1;i>=0;i--){const e=flatEx(S.log[i]).find(x=>x.n===name);if(e&&e.sets?.some(s=>s[0]))return e.sets}return null}
 
 let active=null; // pågående pass
 /* Viktförslag: klarade du alla reps förra gången → öka. Missade du mycket → sänk. Annars samma vikt. */
-function lastExLog(name){for(let i=S.log.length-1;i>=0;i--){const e=(S.log[i].ex||[]).find(x=>x.n===name);if(e&&e.sets&&e.sets.some(s=>+s[0]))return e}return null}
+function lastExLog(name){for(let i=S.log.length-1;i>=0;i--){const e=flatEx(S.log[i]).find(x=>x.n===name);if(e&&e.sets&&e.sets.some(s=>+s[0]))return e}return null}
 const firstNum=v=>{const m=String(v??'').match(/\d+/);return m?+m[0]:NaN};
 function weightSuggest(e){
   const [name,,,scheme,,,,,sets,reps]=e; const last=lastExLog(name); if(!last) return null;
@@ -2781,13 +2814,19 @@ function weightSuggest(e){
    räknat om till passets målreps per set. Supersets hoppas över. */
 const kgNum=v=>{const n=parseFloat(String(v??'').replace(',','.'));return isNaN(n)?0:n};
 const epley=(kg,r)=>kg*(1+r/30);
-function strengthLogsWithKg(){return S.log.filter(l=>l.type==='styrka'&&(l.ex||[]).some(x=>(x.sets||[]).some(s=>kgNum(s[0])>0)))}
+function strengthLogsWithKg(){return S.log.filter(l=>l.type==='styrka'&&flatEx(l).some(x=>(x.sets||[]).some(s=>kgNum(s[0])>0)))}
+/* En delövning i ett superset som egen rad: [namn,...,set,reps] med respektive del av "12/10". */
+const LET='ABCDEFGH';
+const supParts=e=>String(e&&e[0]||'').split(' / ');
+function partRow(e,k){const P=supParts(e);return [P[k],'',null,'straight',null,null,null,null,e[8]||3,(e[9]||[]).map(r=>{const a=String(r).split('/');return a[k]??a[0]})]}
 function prefillKg(e){
-  const name=String(e&&e[0]||'');if(!name||name.includes(' / '))return null;
+  const name=String(e&&e[0]||'');if(!name)return null;
+  if(name.includes(' / ')){const parts=supParts(e).map((_,k)=>prefillKg(partRow(e,k)));if(!parts.some(Boolean))return null;
+    return {kgs:(parts[0]&&parts[0].kgs)||[],parts,sup:true,level:parts.some(x=>x&&x.level==='ungefar')?'ungefar':'sakert'}}
   const sets=e[8]||3, reps=e[9]||[];
   const hist=[];let maxAt=[];
   for(let k=S.log.length-1;k>=0;k--){const l=S.log[k];if(l.type!=='styrka')continue;
-    const x=(l.ex||[]).find(y=>y.n===name);if(!x)continue;
+    const x=flatEx(l).find(y=>y.n===name);if(!x)continue;
     let best=0;(x.sets||[]).forEach(st=>{const kg=kgNum(st[0]),r=firstNum(st[1]);if(kg>0&&!isNaN(r)&&r>0){best=Math.max(best,epley(kg,r));maxAt.push([kg,r])}});
     if(best>0&&hist.length<3)hist.push({best,date:l.date,x});
   }
@@ -2808,18 +2847,25 @@ function prefillKg(e){
 /* Förslag för ett helt pass: hur många set som kan fyllas och om knappen ska visas. */
 function prefillPlan(w,sets){
   const P=w.x.map(prefillKg);let fill=0,all=0;
-  w.x.forEach((e,i)=>{const n=e[8]||3;all+=n;for(let j=0;j<n;j++){const cur=sets?sets[i]&&sets[i][j]:null;if(P[i]&&P[i].kgs[j]!==''&&(!cur||(cur[0]===''&&!cur[2])))fill++}});
+  w.x.forEach((e,i)=>{const n=e[8]||3;
+    if(P[i]&&P[i].sup){const np=P[i].parts.length;all+=n*np;for(let j=0;j<n;j++){const cur=sets?sets[i]&&sets[i][j]:null;P[i].parts.forEach((pp,k)=>{const pk=cur&&Array.isArray(cur[4])&&cur[4][k]?cur[4][k][0]:(k?'':cur?cur[0]:'');if(pp&&pp.kgs[j]!==''&&(!cur||(pk===''&&!cur[2])))fill++})}return}
+    all+=n*(supParts(e).length>1?supParts(e).length:1);if(supParts(e).length>1)return;
+    for(let j=0;j<n;j++){const cur=sets?sets[i]&&sets[i][j]:null;if(P[i]&&P[i].kgs[j]!==''&&(!cur||(cur[0]===''&&!cur[2])))fill++}});
   const ok=strengthLogsWithKg().length>=3&&w.x.length&&P.filter(Boolean).length>=w.x.length/2;
   return {P,fill,all,ok};
 }
-function ensurePre(){if(!active.pre)active.pre=active.sets.map(r=>r.map(()=>false));if(!active.preKg)active.preKg=active.sets.map(r=>r.map(()=>null))}
+function ensurePre(){if(!active.pre)active.pre=active.sets.map(r=>r.map(()=>false));if(!active.preKg)active.preKg=active.sets.map(r=>r.map(()=>null));if(!active.spreOn)active.spreOn={};if(!active.spreKg)active.spreKg={}}
 function doPrefill(){ensurePre();const w=activeW(),plan=prefillPlan(w,active.sets);let n=0,miss=0;
-  w.x.forEach((e,i)=>active.sets[i].forEach((s,j)=>{const k=plan.P[i]&&plan.P[i].kgs[j];
+  w.x.forEach((e,i)=>active.sets[i].forEach((s,j)=>{
+    const P=supParts(e);if(P.length>1){const S4=ensureParts(i,j,P);S4.forEach((d,k)=>{if(d[0]!==''||s[2])return;const v=plan.P[i]&&plan.P[i].parts&&plan.P[i].parts[k]?plan.P[i].parts[k].kgs[j]:'';
+      if(v!==''&&v!=null){d[0]=String(v);const key=i+':'+j+':'+k;active.spreOn[key]=true;active.spreKg[key]=String(v);n++}else miss++});syncSup(s);return}
+    const k=plan.P[i]&&plan.P[i].kgs[j];
     if(s[0]===''&&!s[2]){if(k!==''&&k!=null){s[0]=String(k);active.pre[i][j]=true;active.preKg[i][j]=String(k);n++}else miss++}}));
   active.preMiss=miss;return n}
-function clearPrefill(){ensurePre();active.sets.forEach((r,i)=>r.forEach((s,j)=>{if(active.pre[i][j]){s[0]='';active.pre[i][j]=false;active.preKg[i][j]=null}}));active.preMiss=0}
+function clearPrefill(){ensurePre();active.sets.forEach((r,i)=>r.forEach((s,j)=>{if(active.pre[i][j]){s[0]='';active.pre[i][j]=false;active.preKg[i][j]=null}}));
+  Object.keys(active.spreOn).forEach(key=>{const [i,j,k]=key.split(':').map(Number);const s=active.sets[i]&&active.sets[i][j];if(s&&s[4]&&s[4][k]){s[4][k][0]='';syncSup(s)}delete active.spreOn[key];delete active.spreKg[key]});active.preMiss=0}
 function prefillBar(){
-  ensurePre();const w=activeW(),nPre=active.pre.flat().filter(Boolean).length;
+  ensurePre();const w=activeW(),nPre=active.pre.flat().filter(Boolean).length+Object.keys(active.spreOn).length;
   if(nPre)return `<div class="prefill"><span class="small muted num">${nPre} set förifyllda${active.preMiss?' · '+active.preMiss+' saknar data':''}</span><button class="linkbtn small" type="button" data-prefillclear>Töm förslag</button></div>`;
   const pl=prefillPlan(w,active.sets);
   return pl.ok&&pl.fill?`<div class="prefill"><button class="btn ghost" type="button" data-prefill>Förifyll vikter (${pl.fill} av ${pl.all} set)</button></div>`:'';
@@ -2829,6 +2875,12 @@ function ensureDrops(i,j,tg){const s=active.sets[i][j],n=String(tg).split('+').l
   if(!Array.isArray(s[3])||s[3].length!==n){const old=Array.isArray(s[3])?s[3]:[];const rp=String(s[1]||'').split('+');s[3]=[...Array(n)].map((_,k)=>[old[k]?old[k][0]:'',old[k]?old[k][1]:(rp.length===n?rp[k]:'')])}
   s[3][0][0]=s[0];return s[3]}
 function syncDrop(s){if(!Array.isArray(s[3]))return;s[3][0][0]=s[0];s[1]=s[3].some(d=>d[1]!=='')?s[3].map(d=>d[1]).join('+'):''}
+/* Superset: active.sets[i][j][4] = [[kg,reps] per delövning]. s[0] = delövning A:s vikt, s[1] = reps ihopslagna med '/'. */
+function ensureParts(i,j,P){const s=active.sets[i][j],n=P.length;
+  if(!Array.isArray(s[4])||s[4].length!==n){const old=Array.isArray(s[4])?s[4]:[];const rp=String(s[1]||'').split('/');s[4]=P.map((_,k)=>old[k]?[old[k][0],old[k][1]]:[k?'':String(s[0]||''),rp.length===n?rp[k]:''])}
+  return s[4]}
+function syncSup(s){if(!Array.isArray(s[4]))return;s[0]=s[4][0][0];s[1]=s[4].some(d=>d[1]!=='')?s[4].map(d=>d[1]).join('/'):''}
+function supPH(e,k,j){const pr=partRow(e,k),ws=weightSuggest(pr),prev=lastSetsFor(pr[0]);return ws&&ws.kgs[j]!==''?ws.kgs[j]:prev&&prev[j]&&prev[j][0]?kgNum(prev[j][0]):''}
 const dropStep=n=>/hantel|dumbbell/i.test(n)?2:2.5;
 const r2=x=>Math.round(x*100)/100;
 function dropPH(e,i,j){const name=String(e[0]),s=active.sets[i][j],D=s[3]||[],n=D.length,step=dropStep(name);
@@ -2844,13 +2896,22 @@ function updDropPH(i,j){const s=active.sets[i][j];if(!Array.isArray(s[3]))return
   for(let k=1;k<s[3].length;k++){const el=document.querySelector(`[data-dkg="${i}:${j}:${k}"]`);if(el)el.placeholder=ph[k]!==''?String(ph[k]).replace('.',','):'kg'}}
 function exerciseHTML(e,i,mode){
   const [name,variation,repsText,scheme,,rest,notes,,sets,reps]=e;
-  const tempo=exTempo(e), tt=tempoText(tempo); const prev=lastSetsFor(name); const sug=mode==='run'?weightSuggest(e):null;
-  const prevTxt=prev?prev.filter(s=>s[0]).map(s=>setTxt(s)).join(', '):'';
+  const tempo=exTempo(e), tt=tempoText(tempo); const PN=supParts(e),isSup=PN.length>1;
+  const prev=lastSetsFor(name); const sug=mode==='run'&&!isSup?weightSuggest(e):null;
+  let prevTxt=prev?prev.filter(s=>s[0]).map(s=>setTxt(s)).join(', '):'';
+  if(isSup&&mode==='run'){const pt=PN.map(pn=>{const pv=lastSetsFor(pn);return pv?`${pn} ${pv.filter(s=>s[0]).map(s=>setTxt(s)).join(', ')}`:''}).filter(Boolean).join(' · ');if(pt)prevTxt=pt}
+  const supSug=isSup&&mode==='run'?PN.map((pn,k)=>{const w=weightSuggest(partRow(e,k));return w?{pn,w}:null}).filter(Boolean):[];
   let rows='';
   if(mode==='run'){
     rows=`<div class="sets"><span class="h">Set</span><span class="h">Kg</span><span class="h">Reps</span><span></span>`+
     [...Array(sets||3)].map((_,j)=>{const v=active.sets[i][j]||['','',false];
-      const tg=String(reps?.[j]??'');if(tg.includes('+')&&active.sets[i][j]){const D=ensureDrops(i,j,tg),ph=dropPH(e,i,j),pt=tg.split('+'),pre=active.pre&&active.pre[i]&&active.pre[i][j];
+      const tg=String(reps?.[j]??'');
+      if(isSup&&active.sets[i][j]){const S4=ensureParts(i,j,PN),pt=tg.split('/');
+        return S4.map((d,k)=>{const ph=supPH(e,k,j),key=i+':'+j+':'+k,dot=active.spreOn&&active.spreOn[key];return `<span class="num muted" title="${esc(PN[k])}">${k?'':j+1}${LET[k]}</span>
+      <span class="kgw"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(d[0]).replace('.',','))}" placeholder="${ph!==''?esc(String(ph).replace('.',',')):'kg'}" data-skg="${key}" aria-label="Vikt set ${j+1}, ${esc(PN[k])}">${dot?'<span class="pdot" aria-hidden="true"></span>':''}</span>
+      <input type="text" inputmode="numeric" value="${esc(d[1])}" placeholder="${esc(pt[k]??pt[0]??'')}" data-srp="${key}" aria-label="Reps set ${j+1}, ${esc(PN[k])}">
+      ${k===S4.length-1?`<button class="ok" type="button" aria-pressed="${!!v[2]}" data-ok="${i}:${j}" aria-label="Varv ${j+1} klart">${v[2]?'✓':''}</button>`:'<span></span>'}`}).join('')}
+      if(tg.includes('+')&&active.sets[i][j]){const D=ensureDrops(i,j,tg),ph=dropPH(e,i,j),pt=tg.split('+'),pre=active.pre&&active.pre[i]&&active.pre[i][j];
         return D.map((d,k)=>`${k?'<span class="dar" aria-hidden="true">↳</span>':`<span class="num muted">${j+1}</span>`}
       <span class="kgw"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(k?d[0]:v[0]).replace('.',','))}" placeholder="${ph[k]!==''?esc(String(ph[k]).replace('.',',')):'kg'}" ${k?`data-dkg="${i}:${j}:${k}"`:`data-kg="${i}:${j}"`} aria-label="Vikt set ${j+1}${D.length>1?', drop '+(k+1):''}">${!k&&pre?'<span class="pdot" aria-hidden="true"></span>':''}</span>
       <input type="text" inputmode="numeric" value="${esc(d[1])}" placeholder="${esc(pt[k]||'')}" data-drp="${i}:${j}:${k}" aria-label="Reps set ${j+1}, drop ${k+1}">
@@ -2863,6 +2924,7 @@ function exerciseHTML(e,i,mode){
   const ak=String(name).split(' / ').map(exAnimKey).filter(Boolean).slice(0,2);
   return `<div class="ex"><div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:12px">${ak.length?`<div class="animcol">${ak.map(k=>animSVG(k,mode==='run'?76:92)).join('')}</div>`:''}<div class="grow"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div><div class="name">${i+1}. ${esc(name)}</div>${variation?`<div class="small muted">${esc(variation)}</div>`:''}</div>
      ${scheme&&scheme!=='straight'?`<span class="pill line">${esc(SCHEME_SV[scheme]||scheme)}</span>`:''}</div>
+   ${isSup&&mode==='run'?`<div class="small muted">${PN.map((pn,k)=>`${LET[k]}: ${esc(pn)}`).join(' · ')}</div>`:''}
    <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest&&mode!=='run'?` · vila ${esc(rest)}`:''}</div>
    ${mode==='run'?restEditHTML(e,i):''}
    ${tempo?`<div class="tempobox"><span class="tempotag num">Tempo ${esc(tempo)}</span>${tt?`<span class="tempotxt">${esc(tt)}</span>`:''}</div>`:''}
@@ -2870,6 +2932,7 @@ function exerciseHTML(e,i,mode){
    ${(()=>{const h=String(name).split(' / ').map(x=>[x,howTo(x)]).filter(x=>x[1]);return h.length?`<details class="howto"><summary>Så gör du</summary>${h.map(([x,t])=>`<p class="small" style="margin:4px 0 0">${h.length>1?`<strong>${esc(x)}:</strong> `:''}${esc(t)}</p>`).join('')}</details>`:''})()}
    ${prevTxt&&mode==='run'?`<div class="small muted" style="margin-top:4px">Förra gången: ${esc(prevTxt)}</div>`:''}
    ${sug?`<div class="sugg ${sug.inc>0?'up':sug.inc<0?'down':''}">${sug.inc>0?'▲':sug.inc<0?'▼':'='} ${esc(sug.note)}</div>`:''}
+   ${supSug.map(({pn,w})=>`<div class="sugg ${w.inc>0?'up':w.inc<0?'down':''}">${w.inc>0?'▲':w.inc<0?'▼':'='} ${esc(pn)}: ${esc(w.note)}</div>`).join('')}
    ${(()=>{const parts=String(name).split(' / '),orig=(e[10]&&e[10].orig)||[];
      return `<div class="exacts">${orig.map(o=>`<button class="linkbtn small muted" type="button" data-unavoid="${esc(o)}">Ångra byte (${esc(o)})</button>`).join(' ')}${parts.filter(p=>!orig.length||!orig.includes(p)).map(p=>`<button class="linkbtn small muted" type="button" data-avoid="${esc(p)}">${parts.length>1?'Byt ut '+esc(p):'Byt ut övningen'}</button>`).join(' ')}</div>`})()}
    </div></div>${rows}</div>`;
@@ -2929,7 +2992,13 @@ function renderActive(){
 }
 function finishWorkout(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false}); let vol=0;
-  const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});sets.forEach(s=>{vol+=setVol(s)});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
+  const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);active.sets[i].forEach(syncSup);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
+    const PN=supParts(e);if(PN.length>1&&active.sets[i].some(s=>Array.isArray(s[4]))){
+      o.parts=PN.map((pn,k)=>{const idx=active.sets[i].map((s,j)=>j).filter(j=>{const d=active.sets[i][j][4];return d&&d[k]&&(d[k][0]!==''||d[k][1]!=='')});
+        const p={n:pn,sets:idx.map(j=>[active.sets[i][j][4][k][0],active.sets[i][j][4][k][1]]),t:idx.map(j=>{const a=String((e[9]||[])[j]??'').split('/');return a[k]??''})};
+        const pre=idx.filter(j=>active.spreKg&&active.spreKg[i+':'+j+':'+k]!=null).map(j=>({p:kgNum(active.spreKg[i+':'+j+':'+k]),f:kgNum(active.sets[i][j][4][k][0])}));if(pre.length)p.pre=pre;return p});
+      if(!o.parts.some(p=>p.sets.length))delete o.parts}
+    vol+=exVol(o);
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
   const min=Math.max(1,Math.round((Date.now()-active.start)/60000));
@@ -3331,6 +3400,9 @@ function bind(root){
   root.querySelectorAll('[data-prefill]').forEach(b=>b.onclick=()=>{const n=doPrefill();rerenderActiveKeep();toast(n?n+' set förifyllda':'Inga tomma set att fylla')});
   root.querySelectorAll('[data-prefillclear]').forEach(b=>b.onclick=()=>{clearPrefill();rerenderActiveKeep()});
   root.querySelectorAll('[data-startpre]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.startpre,null,true));
+  root.querySelectorAll('[data-skg]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.skg.split(':').map(Number);const s=active.sets[i][j];if(!s[4]||!s[4][k])return;s[4][k][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');syncSup(s);
+    if(active.spreOn&&active.spreOn[inp.dataset.skg]){delete active.spreOn[inp.dataset.skg];inp.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}});
+  root.querySelectorAll('[data-srp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.srp.split(':').map(Number);const s=active.sets[i][j];if(!s[4]||!s[4][k])return;s[4][k][1]=inp.value;syncSup(s)});
   root.querySelectorAll('[data-dkg]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.dkg.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');updDropPH(i,j)});
   root.querySelectorAll('[data-drp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.drp.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][1]=inp.value;syncDrop(s)});
   root.querySelectorAll('[data-rp]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.rp.split(':');active.sets[i][j][1]=inp.value});
@@ -3339,12 +3411,16 @@ function bind(root){
       s[3].forEach((d,k)=>{if(!d[0]&&ph[k]!==''){d[0]=String(ph[k]);if(!k)s[0]=d[0]}if(!d[1])d[1]=pt[k]||''});
       if(s[0]===''&&s[3][0][0])s[0]=s[3][0][0];syncDrop(s);
       s[3].forEach((d,k)=>{if(k){const a=document.querySelector(`[data-dkg="${i}:${j}:${k}"]`);if(a)a.value=String(d[0]).replace('.',',')}const r=document.querySelector(`[data-drp="${i}:${j}:${k}"]`);if(r)r.value=d[1]})}
-    if(s[2]&&!s[0]){const sg=weightSuggest(WBYID[active.wid].x[i]);const p=lastSetsFor(WBYID[active.wid].x[i][0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
+    if(s[2]&&Array.isArray(s[4])){const e=activeRow(i),pt=String(e[9]?.[j]||'').split('/');
+      s[4].forEach((d,k)=>{const key=i+':'+j+':'+k;if(!d[0]){const ph=supPH(e,k,j);if(ph!=='')d[0]=String(ph)}if(!d[1])d[1]=pt[k]??'';
+        const a=document.querySelector(`[data-skg="${key}"]`);if(a){a.value=String(d[0]).replace('.',',');a.parentElement.querySelector('.pdot')?.remove()}const r=document.querySelector(`[data-srp="${key}"]`);if(r)r.value=d[1];
+        if(active.spreOn)delete active.spreOn[key]});syncSup(s);updPrefillBar()}
+    if(s[2]&&!s[0]&&!Array.isArray(s[4])){const sg=weightSuggest(WBYID[active.wid].x[i]);const p=lastSetsFor(WBYID[active.wid].x[i][0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
     if(s[2]&&!s[1]){s[1]=WBYID[active.wid].x[i][9]?.[j]||''}
     if(Array.isArray(s[3]))s[3][0][0]=s[0];
     if(s[2]&&active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;b.parentElement.querySelector(`[data-kg="${i}:${j}"]`)?.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}
     b.setAttribute('aria-pressed',s[2]);b.textContent=s[2]?'✓':'';
-    const row=b.parentElement;row.querySelector(`[data-kg="${i}:${j}"]`).value=String(s[0]).replace('.',',');const rpI=row.querySelector(`[data-rp="${i}:${j}"]`);if(rpI)rpI.value=s[1];
+    const row=b.parentElement;const kgI=row.querySelector(`[data-kg="${i}:${j}"]`);if(kgI)kgI.value=String(s[0]).replace('.',',');const rpI=row.querySelector(`[data-rp="${i}:${j}"]`);if(rpI)rpI.value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
     if(s[2])startRest(restFor(activeRow(i)))});
   root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
