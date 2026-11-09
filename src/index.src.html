@@ -215,6 +215,9 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .bars-x{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;font-size:10px;color:var(--muted);text-align:center}
 .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat .k{font-family:var(--display);font-size:26px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.tempobox{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin-top:6px;padding:6px 10px;border-radius:8px;background:var(--bg);border-left:3px solid var(--c-s)}
+.tempotag{font-family:var(--display);font-weight:800;letter-spacing:-.01em;color:var(--ink);white-space:nowrap}
+.tempobox .tempotag{font-size:15px}.tempotxt{font-size:14px;color:var(--ink);line-height:1.35}
 .note{font-size:13px;color:var(--muted);background:var(--bg);border-radius:10px;padding:8px 10px}
 .toast{position:fixed;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;z-index:20;display:none}
 .toast.on{display:block}
@@ -371,6 +374,9 @@ const DAYS_SV=['Mån','Tis','Ons','Tor','Fre','Lör','Sön'];
 const fmtDate = d=>d.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'});
 const mmss = s=>Math.floor(s/60)+':'+pad(Math.max(0,s%60));
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2200)}
+/* Tempo bara när raden har tempo angivet. Gissat tempo (e[7]) räknas inte som angivet och visas inte. */
+function exTempo(e){return e&&e[4]&&!e[7]?String(e[4]).trim():''}
+function exSub(e){const t=exTempo(e);return [e[2]?String(e[2]):'',t?'tempo '+t:''].filter(Boolean).join(' · ')}
 function tempoText(t){
   if(!t) return '';
   const p=String(t).split('/')[0].trim().split(':');
@@ -1805,7 +1811,7 @@ function viewAhead(){
   const lab={s:'Styrka',r:'Löpning',m:'Rörlighet och promenad',v:'Vila'}[a.typ]||'';
   let body='';
   if(a.typ==='s'){
-    if(a.w){const pw=AW(a.w);body=`<h2>${esc(a.w.t?wTitle(a.w):a.focus||'Styrkepass')}</h2>${workoutSummary(a.w)}${peekList(pw.x.map(e=>[e[0],e[2]]))}<button class="btn ghost" type="button" data-open="${a.w.i}">Visa passet med instruktioner</button>`}
+    if(a.w){const pw=AW(a.w);body=`<h2>${esc(a.w.t?wTitle(a.w):a.focus||'Styrkepass')}</h2>${workoutSummary(a.w)}${peekList(pw.x.map(e=>[e[0],exSub(e)]))}<button class="btn ghost" type="button" data-open="${a.w.i}">Visa passet med instruktioner</button>`}
     else body=`<h2>${esc(a.focus||'Styrkepass')}</h2><p class="small muted" style="margin:0">Övningarna väljs när dagen kommer, så att de skiljer sig från passen innan.</p>`;
   } else if(a.typ==='r'){
     if(a.r) body=`<h2>${esc(a.r.t)}</h2><div class="row"><span class="pill run">${esc(passTypeLabel(a.r))}</span><span class="small muted num">ca ${a.r.min} min</span></div><p style="margin:0">${esc(a.r.desc)}</p><details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(a.r)}</details><p class="small muted" style="margin:0">Farterna kan justeras efter hur passen innan känns.</p>`;
@@ -1844,7 +1850,7 @@ function viewToday(){
       ${!gen&&w&&!doneW&&S.settings.mode==='program'&&!sugFocus?((sugCache?sugIdx%Math.max(1,sugCache.length):0)===0?`<div class="note">Nästa pass i ditt program: <strong>${esc(progLabel(w))}</strong>. Senast körde du ${esc(progLabel(WBYID[S.settings.lastProg]||w))}.</div>`:`<div class="note">Avvikelse från programmet – ett pass från biblioteket. Programmet fortsätter där du var nästa gång.</div>`):''}
       ${!w&&strengthChanged(gen)?RESTORE_BTN:''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${workoutSummary(w)}
-      <div class="small muted">${w.x.slice(0,5).map(e=>esc(e[0])).join(' · ')}${w.x.length>5?' …':''}</div>
+      <div class="small muted">${w.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${w.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-open="${w.i}">Visa passet</button></div>`
       :`<div class="row"><button class="btn" type="button" data-start="${w.i}">Starta passet</button><button class="btn ghost" type="button" ${gen?'data-regen':'data-next'}>Annat förslag</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>${strengthChanged(gen)?RESTORE_BTN:''}`}`
       :`<p class="muted">Inga pass matchar filtret. Välj ett annat fokus eller fler program i inställningarna.</p>`}
@@ -2641,8 +2647,8 @@ function weightSuggest(e){
   return {kgs,inc,note};
 }
 function exerciseHTML(e,i,mode){
-  const [name,variation,repsText,scheme,tempo,rest,notes,est,sets,reps]=e;
-  const tt=tempoText(tempo); const prev=lastSetsFor(name); const sug=mode==='run'?weightSuggest(e):null;
+  const [name,variation,repsText,scheme,,rest,notes,,sets,reps]=e;
+  const tempo=exTempo(e), tt=tempoText(tempo); const prev=lastSetsFor(name); const sug=mode==='run'?weightSuggest(e):null;
   const prevTxt=prev?prev.filter(s=>s[0]).map(s=>`${s[0]}×${s[1]||'?'}`).join(', '):'';
   let rows='';
   if(mode==='run'){
@@ -2655,8 +2661,8 @@ function exerciseHTML(e,i,mode){
   const ak=String(name).split(' / ').map(exAnimKey).filter(Boolean).slice(0,2);
   return `<div class="ex"><div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:12px">${ak.length?`<div class="animcol">${ak.map(k=>animSVG(k,mode==='run'?76:92)).join('')}</div>`:''}<div class="grow"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div><div class="name">${i+1}. ${esc(name)}</div>${variation?`<div class="small muted">${esc(variation)}</div>`:''}</div>
      ${scheme&&scheme!=='straight'?`<span class="pill line">${esc(SCHEME_SV[scheme]||scheme)}</span>`:''}</div>
-   <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${tempo?` · tempo <strong>${esc(tempo)}</strong>${est?' <span class="pill line" title="Gissat utifrån passets övriga övningar">gissat</span>':''}`:''}${rest?` · vila ${esc(rest)}`:''}</div>
-   ${tt?`<div class="small muted">${esc(tt)}</div>`:''}
+   <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest?` · vila ${esc(rest)}`:''}</div>
+   ${tempo?`<div class="tempobox"><span class="tempotag num">Tempo ${esc(tempo)}</span>${tt?`<span class="tempotxt">${esc(tt)}</span>`:''}</div>`:''}
    ${notes?`<div class="note" style="margin-top:6px">${esc(notes)}</div>`:''}
    ${(()=>{const h=String(name).split(' / ').map(x=>[x,howTo(x)]).filter(x=>x[1]);return h.length?`<details class="howto"><summary>Så gör du</summary>${h.map(([x,t])=>`<p class="small" style="margin:4px 0 0">${h.length>1?`<strong>${esc(x)}:</strong> `:''}${esc(t)}</p>`).join('')}</details>`:''})()}
    ${prevTxt&&mode==='run'?`<div class="small muted" style="margin-top:4px">Förra gången: ${esc(prevTxt)}</div>`:''}
