@@ -196,6 +196,8 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .sets .kgw .pdot{position:absolute;top:7px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--spot);pointer-events:none}
 .prefill{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
 .prefill .linkbtn{min-height:44px;align-self:flex-start}
+.sets input{min-height:44px}
+.sets .dar{text-align:center;color:var(--muted);font-size:16px}
 .sets .ok{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:transparent;cursor:pointer}
 .sets .ok[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
@@ -212,7 +214,7 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .sticky .in .btn{flex:1}
 .timer{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;z-index:12;display:none;gap:12px;align-items:center;font-variant-numeric:tabular-nums;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .timer.on{display:flex}
-.timer button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:44px;min-width:44px;padding:0 4px;font:inherit}
+.timer button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;white-space:nowrap;min-height:44px;min-width:44px;padding:0 4px;font:inherit}
 .restbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;margin-top:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .restbtn .small{font-weight:400}
 .restedit{margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
@@ -2307,7 +2309,7 @@ function showExercise(name){
     ${h?`<section class="card stack"><h3>Så gör du</h3><p style="margin:0">${esc(h)}</p></section>`:''}
     ${facts.length?`<section class="card"><dl class="facts">${facts.map(([a,b])=>`<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('')}</dl></section>`:''}
     <div>${isAvoided(name)?`<button class="btn ghost" type="button" data-unavoid="${esc(name)}">Ta med övningen igen</button><p class="small muted">Du undviker den här övningen. Den byts ut i pass och väljs inte när appen bygger pass.</p>`:`<button class="btn ghost" type="button" data-avoid="${esc(name)}">Undvik den här övningen</button>`}</div>
-    ${s.n?`<section class="card stack"><h3>Din historik</h3><p class="small" style="margin:0">Loggad ${s.n} ${s.n===1?'gång':'gånger'}${s.pts.length?` · tyngst ${Math.max(...s.pts.map(p=>p.y)).toLocaleString('sv-SE')} kg`:''}${s.last?` · senast ${esc(shortDate(s.last.d))}: ${esc((s.last.sets||[]).filter(x=>x[0]||x[1]).map(x=>`${x[0]||'–'}×${x[1]||'?'}`).join(', '))}`:''}</p>${s.pts.length>1?lineChart([{pts:s.pts,c:'var(--c-s)',area:1}],'kg'):''}</section>`:''}
+    ${s.n?`<section class="card stack"><h3>Din historik</h3><p class="small" style="margin:0">Loggad ${s.n} ${s.n===1?'gång':'gånger'}${s.pts.length?` · tyngst ${Math.max(...s.pts.map(p=>p.y)).toLocaleString('sv-SE')} kg`:''}${s.last?` · senast ${esc(shortDate(s.last.d))}: ${esc((s.last.sets||[]).filter(x=>x[0]||x[1]).map(x=>setTxt(x,1)).join(', '))}`:''}</p>${s.pts.length>1?lineChart([{pts:s.pts,c:'var(--c-s)',area:1}],'kg'):''}</section>`:''}
    </div>`);
 }
 
@@ -2345,7 +2347,10 @@ const ANIM_GROUP={};
  ['Bål','plank sideplank crunch legraise deadbug twist climber quadruped carry']].forEach(([g,ks])=>ks.split(' ').forEach(k=>ANIM_GROUP[k]=g));
 function muscleOf(n){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];if(/neck|nack/i.test(f))return 'Nacke';if(/forearm|wrist|underarm|handled/i.test(f))return 'Armar';return ANIM_GROUP[animKeyRaw(f)]||null}
 const setDone=s=>!!(s&&(+s[0]||+s[1]||s[2]));
-function logVol(l){if(+l.vol)return +l.vol;let v=0;(l.ex||[]).forEach(e=>(e.sets||[]).forEach(s=>{v+=(+s[0]||0)*(parseInt(s[1])||0)}));return v}
+/* Volym för ett loggat set: dropset (s[2] = [[kg,reps],...]) summeras över alla drops. */
+const setVol=s=>Array.isArray(s[2])&&s[2].length?s[2].reduce((a,d)=>a+(kgNum(d[0])||0)*(parseInt(d[1])||0),0):(+s[0]||0)*(parseInt(s[1])||0);
+const setTxt=(s,dash)=>Array.isArray(s[2])&&s[2].length?s[2].map(d=>`${String(d[0]||'–')}×${d[1]||'?'}`).join(' → '):`${dash?s[0]||'–':s[0]}×${s[1]||'?'}`;
+function logVol(l){if(+l.vol)return +l.vol;let v=0;(l.ex||[]).forEach(e=>(e.sets||[]).forEach(s=>{v+=setVol(s)}));return v}
 function activeDay(k){const d=S.days[k];return S.log.some(l=>l.date===k)||(d&&((+d.steps||0)>=S.settings.stepGoal||d.mob||d.walk||(d.moves||[]).length>=3))}
 function streaks(){let cur=0,d=new Date();if(!activeDay(dkey(d)))d=addDays(d,-1);while(activeDay(dkey(d))){cur++;d=addDays(d,-1)}
   const keys=new Set([...S.log.map(l=>l.date),...Object.keys(S.days)]);const sorted=[...keys].filter(activeDay).sort();let best=0,run=0,prev=null;
@@ -2711,14 +2716,38 @@ function prefillBar(){
   const pl=prefillPlan(w,active.sets);
   return pl.ok&&pl.fill?`<div class="prefill"><button class="btn ghost" type="button" data-prefill>Förifyll vikter (${pl.fill} av ${pl.all} set)</button></div>`:'';
 }
+/* Dropset: active.sets[i][j][3] = [[kg,reps],...]. s[0] = första droppens vikt, s[1] = reps ihopslagna med '+'. */
+function ensureDrops(i,j,tg){const s=active.sets[i][j],n=String(tg).split('+').length;
+  if(!Array.isArray(s[3])||s[3].length!==n){const old=Array.isArray(s[3])?s[3]:[];const rp=String(s[1]||'').split('+');s[3]=[...Array(n)].map((_,k)=>[old[k]?old[k][0]:'',old[k]?old[k][1]:(rp.length===n?rp[k]:'')])}
+  s[3][0][0]=s[0];return s[3]}
+function syncDrop(s){if(!Array.isArray(s[3]))return;s[3][0][0]=s[0];s[1]=s[3].some(d=>d[1]!=='')?s[3].map(d=>d[1]).join('+'):''}
+const dropStep=n=>/hantel|dumbbell/i.test(n)?2:2.5;
+const r2=x=>Math.round(x*100)/100;
+function dropPH(e,i,j){const name=String(e[0]),s=active.sets[i][j],D=s[3]||[],n=D.length,step=dropStep(name);
+  const last=lastExLog(name),ws=weightSuggest(e),inc=ws?ws.inc:0;
+  let pd=null;if(last){const ls=last.sets[Math.min(j,last.sets.length-1)];pd=ls&&Array.isArray(ls[2])&&ls[2].length?ls[2]:([...last.sets].reverse().find(x=>Array.isArray(x[2])&&x[2].length)||[])[2]||null}
+  const prev=lastSetsFor(name),out=[];
+  for(let k=0;k<n;k++){
+    if(pd&&pd[k]&&kgNum(pd[k][0])>0){out[k]=r2(Math.max(0,kgNum(pd[k][0])+inc));continue}
+    if(!k){out[k]=ws&&ws.kgs[j]!==''?ws.kgs[j]:prev&&prev[j]&&prev[j][0]?kgNum(prev[j][0]):'';continue}
+    const base=kgNum(D[k-1]&&(k-1?D[k-1][0]:s[0]))||kgNum(out[k-1]);out[k]=base?r2(Math.floor(base*0.7/step+1e-9)*step):''}
+  return out}
+function updDropPH(i,j){const s=active.sets[i][j];if(!Array.isArray(s[3]))return;const ph=dropPH(activeRow(i),i,j);
+  for(let k=1;k<s[3].length;k++){const el=document.querySelector(`[data-dkg="${i}:${j}:${k}"]`);if(el)el.placeholder=ph[k]!==''?String(ph[k]).replace('.',','):'kg'}}
 function exerciseHTML(e,i,mode){
   const [name,variation,repsText,scheme,,rest,notes,,sets,reps]=e;
   const tempo=exTempo(e), tt=tempoText(tempo); const prev=lastSetsFor(name); const sug=mode==='run'?weightSuggest(e):null;
-  const prevTxt=prev?prev.filter(s=>s[0]).map(s=>`${s[0]}×${s[1]||'?'}`).join(', '):'';
+  const prevTxt=prev?prev.filter(s=>s[0]).map(s=>setTxt(s)).join(', '):'';
   let rows='';
   if(mode==='run'){
     rows=`<div class="sets"><span class="h">Set</span><span class="h">Kg</span><span class="h">Reps</span><span></span>`+
-    [...Array(sets||3)].map((_,j)=>{const v=active.sets[i][j]||['','',false];return `<span class="num muted">${j+1}</span>
+    [...Array(sets||3)].map((_,j)=>{const v=active.sets[i][j]||['','',false];
+      const tg=String(reps?.[j]??'');if(tg.includes('+')&&active.sets[i][j]){const D=ensureDrops(i,j,tg),ph=dropPH(e,i,j),pt=tg.split('+'),pre=active.pre&&active.pre[i]&&active.pre[i][j];
+        return D.map((d,k)=>`${k?'<span class="dar" aria-hidden="true">↳</span>':`<span class="num muted">${j+1}</span>`}
+      <span class="kgw"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(k?d[0]:v[0]).replace('.',','))}" placeholder="${ph[k]!==''?esc(String(ph[k]).replace('.',',')):'kg'}" ${k?`data-dkg="${i}:${j}:${k}"`:`data-kg="${i}:${j}"`} aria-label="Vikt set ${j+1}${D.length>1?', drop '+(k+1):''}">${!k&&pre?'<span class="pdot" aria-hidden="true"></span>':''}</span>
+      <input type="text" inputmode="numeric" value="${esc(d[1])}" placeholder="${esc(pt[k]||'')}" data-drp="${i}:${j}:${k}" aria-label="Reps set ${j+1}, drop ${k+1}">
+      ${k===D.length-1?`<button class="ok" type="button" aria-pressed="${!!v[2]}" data-ok="${i}:${j}" aria-label="Set ${j+1} klart">${v[2]?'✓':''}</button>`:'<span></span>'}`).join('')}
+      return `<span class="num muted">${j+1}</span>
       <span class="kgw"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(v[0]).replace('.',','))}" placeholder="${sug&&sug.kgs[j]!==''?esc(String(sug.kgs[j]).replace('.',',')):prev&&prev[j]?esc(prev[j][0]):'kg'}" data-kg="${i}:${j}" aria-label="Vikt set ${j+1}${active.pre&&active.pre[i]&&active.pre[i][j]?', förifylld':''}">${active.pre&&active.pre[i]&&active.pre[i][j]?'<span class="pdot" aria-hidden="true"></span>':''}</span>
       <input type="text" inputmode="numeric" value="${esc(v[1])}" placeholder="${esc(reps?.[j]||'')}" data-rp="${i}:${j}" aria-label="Reps set ${j+1}">
       <button class="ok" type="button" aria-pressed="${!!v[2]}" data-ok="${i}:${j}" aria-label="Set ${j+1} klart">${v[2]?'✓':''}</button>`}).join('')+`</div>`;
@@ -2792,7 +2821,7 @@ function renderActive(){
 }
 function finishWorkout(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false}); let vol=0;
-  const ex=w.x.map((e,i)=>{const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>[s[0],s[1]]);sets.forEach(s=>{vol+=(+s[0]||0)*(parseInt(s[1])||0)});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
+  const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});sets.forEach(s=>{vol+=setVol(s)});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
   const min=Math.max(1,Math.round((Date.now()-active.start)/60000));
@@ -3188,19 +3217,26 @@ function bind(root){
   root.querySelectorAll('[data-finish]').forEach(b=>b.onclick=finishWorkout);
   root.querySelectorAll('[data-kg]').forEach(inp=>{
     inp.onfocus=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);inp._old=active.sets[i][j][0]};
-    inp.oninput=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);active.sets[i][j][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');
+    inp.oninput=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);active.sets[i][j][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');if(active.sets[i][j][3]){syncDrop(active.sets[i][j]);updDropPH(i,j)}
       if(active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;inp.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}};
     inp.onchange=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);followKg(i,j,inp._old);inp._old=active.sets[i][j][0];updPrefillBar()}});
   root.querySelectorAll('[data-prefill]').forEach(b=>b.onclick=()=>{const n=doPrefill();rerenderActiveKeep();toast(n?n+' set förifyllda':'Inga tomma set att fylla')});
   root.querySelectorAll('[data-prefillclear]').forEach(b=>b.onclick=()=>{clearPrefill();rerenderActiveKeep()});
   root.querySelectorAll('[data-startpre]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.startpre,null,true));
+  root.querySelectorAll('[data-dkg]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.dkg.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');updDropPH(i,j)});
+  root.querySelectorAll('[data-drp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.drp.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][1]=inp.value;syncDrop(s)});
   root.querySelectorAll('[data-rp]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.rp.split(':');active.sets[i][j][1]=inp.value});
   root.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const [i,j]=b.dataset.ok.split(':').map(Number);const s=active.sets[i][j];s[2]=!s[2];
+    if(s[2]&&Array.isArray(s[3])){const e=activeRow(i),ph=dropPH(e,i,j),pt=String(e[9]?.[j]||'').split('+');syncDrop(s);
+      s[3].forEach((d,k)=>{if(!d[0]&&ph[k]!==''){d[0]=String(ph[k]);if(!k)s[0]=d[0]}if(!d[1])d[1]=pt[k]||''});
+      if(s[0]===''&&s[3][0][0])s[0]=s[3][0][0];syncDrop(s);
+      s[3].forEach((d,k)=>{if(k){const a=document.querySelector(`[data-dkg="${i}:${j}:${k}"]`);if(a)a.value=String(d[0]).replace('.',',')}const r=document.querySelector(`[data-drp="${i}:${j}:${k}"]`);if(r)r.value=d[1]})}
     if(s[2]&&!s[0]){const sg=weightSuggest(WBYID[active.wid].x[i]);const p=lastSetsFor(WBYID[active.wid].x[i][0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
     if(s[2]&&!s[1]){s[1]=WBYID[active.wid].x[i][9]?.[j]||''}
+    if(Array.isArray(s[3]))s[3][0][0]=s[0];
     if(s[2]&&active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;b.parentElement.querySelector(`[data-kg="${i}:${j}"]`)?.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}
     b.setAttribute('aria-pressed',s[2]);b.textContent=s[2]?'✓':'';
-    const row=b.parentElement;row.querySelector(`[data-kg="${i}:${j}"]`).value=String(s[0]).replace('.',',');row.querySelector(`[data-rp="${i}:${j}"]`).value=s[1];
+    const row=b.parentElement;row.querySelector(`[data-kg="${i}:${j}"]`).value=String(s[0]).replace('.',',');const rpI=row.querySelector(`[data-rp="${i}:${j}"]`);if(rpI)rpI.value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
     if(s[2])startRest(restFor(activeRow(i)))});
   root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
