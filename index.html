@@ -213,7 +213,12 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .sticky .in .btn{flex:1}
 .timer{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;z-index:12;display:none;gap:12px;align-items:center;font-variant-numeric:tabular-nums;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .timer.on{display:flex}
-.timer button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer}
+.timer button{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:44px;min-width:44px;padding:0 4px;font:inherit}
+.restbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;margin-top:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.restbtn .small{font-weight:400}
+.restedit{margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
+.restedit .chips{gap:8px}.big44 .chip,.restedit .chip{min-height:44px;min-width:44px;padding:0 14px}
+.big44 .btn.sm{min-height:44px;min-width:44px}
 .bars{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;align-items:end;height:110px}
 .bars div{background:var(--accent-soft);border-radius:4px 4px 0 0;position:relative;min-height:2px}
 .bars div.hit{background:var(--spot)}
@@ -237,7 +242,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <main class="app" id="view"></main>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="app" id="sheetBody"></div></div>
-<div class="timer" id="restTimer" role="timer" aria-live="off"><span>Vila</span><strong id="restLeft">0:45</strong><button id="restAdd" type="button">+15 s</button><button id="restStop" type="button">Klar</button></div>
+<div class="timer" id="restTimer" role="timer" aria-live="off"><span>Vila</span><strong id="restLeft">0:45</strong><button id="restSub" type="button" aria-label="15 sekunder kortare">−15 s</button><button id="restAdd" type="button" aria-label="15 sekunder längre">+15 s</button><button id="restStop" type="button">Klar</button></div>
 <nav class="tabs" aria-label="Huvudmeny"><div class="in">
   <button class="tab" data-tab="idag" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Idag</button>
   <button class="tab" data-tab="vecka" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Vecka</button>
@@ -394,6 +399,15 @@ function defaultRest(ex){
   const r=parseInt(String(ex[9]?.[0]||''),10);
   return r>=15?55:40;
 }
+/* Vilotid: sparad per övning → fast tid → passets tid justerad efter inställningen. */
+function restFor(ex){
+  const st=S.settings, by=st.restByEx||{}, n=String(ex&&ex[0]||'');
+  if(n&&+by[n]>0)return +by[n];
+  if(st.restMode==='fast'&&+st.restFixed>0)return +st.restFixed;
+  const f=st.restMode==='kort'?0.75:st.restMode==='lang'?1.25:1;
+  return Math.max(15,Math.round(defaultRest(ex)*f/5)*5);
+}
+const fmtRest=s=>s<120?s+' s':s%60?Math.floor(s/60)+' min '+(s%60)+' s':(s/60)+' min';
 function estMinutes(w){return Math.round(w.x.reduce((a,e)=>a+(e[8]||3)*(e[3]==='superset'||e[3]==='giant'?2.2:1.6),0))}
 
 /* ---------- State & storage ---------- */
@@ -2666,7 +2680,8 @@ function exerciseHTML(e,i,mode){
   const ak=String(name).split(' / ').map(exAnimKey).filter(Boolean).slice(0,2);
   return `<div class="ex"><div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:12px">${ak.length?`<div class="animcol">${ak.map(k=>animSVG(k,mode==='run'?76:92)).join('')}</div>`:''}<div class="grow"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div><div class="name">${i+1}. ${esc(name)}</div>${variation?`<div class="small muted">${esc(variation)}</div>`:''}</div>
      ${scheme&&scheme!=='straight'?`<span class="pill line">${esc(SCHEME_SV[scheme]||scheme)}</span>`:''}</div>
-   <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest?` · vila ${esc(rest)}`:''}</div>
+   <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest&&mode!=='run'?` · vila ${esc(rest)}`:''}</div>
+   ${mode==='run'?restEditHTML(e,i):''}
    ${tempo?`<div class="tempobox"><span class="tempotag num">Tempo ${esc(tempo)}</span>${tt?`<span class="tempotxt">${esc(tt)}</span>`:''}</div>`:''}
    ${notes?`<div class="note" style="margin-top:6px">${esc(notes)}</div>`:''}
    ${(()=>{const h=String(name).split(' / ').map(x=>[x,howTo(x)]).filter(x=>x[1]);return h.length?`<details class="howto"><summary>Så gör du</summary>${h.map(([x,t])=>`<p class="small" style="margin:4px 0 0">${h.length>1?`<strong>${esc(x)}:</strong> `:''}${esc(t)}</p>`).join('')}</details>`:''})()}
@@ -2690,9 +2705,24 @@ function showWorkout(id){
 function stickyBar(inner){document.querySelector('.sticky')?.remove();const d=document.createElement('div');d.className='sticky';d.innerHTML=`<div class="in">${inner}</div>`;document.body.appendChild(d);bind(d)}
 function startWorkout(id,date){
   const w=WBYID[id];if(!w)return;
-  if(!active||active.wid!==id){const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))}}
+  if(!active||active.wid!==id){restOpen=-1;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))}}
   renderActive();
 }
+let restOpen=-1;
+function activeW(){return active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false})}
+function activeRow(i){return activeW().x[i]||WBYID[active.wid].x[i]}
+function rerenderActiveKeep(){const y=$('#sheet').scrollTop;renderActive();$('#sheet').scrollTop=y}
+/* Spara vilotid per övningsnamn (gäller nästa gång övningen dyker upp, oavsett pass). */
+function setRestFor(i,v){const e=activeRow(i);if(!e)return;const n=String(e[0]),st=S.settings;
+  const by=JSON.parse(JSON.stringify(st.restByEx||{}));
+  if(v==='reset')delete by[n];
+  else{const cur=restFor(e);let sec=v[0]==='+'||v[0]==='-'?cur+(+v):+v;sec=Math.max(15,Math.min(600,Math.round(sec/5)*5));by[n]=sec}
+  st.restByEx=by;markDirty('settings');rerenderActiveKeep()}
+function restEditHTML(e,i){const sec=restFor(e),own=!!(S.settings.restByEx||{})[String(e[0])];
+  return `<button class="restbtn" type="button" data-restopen="${i}" aria-expanded="${restOpen===i}">Vila ${esc(fmtRest(sec))}${own?' <span class="small muted">· din tid</span>':''}</button>
+  ${restOpen===i?`<div class="restedit"><div class="row between" style="flex-wrap:nowrap"><button class="btn ghost sm" type="button" data-restset="${i}:-15" aria-label="15 sekunder kortare">−15 s</button><strong class="num">${esc(fmtRest(sec))}</strong><button class="btn ghost sm" type="button" data-restset="${i}:+15" aria-label="15 sekunder längre">+15 s</button></div>
+   <div class="chips wrap">${[30,45,60,90,120,180].map(v=>`<button class="chip" type="button" data-restset="${i}:${v}" aria-pressed="${sec===v}">${fmtRest(v)}</button>`).join('')}</div>
+   ${own?`<button class="linkbtn small" type="button" data-restset="${i}:reset">Återställ till passets tid</button>`:'<p class="small muted" style="margin:0">Sparas för övningen och gäller nästa gång också.</p>'}</div>`:''}`}
 function renderActive(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false});sheetCtx={t:'active'};
   const doneSets=active.sets.flat().filter(s=>s[2]).length, all=active.sets.flat().length;
@@ -2711,11 +2741,16 @@ function finishWorkout(){
   const fdate=active.date||today();
   active=null; sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate);
 }
-let restT=null,restLeft=0;
-function startRest(sec){restLeft=sec;$('#restTimer').classList.add('on');tickRest();clearInterval(restT);restT=setInterval(()=>{restLeft--;tickRest();if(restLeft<=0){stopRest();try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast('Vilan är slut')}},1000)}
-function tickRest(){$('#restLeft').textContent=mmss(Math.max(0,restLeft))}
-function stopRest(){clearInterval(restT);$('#restTimer').classList.remove('on')}
-$('#restAdd').addEventListener('click',()=>{restLeft+=15;tickRest()});
+/* Vilotimern räknar mot en sluttid så att den stämmer efter skärmlås eller appbyte. */
+let restT=null,restLeft=0,restEnd=0;
+function startRest(sec){restEnd=Date.now()+sec*1000;$('#restTimer').classList.add('on');clearInterval(restT);restT=setInterval(tickRest,250);tickRest()}
+function tickRest(){if(!restEnd)return;restLeft=Math.max(0,Math.ceil((restEnd-Date.now())/1000));$('#restLeft').textContent=mmss(restLeft);
+  if(restLeft<=0){stopRest();try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast('Vilan är slut')}}
+function stopRest(){clearInterval(restT);restEnd=0;$('#restTimer').classList.remove('on')}
+function nudgeRest(d){if(!restEnd)return;restEnd=Math.max(Date.now(),restEnd+d*1000);tickRest()}
+$('#restAdd').addEventListener('click',()=>nudgeRest(15));
+$('#restSub').addEventListener('click',()=>nudgeRest(-15));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&restEnd)tickRest()});
 $('#restStop').addEventListener('click',stopRest);
 
 let runLog={rpe:0,pain:0,area:'',actual:null};
@@ -2893,6 +2928,8 @@ function showSettings(){
    ${st.mode!=='program'||!lib?sOpt('passLen','Passlängd',gen?[[20,'20 min'],[30,'30 min'],[45,'45 min'],[60,'60 min']]:[[30,'Max 30 min'],[45,'Max 45 min'],[60,'Max 60 min'],[0,'Ingen gräns']],passLen):''}
    ${sOpt('level','Erfarenhet',[[1,'Nybörjare'],[2,'Tränar ibland'],[3,'Van']],st.level||2)}
    ${sOpt('equip','Var tränar du?',[['gym','Gym'],['hantlar','Hantlar hemma'],['kropp','Bara kroppsvikt']],st.equip||'gym')}
+   <div class="big44">${sOpt('restMode','Vilotid mellan set',[['pass','Enligt passet'],['kort','Kortare (−25 %)'],['lang','Längre (+25 %)'],['fast','Fast tid']],st.restMode||'pass')}
+   ${st.restMode==='fast'?sStep('restFixed','Fast vilotid',+st.restFixed||90,30,240,fmtRest):''}<p class="small muted" style="margin:6px 0 0">Vilan du ställer in på en enskild övning i passet gäller före det här.</p></div>
    ${sTog('kneeFocus','Knästarka benpass',!!st.kneeFocus,'Benpassen byggs med bakåtgång, step-downs och split squats med knät över tårna. Ger också knärutiner i rörligheten.')}
    <div class="setfield"><div class="lab">Muskelgrupper du hoppar över</div>${avoidChips(g=>`data-avgrp="${g}"`,avoidGroups())}<p class="small muted" style="margin:6px 0 0">${avoidGroups().length?'Hoppar över: '+esc(AVOID_CHIPS.filter(g=>avoidGroups().includes(g)).concat(avoidGroups().filter(g=>!AVOID_CHIPS.includes(g))).join(', ')):'Inga – alla muskelgrupper tränas.'}</p></div>
    <div class="setfield"><div class="lab">Övningar du undviker</div>${avoidList().length?`<div class="list">${avoidList().map(n=>`<div class="li" style="cursor:default;align-items:center;padding:8px 0"><div class="grow">${esc(n)}</div><button class="btn ghost sm" type="button" data-unavoid="${esc(n)}">Ta med igen</button></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Inga. Tryck ”Byt ut övningen” i ett pass för att välja bort en övning.</p>'}</div>`;
@@ -2971,6 +3008,8 @@ function applySetting(k,v,silent){
     case 'passLen':{const n=+v;if(st.mode==='gen'||!WORKOUTS.length){st.minutes=n;st.maxMin=n}else{st.maxMin=n;st.minutes=n||60}st.genCur=null;break}
     case 'level':st.level=+v;st.genCur=null;break;
     case 'equip':st.equip=v;st.genCur=null;break;
+    case 'restMode':st.restMode=['pass','kort','lang','fast'].includes(v)?v:'pass';if(v==='fast'&&!(+st.restFixed>0))st.restFixed=90;break;
+    case 'restFixed':st.restFixed=Math.max(30,Math.min(240,Math.round(+v/15)*15))||90;break;
     case 'kneeFocus':st.kneeFocus=!!v;st.genCur=null;break;
     case 'runPref':case 'runLevel':case 'runStyle':st[k]=v;break;
     case 'fiveK':{const raw=String(v).trim();if(!raw)break;const f=parseFiveK(raw);if(!f){toast('Skriv tiden i minuter, t.ex. 30');return}st.fiveK=raw;st.v10=v10FromFiveK(f);break}
@@ -2994,7 +3033,7 @@ function applySetting(k,v,silent){
   else showSettings();
   clearTimeout(applySetting._t);applySetting._t=setTimeout(()=>{const s=document.getElementById('setStatus');if(s)s.textContent='Ändringar sparas direkt'},2500);
 }
-const SET_STEP={stepGoal:500,moveGoal:2};
+const SET_STEP={stepGoal:500,moveGoal:2,restFixed:15};
 function bindSettings(root){
   root.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>applySetting(b.dataset.set,b.dataset.val));
   root.querySelectorAll('[data-setstep]').forEach(b=>b.onclick=()=>{const k=b.dataset.setstep;applySetting(k,(+S.settings[k]||0)+(+b.dataset.d)*(SET_STEP[k]||1))});
@@ -3092,7 +3131,9 @@ function bind(root){
     b.setAttribute('aria-pressed',s[2]);b.textContent=s[2]?'✓':'';
     const row=b.parentElement;row.querySelector(`[data-kg="${i}:${j}"]`).value=String(s[0]).replace('.',',');row.querySelector(`[data-rp="${i}:${j}"]`).value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
-    if(s[2])startRest(defaultRest(WBYID[active.wid].x[i]))});
+    if(s[2])startRest(restFor(activeRow(i)))});
+  root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
+  root.querySelectorAll('[data-restset]').forEach(b=>b.onclick=()=>{const [i,v]=b.dataset.restset.split(':');setRestFor(+i,v)});
   root.querySelectorAll('[data-runlog]').forEach(b=>b.onclick=()=>showRunLog(b.dataset.runlog));
   root.querySelectorAll('[data-rpe]').forEach(b=>b.onclick=()=>{runLog.rpe=+b.dataset.rpe;root.querySelectorAll('[data-rpe]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   root.querySelectorAll('[data-parea]').forEach(b=>b.onclick=()=>{runLog.area=b.dataset.parea;root.querySelectorAll('[data-parea]').forEach(x=>x.setAttribute('aria-pressed',x===b));const pb=$('#painBox');if(pb)pb.hidden=!runLog.area;if(runLog.area)runLog.pain=+($('#painS')||{}).value||2});
