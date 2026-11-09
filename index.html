@@ -197,6 +197,10 @@ input[type=number],input[type=text],input[type=search],select,textarea{font-size
 .ex .name{font-weight:600}
 .sets{display:grid;grid-template-columns:28px 1fr 1fr 44px;gap:6px;align-items:center;margin-top:8px}
 .sets .h{font-size:12px;color:var(--muted)}
+.sets .kgw{position:relative;display:block;min-width:0}
+.sets .kgw .pdot{position:absolute;top:7px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--spot);pointer-events:none}
+.prefill{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.prefill .linkbtn{min-height:44px;align-self:flex-start}
 .sets .ok{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:transparent;cursor:pointer}
 .sets .ok[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
@@ -2665,6 +2669,53 @@ function weightSuggest(e){
   const note=inc>0?`Öka ${String(inc).replace('.',',')} kg – du klarade alla reps förra gången.`:inc<0?`Sänk ${String(-inc).replace('.',',')} kg – förra gången blev det många reps kvar.`:'Samma vikt som förra gången – sikta på alla reps.';
   return {kgs,inc,note};
 }
+/* Förifyllda vikter: Epley-1RM från upp till 3 senaste passen (median av bästa set per pass),
+   räknat om till passets målreps per set. Supersets hoppas över. */
+const kgNum=v=>{const n=parseFloat(String(v??'').replace(',','.'));return isNaN(n)?0:n};
+const epley=(kg,r)=>kg*(1+r/30);
+function strengthLogsWithKg(){return S.log.filter(l=>l.type==='styrka'&&(l.ex||[]).some(x=>(x.sets||[]).some(s=>kgNum(s[0])>0)))}
+function prefillKg(e){
+  const name=String(e&&e[0]||'');if(!name||name.includes(' / '))return null;
+  const sets=e[8]||3, reps=e[9]||[];
+  const hist=[];let maxAt=[];
+  for(let k=S.log.length-1;k>=0;k--){const l=S.log[k];if(l.type!=='styrka')continue;
+    const x=(l.ex||[]).find(y=>y.n===name);if(!x)continue;
+    let best=0;(x.sets||[]).forEach(st=>{const kg=kgNum(st[0]),r=firstNum(st[1]);if(kg>0&&!isNaN(r)&&r>0){best=Math.max(best,epley(kg,r));maxAt.push([kg,r])}});
+    if(best>0&&hist.length<3)hist.push({best,date:l.date,x});
+  }
+  if(!hist.length)return null;
+  const b=hist.map(h=>h.best).sort((a,c)=>a-c),m=b.length%2?b[(b.length-1)/2]:(b[b.length/2-1]+b[b.length/2])/2;
+  const last=hist[0].x, tgt=j=>firstNum(reps[j]??reps[0]);
+  const sameGoal=Array.isArray(last.t)&&last.t.length&&last.t.every((t,j)=>firstNum(t)===tgt(j));
+  const ws=sameGoal?weightSuggest(e):null, inc=ws?ws.inc:0;
+  const old=(Date.now()-new Date(hist[0].date+'T12:00:00').getTime())/864e5>56;
+  const step=/hantel|dumbbell/i.test(name)?2:2.5;
+  const kgs=[...Array(sets)].map((_,j)=>{const r=tgt(j);if(isNaN(r)||r<=0)return '';
+    let w=m/(1+r/30)+inc;if(old)w*=0.9;
+    const cap=maxAt.filter(([,rr])=>rr>=r).reduce((a,[kg])=>Math.max(a,kg),0);if(cap>0)w=Math.min(w,cap*1.05);
+    w=Math.max(0,Math.floor(w/step+1e-9)*step);return w>0?Math.round(w*100)/100:''});
+  if(!kgs.some(k=>k!==''))return null;
+  return {kgs,level:old?'ungefar':'sakert'};
+}
+/* Förslag för ett helt pass: hur många set som kan fyllas och om knappen ska visas. */
+function prefillPlan(w,sets){
+  const P=w.x.map(prefillKg);let fill=0,all=0;
+  w.x.forEach((e,i)=>{const n=e[8]||3;all+=n;for(let j=0;j<n;j++){const cur=sets?sets[i]&&sets[i][j]:null;if(P[i]&&P[i].kgs[j]!==''&&(!cur||(cur[0]===''&&!cur[2])))fill++}});
+  const ok=strengthLogsWithKg().length>=3&&w.x.length&&P.filter(Boolean).length>=w.x.length/2;
+  return {P,fill,all,ok};
+}
+function ensurePre(){if(!active.pre)active.pre=active.sets.map(r=>r.map(()=>false));if(!active.preKg)active.preKg=active.sets.map(r=>r.map(()=>null))}
+function doPrefill(){ensurePre();const w=activeW(),plan=prefillPlan(w,active.sets);let n=0,miss=0;
+  w.x.forEach((e,i)=>active.sets[i].forEach((s,j)=>{const k=plan.P[i]&&plan.P[i].kgs[j];
+    if(s[0]===''&&!s[2]){if(k!==''&&k!=null){s[0]=String(k);active.pre[i][j]=true;active.preKg[i][j]=String(k);n++}else miss++}}));
+  active.preMiss=miss;return n}
+function clearPrefill(){ensurePre();active.sets.forEach((r,i)=>r.forEach((s,j)=>{if(active.pre[i][j]){s[0]='';active.pre[i][j]=false;active.preKg[i][j]=null}}));active.preMiss=0}
+function prefillBar(){
+  ensurePre();const w=activeW(),nPre=active.pre.flat().filter(Boolean).length;
+  if(nPre)return `<div class="prefill"><span class="small muted num">${nPre} set förifyllda${active.preMiss?' · '+active.preMiss+' saknar data':''}</span><button class="linkbtn small" type="button" data-prefillclear>Töm förslag</button></div>`;
+  const pl=prefillPlan(w,active.sets);
+  return pl.ok&&pl.fill?`<div class="prefill"><button class="btn ghost" type="button" data-prefill>Förifyll vikter (${pl.fill} av ${pl.all} set)</button></div>`:'';
+}
 function exerciseHTML(e,i,mode){
   const [name,variation,repsText,scheme,,rest,notes,,sets,reps]=e;
   const tempo=exTempo(e), tt=tempoText(tempo); const prev=lastSetsFor(name); const sug=mode==='run'?weightSuggest(e):null;
@@ -2673,7 +2724,7 @@ function exerciseHTML(e,i,mode){
   if(mode==='run'){
     rows=`<div class="sets"><span class="h">Set</span><span class="h">Kg</span><span class="h">Reps</span><span></span>`+
     [...Array(sets||3)].map((_,j)=>{const v=active.sets[i][j]||['','',false];return `<span class="num muted">${j+1}</span>
-      <input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(v[0]).replace('.',','))}" placeholder="${sug&&sug.kgs[j]!==''?esc(sug.kgs[j]):prev&&prev[j]?esc(prev[j][0]):'kg'}" data-kg="${i}:${j}" aria-label="Vikt set ${j+1}">
+      <span class="kgw"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(String(v[0]).replace('.',','))}" placeholder="${sug&&sug.kgs[j]!==''?esc(String(sug.kgs[j]).replace('.',',')):prev&&prev[j]?esc(prev[j][0]):'kg'}" data-kg="${i}:${j}" aria-label="Vikt set ${j+1}${active.pre&&active.pre[i]&&active.pre[i][j]?', förifylld':''}">${active.pre&&active.pre[i]&&active.pre[i][j]?'<span class="pdot" aria-hidden="true"></span>':''}</span>
       <input type="text" inputmode="numeric" value="${esc(v[1])}" placeholder="${esc(reps?.[j]||'')}" data-rp="${i}:${j}" aria-label="Reps set ${j+1}">
       <button class="ok" type="button" aria-pressed="${!!v[2]}" data-ok="${i}:${j}" aria-label="Set ${j+1} klart">${v[2]?'✓':''}</button>`}).join('')+`</div>`;
   }
@@ -2699,13 +2750,16 @@ function showWorkout(id){
   openSheet(`<header class="top"><div><div class="date">${esc(path)}</div><h1 class="h1sm">${esc(wTitle(w))}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack"><div class="card stack"><div class="row">${(w.g||[]).map(g=>`<span class="pill">${esc(g)}</span>`).join(' ')}${isNext?' <span class="pill run">Nästa i programmet</span>':''}</div>
      <div class="small muted num">${esc(wMeta(w))}${last?' · senast gjort '+esc(shortDate(last)):''}</div>${note?`<p class="small muted" style="margin:0">${note}</p>`:''}</div>
+    ${(()=>{const pl=prefillPlan(w);return pl.ok&&pl.fill?`<button class="btn ghost" type="button" data-startpre="${esc(w.i)}">Förifyll vikter (${pl.fill} av ${pl.all} set)</button>`:''})()}
     <div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'view')).join('')}</div></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Tillbaka</button><button class="btn" type="button" data-start="${w.i}">Starta passet</button>`);
 }
 function stickyBar(inner){document.querySelector('.sticky')?.remove();const d=document.createElement('div');d.className='sticky';d.innerHTML=`<div class="in">${inner}</div>`;document.body.appendChild(d);bind(d)}
-function startWorkout(id,date){
+function startWorkout(id,date,pre){
   const w=WBYID[id];if(!w)return;
-  if(!active||active.wid!==id){restOpen=-1;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))}}
+  if(!active||active.wid!==id){restOpen=-1;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))};
+    ensurePre();if(pre||(S.settings.autoPrefill&&prefillPlan(activeW(),active.sets).ok))doPrefill()}
+  else if(pre)doPrefill();
   renderActive();
 }
 let restOpen=-1;
@@ -2723,17 +2777,29 @@ function restEditHTML(e,i){const sec=restFor(e),own=!!(S.settings.restByEx||{})[
   ${restOpen===i?`<div class="restedit"><div class="row between" style="flex-wrap:nowrap"><button class="btn ghost sm" type="button" data-restset="${i}:-15" aria-label="15 sekunder kortare">−15 s</button><strong class="num">${esc(fmtRest(sec))}</strong><button class="btn ghost sm" type="button" data-restset="${i}:+15" aria-label="15 sekunder längre">+15 s</button></div>
    <div class="chips wrap">${[30,45,60,90,120,180].map(v=>`<button class="chip" type="button" data-restset="${i}:${v}" aria-pressed="${sec===v}">${fmtRest(v)}</button>`).join('')}</div>
    ${own?`<button class="linkbtn small" type="button" data-restset="${i}:reset">Återställ till passets tid</button>`:'<p class="small muted" style="margin:0">Sparas för övningen och gäller nästa gång också.</p>'}</div>`:''}`}
+/* Ändrar man vikten i ett set följer senare förifyllda eller tomma set i samma övning med samma skillnad. */
+function followKg(i,j,old){ensurePre();const row=active.sets[i],nw=kgNum(row[j][0]);if(row[j][0]===''||!active.preKg[i].some(x=>x!=null))return;
+  const pf=prefillKg(activeRow(i)),base=kgNum(old)||(pf&&kgNum(pf.kgs[j]));if(!base)return;const d=nw-base;if(!d)return;
+  for(let k=j+1;k<row.length;k++){const s=row[k];if(s[2])continue;let v=null;
+    if(active.pre[i][k])v=kgNum(s[0])+d;else if(s[0]===''&&pf&&kgNum(pf.kgs[k]))v=kgNum(pf.kgs[k])+d;
+    if(v==null)continue;v=Math.max(0,Math.round(v*100)/100);s[0]=String(v);
+    if(!active.pre[i][k]){active.pre[i][k]=true;active.preKg[i][k]=pf?String(pf.kgs[k]):String(v)}
+    const inp=document.querySelector(`[data-kg="${i}:${k}"]`);if(inp){inp.value=String(v).replace('.',',');if(!inp.parentElement.querySelector('.pdot'))inp.insertAdjacentHTML('afterend','<span class="pdot" aria-hidden="true"></span>')}}
+  updPrefillBar()}
+function updPrefillBar(){const el=document.querySelector('#sheetBody .prefill');if(!el)return;const t=document.createElement('div');t.innerHTML=prefillBar();const n=t.firstElementChild;if(n&&n.outerHTML===el.outerHTML)return;n?el.replaceWith(n):el.remove();const nn=document.querySelector('#sheetBody .prefill');if(nn)bind(nn)}
 function renderActive(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false});sheetCtx={t:'active'};
   const doneSets=active.sets.flat().filter(s=>s[2]).length, all=active.sets.flat().length;
   openSheet(`<header class="top"><div><div class="date num">${active.date?'Loggas på '+esc(new Date(active.date+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'short'}))+' · ':''}${doneSets}/${all} set klara</div><h1 class="h1sm">${esc(wTitle(w))}</h1></div><button class="btn ghost sm" type="button" data-close>Pausa</button></header>
-   <div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'run')).join('')}</div>
+   ${prefillBar()}<div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'run')).join('')}</div>
    <p class="small muted">Tryck ✓ efter varje set så startar vilotimern. Tomma vikter loggas inte.</p>`);
   stickyBar(`<button class="btn ghost" type="button" data-cancel>Avbryt pass</button><button class="btn" type="button" data-finish>Avsluta och spara</button>`);
 }
 function finishWorkout(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false}); let vol=0;
-  const ex=w.x.map((e,i)=>{const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>[s[0],s[1]]);sets.forEach(s=>{vol+=(+s[0]||0)*(parseInt(s[1])||0)});return {n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)}}).filter(e=>e.sets.length);
+  const ex=w.x.map((e,i)=>{const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>[s[0],s[1]]);sets.forEach(s=>{vol+=(+s[0]||0)*(parseInt(s[1])||0)});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
+    const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
+    return o}).filter(e=>e.sets.length);
   const min=Math.max(1,Math.round((Date.now()-active.start)/60000));
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
@@ -2930,6 +2996,7 @@ function showSettings(){
    ${sOpt('equip','Var tränar du?',[['gym','Gym'],['hantlar','Hantlar hemma'],['kropp','Bara kroppsvikt']],st.equip||'gym')}
    <div class="big44">${sOpt('restMode','Vilotid mellan set',[['pass','Enligt passet'],['kort','Kortare (−25 %)'],['lang','Längre (+25 %)'],['fast','Fast tid']],st.restMode||'pass')}
    ${st.restMode==='fast'?sStep('restFixed','Fast vilotid',+st.restFixed||90,30,240,fmtRest):''}<p class="small muted" style="margin:6px 0 0">Vilan du ställer in på en enskild övning i passet gäller före det här.</p></div>
+   ${sTog('autoPrefill','Förifyll vikter automatiskt',!!st.autoPrefill,'Vikterna fylls i när du startar ett styrkepass, utifrån dina senaste pass. Du kan alltid ändra dem.')}
    ${sTog('kneeFocus','Knästarka benpass',!!st.kneeFocus,'Benpassen byggs med bakåtgång, step-downs och split squats med knät över tårna. Ger också knärutiner i rörligheten.')}
    <div class="setfield"><div class="lab">Muskelgrupper du hoppar över</div>${avoidChips(g=>`data-avgrp="${g}"`,avoidGroups())}<p class="small muted" style="margin:6px 0 0">${avoidGroups().length?'Hoppar över: '+esc(AVOID_CHIPS.filter(g=>avoidGroups().includes(g)).concat(avoidGroups().filter(g=>!AVOID_CHIPS.includes(g))).join(', ')):'Inga – alla muskelgrupper tränas.'}</p></div>
    <div class="setfield"><div class="lab">Övningar du undviker</div>${avoidList().length?`<div class="list">${avoidList().map(n=>`<div class="li" style="cursor:default;align-items:center;padding:8px 0"><div class="grow">${esc(n)}</div><button class="btn ghost sm" type="button" data-unavoid="${esc(n)}">Ta med igen</button></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Inga. Tryck ”Byt ut övningen” i ett pass för att välja bort en övning.</p>'}</div>`;
@@ -3010,6 +3077,7 @@ function applySetting(k,v,silent){
     case 'equip':st.equip=v;st.genCur=null;break;
     case 'restMode':st.restMode=['pass','kort','lang','fast'].includes(v)?v:'pass';if(v==='fast'&&!(+st.restFixed>0))st.restFixed=90;break;
     case 'restFixed':st.restFixed=Math.max(30,Math.min(240,Math.round(+v/15)*15))||90;break;
+    case 'autoPrefill':st.autoPrefill=!!v;break;
     case 'kneeFocus':st.kneeFocus=!!v;st.genCur=null;break;
     case 'runPref':case 'runLevel':case 'runStyle':st[k]=v;break;
     case 'fiveK':{const raw=String(v).trim();if(!raw)break;const f=parseFiveK(raw);if(!f){toast('Skriv tiden i minuter, t.ex. 30');return}st.fiveK=raw;st.v10=v10FromFiveK(f);break}
@@ -3123,11 +3191,19 @@ function bind(root){
   root.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{if(mobState){clearInterval(mobState.t);mobState=null}closeSheet()});
   root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{active=null;closeSheet();toast('Passet avbröts')});
   root.querySelectorAll('[data-finish]').forEach(b=>b.onclick=finishWorkout);
-  root.querySelectorAll('[data-kg]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.kg.split(':');active.sets[i][j][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'')});
+  root.querySelectorAll('[data-kg]').forEach(inp=>{
+    inp.onfocus=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);inp._old=active.sets[i][j][0]};
+    inp.oninput=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);active.sets[i][j][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');
+      if(active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;inp.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}};
+    inp.onchange=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);followKg(i,j,inp._old);inp._old=active.sets[i][j][0];updPrefillBar()}});
+  root.querySelectorAll('[data-prefill]').forEach(b=>b.onclick=()=>{const n=doPrefill();rerenderActiveKeep();toast(n?n+' set förifyllda':'Inga tomma set att fylla')});
+  root.querySelectorAll('[data-prefillclear]').forEach(b=>b.onclick=()=>{clearPrefill();rerenderActiveKeep()});
+  root.querySelectorAll('[data-startpre]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.startpre,null,true));
   root.querySelectorAll('[data-rp]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.rp.split(':');active.sets[i][j][1]=inp.value});
   root.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const [i,j]=b.dataset.ok.split(':').map(Number);const s=active.sets[i][j];s[2]=!s[2];
     if(s[2]&&!s[0]){const sg=weightSuggest(WBYID[active.wid].x[i]);const p=lastSetsFor(WBYID[active.wid].x[i][0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
     if(s[2]&&!s[1]){s[1]=WBYID[active.wid].x[i][9]?.[j]||''}
+    if(s[2]&&active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;b.parentElement.querySelector(`[data-kg="${i}:${j}"]`)?.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}
     b.setAttribute('aria-pressed',s[2]);b.textContent=s[2]?'✓':'';
     const row=b.parentElement;row.querySelector(`[data-kg="${i}:${j}"]`).value=String(s[0]).replace('.',',');row.querySelector(`[data-rp="${i}:${j}"]`).value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
