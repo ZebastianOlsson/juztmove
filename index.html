@@ -1762,30 +1762,55 @@ function viewPast(){
    <button class="btn ghost" type="button" data-dayoff="0">Tillbaka till idag</button></div>`;
 }
 /* ---------- Annan träning (extra, påverkar inte schemakön) ---------- */
-const OTHER_ACT=[['lutgang','Lutande gång (band)'],['cykel','Cykel'],['simning','Simning'],['padel','Padel/racket'],['yoga','Yoga/pilates'],['promenad','Långpromenad'],['annat','Annat']];
-const OTHER_TITLE={lutgang:'Lutande gång',cykel:'Cykel',simning:'Simning',padel:'Padel/racket',yoga:'Yoga/pilates',promenad:'Långpromenad',annat:'Annan träning'};
+const OTHER_DAILY=[['vpromenad','Promenad'],['trappor','Trappor'],['pendelcykel','Cykla till/från'],['hushall','Hushåll/trädgård'],['rorpaus','Rörelsepaus']];
+const OTHER_ACT=[['lutgang','Lutande gång (band)'],['cykel','Cykel'],['simning','Simning'],['padel','Padel/racket'],['yoga','Yoga/pilates'],['promenad','Långpromenad']];
+const OTHER_TITLE={lutgang:'Lutande gång',cykel:'Cykel',simning:'Simning',padel:'Padel/racket',yoga:'Yoga/pilates',promenad:'Långpromenad',annat:'Annan träning',
+  vpromenad:'Promenad',trappor:'Trappor',pendelcykel:'Cykla till/från',hushall:'Hushåll/trädgård',rorpaus:'Rörelsepaus'};
+const CUSTOM_MAX=12,CUSTOM_LEN=40;
 const decStr=x=>String(x).replace('.',',');
 function otherExtra(l){return [l.min?decStr(l.min)+' min':'',+l.kmh?fmtK(+l.kmh)+' km/h':'',l.incline!=null&&l.incline!==''?decStr(l.incline)+' %':'',+l.intensity?l.intensity+'/10':''].filter(Boolean).join(' · ')}
+function customOther(){const a=S.settings.customOther;return Array.isArray(a)?a.filter(x=>typeof x==='string'&&x.trim()):[]}
+const normName=x=>String(x||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('sv-SE');
+function fixedOtherKey(name){const n=normName(name);if(!n)return null;
+  for(const [v,l] of [...OTHER_DAILY,...OTHER_ACT])if(normName(l)===n||normName(OTHER_TITLE[v])===n)return v;return null}
+function addCustomOther(name){const n=normName(name),cur=customOther();const hit=cur.find(x=>normName(x)===n);
+  const list=[hit||name,...cur.filter(x=>normName(x)!==n)];
+  const seen=new Set();S.settings.customOther=list.filter(x=>{const k=normName(x);if(seen.has(k))return false;seen.add(k);return true}).slice(0,CUSTOM_MAX);
+  markDirty('settings');return hit||name}
+function removeCustomOther(name){const n=normName(name);S.settings.customOther=customOther().filter(x=>normName(x)!==n);markDirty('settings')}
 let oth=null;
 function showOtherLog(k,preset){const p=typeof preset==='string'?{act:preset}:(preset||{});
-  oth={k:k||today(),act:p.act||'lutgang',min:p.min!=null?String(p.min):'',int:0,kmh:p.kmh!=null?decStr(p.kmh):'5',inc:p.inc!=null?decStr(p.inc):'10',title:''};renderOtherLog()}
+  oth={k:k||today(),act:p.act==='annat'?'ny':(p.act||'lutgang'),custom:'',min:p.min!=null?String(p.min):'',int:0,kmh:p.kmh!=null?decStr(p.kmh):'5',inc:p.inc!=null?decStr(p.inc):'10',title:''};renderOtherLog()}
 function othRead(){if(!oth)return;const g=id=>{const e=document.getElementById(id);return e?e.value:null};
   const m=g('othMin'),t=g('othT'),v=g('othKmh'),i=g('othInc');if(m!=null)oth.min=m;if(t!=null)oth.title=t;if(v!=null)oth.kmh=v;if(i!=null)oth.inc=i}
-function renderOtherLog(){const {k,act}=oth,dt=new Date(k+'T12:00:00'),lut=act==='lutgang';
+function renderOtherLog(){const {k,act}=oth,dt=new Date(k+'T12:00:00'),lut=act==='lutgang',cust=customOther();
+  if(act==='egen'&&!cust.some(x=>normName(x)===normName(oth.custom))){oth.act='ny';return renderOtherLog()}
+  const chip=(v,l,on)=>`<button class="chip" type="button" data-othact="${esc(v)}" aria-pressed="${on}">${esc(l)}</button>`;
+  const group=(h,inner)=>`<div class="stack" style="gap:6px"><div class="small muted">${esc(h)}</div><div class="chips wrap">${inner}</div></div>`;
   openSheet(`<header class="top"><div><div class="date cap">${esc(k===today()?'Idag':dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'}))}</div><h1>Annan träning</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack"><p class="small muted" style="margin:0">Räknas som extra träning. Schemat och dagens pass påverkas inte.</p>
    <section class="card stack">
-    <div class="setfield"><div class="lab">Vad gjorde du?</div><div class="chips wrap">${OTHER_ACT.map(([v,l])=>`<button class="chip" type="button" data-othact="${v}" aria-pressed="${act===v}">${esc(l)}</button>`).join('')}</div></div>
-    ${act==='annat'?`<label class="f" for="othT">Beskriv kort<input id="othT" type="text" autocomplete="off" placeholder="t.ex. Klättring" value="${esc(oth.title)}"></label>`:''}
+    <div class="setfield"><div class="lab">Vad gjorde du?</div>
+     ${group('Vardagsrörelse',OTHER_DAILY.map(([v,l])=>chip(v,l,act===v)).join(''))}
+     ${group('Träning',OTHER_ACT.map(([v,l])=>chip(v,l,act===v)).join(''))}
+     ${group('Egna',cust.map(n=>chip('egen:'+n,n,act==='egen'&&normName(oth.custom)===normName(n))).join('')+chip('ny','+ Skriv egen',act==='ny'))}
+    </div>
+    ${act==='ny'?`<label class="f" for="othT">Beskriv kort<input id="othT" type="text" maxlength="${CUSTOM_LEN}" autocomplete="off" placeholder="t.ex. Bar ved" value="${esc(oth.title)}"></label><p class="small muted" style="margin:-4px 0 0">Sparas som ett eget val under Egna, så nästa gång fyller du bara i minuter.</p>`:''}
+    ${act==='egen'?`<button class="btn ghost sm" type="button" data-othdel>Ta bort ‘${esc(oth.custom)}’ från listan</button>`:''}
     <label class="f" for="othMin">Minuter<input id="othMin" type="text" inputmode="decimal" autocomplete="off" placeholder="t.ex. 30" value="${esc(oth.min)}"></label>
     ${lut?`<div class="grid2"><label class="f" for="othKmh">Fart (km/h)<input id="othKmh" type="text" inputmode="decimal" autocomplete="off" value="${esc(oth.kmh)}"></label><label class="f" for="othInc">Lutning (%)<input id="othInc" type="text" inputmode="decimal" autocomplete="off" value="${esc(oth.inc)}"></label></div>`:''}
     <div class="setfield"><div class="lab">Hur jobbigt var det? (1–10, valfritt)</div><div class="chips wrap">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" type="button" data-othint="${n}" aria-pressed="${oth.int===n}">${n}</button>`).join('')}</div></div>
    </section></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Avbryt</button><button class="btn" type="button" data-othsave>Spara</button>`);
 }
-function saveOtherLog(){othRead();const {k,act}=oth;const num=x=>{const v=parseFloat(String(x||'').replace(',','.'));return isNaN(v)?null:v};
+function saveOtherLog(){othRead();const {k}=oth;let act=oth.act;const num=x=>{const v=parseFloat(String(x||'').replace(',','.'));return isNaN(v)?null:v};
+  let title;
+  if(act==='ny'){const name=String(oth.title||'').trim().replace(/\s+/g,' ').slice(0,CUSTOM_LEN);if(!name){toast('Skriv kort vad du gjorde');return}
+    const fixed=fixedOtherKey(name);if(fixed){act=fixed;title=OTHER_TITLE[fixed]}else{act='egen';title=name}}
+  else if(act==='egen')title=oth.custom;
+  else title=OTHER_TITLE[act]||OTHER_TITLE.annat;
   const min=num(oth.min);if(!(min>0)){toast('Skriv hur många minuter');return}
-  const title=act==='annat'?(String(oth.title||'').trim()||OTHER_TITLE.annat):OTHER_TITLE[act];
+  if(oth.act==='ny'&&act==='egen')title=addCustomOther(title);
   const e={type:'annat',date:k,activity:act,title,min:Math.round(min*10)/10};
   if(oth.int)e.intensity=oth.int;
   if(act==='lutgang'){const v=num(oth.kmh),i=num(oth.inc);if(v>0)e.kmh=v;if(i!=null&&i>=0)e.incline=i}
@@ -1804,7 +1829,8 @@ function showMoreAfter(k){
 function bindOther(root){
   root.querySelectorAll('[data-otherlog]').forEach(b=>b.onclick=()=>showOtherLog(b.dataset.otherlog||today(),b.dataset.otheract||''));
   root.querySelectorAll('[data-othquick]').forEach(b=>b.onclick=()=>{const [m,k]=b.dataset.othquick.split('|');showOtherLog(k,{act:'lutgang',min:+m,kmh:5,inc:10})});
-  root.querySelectorAll('[data-othact]').forEach(b=>b.onclick=()=>{othRead();oth.act=b.dataset.othact;const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y});
+  root.querySelectorAll('[data-othact]').forEach(b=>b.onclick=()=>{othRead();const v=b.dataset.othact;if(v.startsWith('egen:')){oth.act='egen';oth.custom=v.slice(5)}else oth.act=v;const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y});
+  root.querySelectorAll('[data-othdel]').forEach(b=>b.onclick=()=>{othRead();const n=oth.custom;removeCustomOther(n);oth.act='ny';oth.custom='';const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y;toast(n+' borttagen från listan')});
   root.querySelectorAll('[data-othint]').forEach(b=>b.onclick=()=>{const n=+b.dataset.othint;oth.int=oth.int===n?0:n;root.querySelectorAll('[data-othint]').forEach(x=>x.setAttribute('aria-pressed',String(+x.dataset.othint===oth.int)))});
   root.querySelectorAll('[data-othsave]').forEach(b=>b.onclick=saveOtherLog);
 }
