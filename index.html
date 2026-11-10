@@ -123,6 +123,13 @@ details.card>summary{cursor:pointer;list-style:none}
 .daynav{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px}
 .daynav .dn2{display:flex;flex-direction:column;align-items:center;line-height:1.2}
 .daynav .btn:disabled{opacity:.35}
+.addpanel{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
+.addpanel .chips{gap:8px}.addpanel .chip{min-height:44px;padding:0 14px}
+.addhits{display:flex;flex-direction:column;gap:6px}
+.addhit{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
+.addhit .grow{min-width:0}.addhit .small{display:block}
+.addacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.addacts .btn{min-height:44px}
+.ex.flash{background:var(--accent-soft);border-radius:10px;transition:background .8s}
 .slex{padding:10px 0;border-top:1px solid var(--line)}.slex:first-child{border-top:0;padding-top:0}
 .slex .nm{font-weight:600}.slsets{font-variant-numeric:tabular-nums;margin-top:2px}
 .sledit .ex{padding:12px 0;border-top:1px solid var(--line)}.sledit .ex:first-child{border-top:0}
@@ -2326,8 +2333,8 @@ function AW(w,opt){
   if(!w||(!avoidList().length&&!(drop&&avoidGroups().length)))return w;
   const used=new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));let changed=false;
   let x=w.x;
-  if(drop&&avoidGroups().length){x=x.map(e=>{const parts=String(e[0]).split(' / ');const keep=parts.filter(p=>!groupAvoided(p));if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');if(e[3]==='superset')n[3]='straight';return n}).filter(Boolean)}
-  x=x.map(e=>{const parts=String(e[0]).split(' / ');const orig=[];
+  if(drop&&avoidGroups().length){x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const keep=parts.filter(p=>!groupAvoided(p));if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');if(e[3]==='superset')n[3]='straight';return n}).filter(Boolean)}
+  x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const orig=[];
     const np=parts.map(p=>{if(!isAvoided(p))return p;const s2=subFor(p,used);if(!s2)return p;used.add(s2);orig.push(p);return s2});
     if(!orig.length)return e;changed=true;const n=[...e];n[0]=np.join(' / ');n[1]=[e[1],'ersätter '+orig.join(' och ')].filter(Boolean).join(' · ');n[10]={orig};return n});
   return changed?{...w,x}:w;
@@ -2960,6 +2967,7 @@ function exerciseHTML(e,i,mode){
    ${sug?`<div class="sugg ${sug.inc>0?'up':sug.inc<0?'down':''}">${sug.inc>0?'▲':sug.inc<0?'▼':'='} ${esc(sug.note)}</div>`:''}
    ${supSug.map(({pn,w})=>`<div class="sugg ${w.inc>0?'up':w.inc<0?'down':''}">${w.inc>0?'▲':w.inc<0?'▼':'='} ${esc(pn)}: ${esc(w.note)}</div>`).join('')}
    ${(()=>{const parts=String(name).split(' / '),orig=(e[10]&&e[10].orig)||[];
+     if(isAdded(e)&&mode==='run')return `<div class="exacts addacts"><button class="btn ghost sm" type="button" data-addset="${i}">+ Set</button><button class="btn ghost sm" type="button" data-addrm="${i}">Ta bort</button><span class="pill">Tillagd</span></div>`;
      return `<div class="exacts">${orig.map(o=>`<button class="linkbtn small muted" type="button" data-unavoid="${esc(o)}">Ångra byte (${esc(o)})</button>`).join(' ')}${parts.filter(p=>!orig.length||!orig.includes(p)).map(p=>`<button class="linkbtn small muted" type="button" data-avoid="${esc(p)}">${parts.length>1?'Byt ut '+esc(p):'Byt ut övningen'}</button>`).join(' ')}</div>`})()}
    </div></div>${rows}</div>`;
 }
@@ -2978,7 +2986,7 @@ function showWorkout(id){
 function stickyBar(inner){document.querySelector('.sticky')?.remove();const d=document.createElement('div');d.className='sticky';d.innerHTML=`<div class="in">${inner}</div>`;document.body.appendChild(d);bind(d)}
 function startWorkout(id,date,pre){
   const w=WBYID[id];if(!w)return;
-  if(!active||active.wid!==id){restOpen=-1;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))};
+  if(!active||active.wid!==id){restOpen=-1;addPanel=null;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))};
     ensurePre();if(pre||(S.settings.autoPrefill&&prefillPlan(activeW(),active.sets).ok))doPrefill()}
   else if(pre)doPrefill();
   renderActive();
@@ -3012,13 +3020,69 @@ function renderActive(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false});sheetCtx={t:'active'};
   const doneSets=active.sets.flat().filter(s=>s[2]).length, all=active.sets.flat().length;
   openSheet(`<header class="top"><div><div class="date num">${active.date?'Loggas på '+esc(new Date(active.date+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'short'}))+' · ':''}${doneSets}/${all} set klara</div><h1 class="h1sm">${esc(wTitle(w))}</h1></div><button class="btn ghost sm" type="button" data-close>Pausa</button></header>
-   ${prefillBar()}<div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'run')).join('')}</div>
+   ${prefillBar()}<div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'run')).join('')}
+    ${addPanel?'<div class="addpanel" id="addPanel"></div>':'<div class="addacts"><button class="btn ghost" type="button" data-addopen>+ Lägg till övning</button></div>'}</div>
    <p class="small muted">Tryck ✓ efter varje set så startar vilotimern. Tomma vikter loggas inte.</p>`);
   stickyBar(`<button class="btn ghost" type="button" data-cancel>Avbryt pass</button><button class="btn" type="button" data-finish>Avsluta och spara</button>`);
+  if(addPanel)renderAddPanel();
 }
+/* ---------- Lägg till övning under pågående pass ----------
+   Tillagda rader markeras med e[11] = {add:true} (e[10] används för utbytta övningar). */
+const MG=['Ben','Bröst','Rygg','Axlar','Armar','Vader','Bål'];
+let addPanel=null;
+const isAdded=e=>!!(e&&e[11]&&e[11].add);
+function passGroups(){const w=active.w||WBYID[active.wid]||{};let g=(w.g||[]).filter(x=>MG.includes(x));
+  if(!g.length)g=[...new Set((w.x||[]).flatMap(e=>String(e[0]).split(' / ')).map(muscleOf).filter(x=>MG.includes(x)))];return g}
+function openAddPanel(){addPanel={q:'',groups:passGroups(),all:false,show:12,focus:true};if(!addPanel.groups.length)addPanel.all=true;rerenderActiveKeep()}
+function addCandidates(){
+  const inPass=new Set(activeW().x.flatMap(e=>String(e[0]).split(' / ')).map(n=>n.toLowerCase()));
+  const cnt={},seen=new Set(),out=[];
+  S.log.filter(l=>l.type==='styrka').forEach(l=>flatEx(l).forEach(e=>String(e.n).split(' / ').forEach(n=>{if(n)cnt[n]=(cnt[n]||0)+1})));
+  const ok=n=>{const k=n.toLowerCase();if(seen.has(k)||inPass.has(k)||isAvoided(n)||groupAvoided(n))return false;
+    if(!addPanel.all){const g=muscleOf(n);if(!g||!addPanel.groups.includes(g))return false}return true};
+  const q=addPanel.q.trim().toLowerCase(),hit=n=>!q||n.toLowerCase().includes(q);
+  Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a.localeCompare(b,'sv')).forEach(n=>{if(hit(n)&&ok(n)){seen.add(n.toLowerCase());out.push({n,c:cnt[n]})}});
+  EXDB.forEach(e=>{if(hit(e.n)&&ok(e.n)){seen.add(e.n.toLowerCase());out.push({n:e.n,c:0})}});
+  return {out,inPass}}
+function addHitsHTML(){
+  const {out,inPass}=addCandidates(),q=addPanel.q.trim(),ql=q.toLowerCase();
+  const exact=ql&&(out.some(x=>x.n.toLowerCase()===ql)||inPass.has(ql)||EXDB.some(e=>e.n.toLowerCase()===ql));
+  const list=out.slice(0,addPanel.show);
+  return `${list.map(x=>{const g=muscleOf(x.n);return `<button class="addhit" type="button" data-addex="${esc(x.n)}"><span class="grow">${esc(x.n)}${x.c?`<span class="small muted">Loggad ${x.c} ${x.c===1?'gång':'gånger'}</span>`:''}</span>${g?`<span class="pill">${esc(g)}</span>`:''}</button>`}).join('')}
+   ${!list.length&&!q?'<p class="small muted" style="margin:0">Inga övningar i valda grupper. Välj fler grupper eller ”Alla övningar”.</p>':''}
+   ${out.length>addPanel.show?`<button class="btn ghost sm" type="button" data-addmore>Visa fler (${out.length-addPanel.show} till)</button>`:''}
+   ${q&&!exact?`<button class="addhit" type="button" data-addex="${esc(q)}"><span class="grow">Lägg till ”${esc(q)}” som egen övning</span></button>`:''}`}
+function renderAddPanel(){const el=$('#addPanel');if(!el||!addPanel)return;const own=passGroups(),rest=MG.filter(g=>!own.includes(g));
+  el.innerHTML=`<div class="row between" style="flex-wrap:nowrap"><strong>Lägg till övning</strong><button class="btn ghost sm" type="button" data-addclose>Stäng</button></div>
+   <input id="addQ" type="search" autocomplete="off" placeholder="Sök övning, t.ex. hammer curl" aria-label="Sök övning" value="${esc(addPanel.q)}">
+   <div class="chips wrap">${[...own,...rest].map(g=>`<button class="chip" type="button" data-addgrp="${g}" aria-pressed="${!addPanel.all&&addPanel.groups.includes(g)}">${g}</button>`).join('')}<button class="chip" type="button" data-addall aria-pressed="${addPanel.all}">Alla övningar</button></div>
+   <div class="addhits" id="addHits">${addHitsHTML()}</div>`;
+  bind(el);const q=$('#addQ');q.oninput=()=>{addPanel.q=q.value;addPanel.show=12;const h=$('#addHits');h.innerHTML=addHitsHTML();bind(h)};
+  if(addPanel.focus){addPanel.focus=false;try{q.focus({preventScroll:true})}catch(e){q.focus()}el.scrollIntoView({block:'nearest'})}}
+function addUpdHits(){const h=$('#addHits');if(h){h.innerHTML=addHitsHTML();bind(h)}}
+function addExercise(name){
+  name=String(name||'').trim();if(!name)return;
+  const last=lastExLog(name),ed=EXDB.find(x=>x.n===name);let reps;
+  if(last&&last.sets&&last.sets.length)reps=last.sets.map((s,j)=>String(s[1]||(last.t&&last.t[j])||'').trim()||(ed&&ed.c?'8':'10'));
+  else reps=[...Array(3)].map(()=>ed&&ed.c?'8':'10');
+  const n=reps.length,row=[name,'',reps.every(r=>r===reps[0])?`${n} × ${reps[0]}`:reps.join(', '),'straight','',null,'',0,n,reps,null,{add:true}];
+  active.w={...(active.w||WBYID[active.wid]),x:[...(active.w||WBYID[active.wid]).x,row]};
+  ensurePre();active.sets.push(reps.map(()=>['','',false]));active.pre.push(reps.map(()=>false));active.preKg.push(reps.map(()=>null));
+  const i=active.sets.length-1;
+  if(S.settings.autoPrefill){const pf=prefillKg(row);if(pf)active.sets[i].forEach((s,j)=>{const k=pf.kgs[j];if(s[0]===''&&k!==''&&k!=null){s[0]=String(k);active.pre[i][j]=true;active.preKg[i][j]=String(k)}})}
+  addPanel=null;rerenderActiveKeep();
+  const el=document.querySelectorAll('#sheetBody .card .ex')[i];if(el){try{el.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){el.scrollIntoView()}el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}
+  toast(name+' tillagd')}
+function addSetTo(i){const e=active.w.x[i];if(!isAdded(e))return;const reps=[...(e[9]||[])],r=reps[reps.length-1]||'10';reps.push(r);
+  const row=[...e];row[9]=reps;row[8]=reps.length;row[2]=reps.every(x=>x===reps[0])?`${reps.length} × ${reps[0]}`:reps.join(', ');
+  const x=[...active.w.x];x[i]=row;active.w={...active.w,x};ensurePre();active.sets[i].push(['','',false]);active.pre[i].push(false);active.preKg[i].push(null);rerenderActiveKeep()}
+function removeAdded(i){const e=active.w.x[i];if(!isAdded(e))return;ensurePre();
+  active.w={...active.w,x:active.w.x.filter((_,k)=>k!==i)};active.sets.splice(i,1);active.pre.splice(i,1);active.preKg.splice(i,1);
+  ['spreOn','spreKg'].forEach(o=>{const m={};Object.entries(active[o]||{}).forEach(([key,v])=>{const [a,b,c]=key.split(':').map(Number);if(a===i)return;m[(a>i?a-1:a)+':'+b+':'+c]=v});active[o]=m});
+  restOpen=-1;rerenderActiveKeep();toast('Övningen togs bort')}
 function finishWorkout(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false}); let vol=0;
-  const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);active.sets[i].forEach(syncSup);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};
+  const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);active.sets[i].forEach(syncSup);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};if(isAdded(e))o.add=true;
     const PN=supParts(e);if(PN.length>1&&active.sets[i].some(s=>Array.isArray(s[4]))){
       o.parts=PN.map((pn,k)=>{const idx=active.sets[i].map((s,j)=>j).filter(j=>{const d=active.sets[i][j][4];return d&&d[k]&&(d[k][0]!==''||d[k][1]!=='')});
         const p={n:pn,sets:idx.map(j=>[active.sets[i][j][4][k][0],active.sets[i][j][4][k][1]]),t:idx.map(j=>{const a=String((e[9]||[])[j]??'').split('/');return a[k]??''})};
@@ -3028,7 +3092,7 @@ function finishWorkout(){
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
   const min=Math.max(1,Math.round((Date.now()-active.start)/60000));
-  addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w}:{})});
+  addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w.x.some(isAdded)?{...w,x:w.x.filter(e=>!isAdded(e))}:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
   if(w.p==='DP'&&S.settings.mode==='program'&&w.i.replace(/-latt$/,'')===programNext().i){S.settings.lastProg=w.i;markDirty('settings')}
   const fdate=active.date||today();
@@ -3449,6 +3513,16 @@ function bind(root){
     const row=b.parentElement;const kgI=row.querySelector(`[data-kg="${i}:${j}"]`);if(kgI)kgI.value=String(s[0]).replace('.',',');const rpI=row.querySelector(`[data-rp="${i}:${j}"]`);if(rpI)rpI.value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
     if(s[2])startRest(restFor(activeRow(i)))});
+  root.querySelectorAll('[data-addopen]').forEach(b=>b.onclick=openAddPanel);
+  root.querySelectorAll('[data-addclose]').forEach(b=>b.onclick=()=>{addPanel=null;rerenderActiveKeep()});
+  root.querySelectorAll('[data-addgrp]').forEach(b=>b.onclick=()=>{const g=b.dataset.addgrp,G=addPanel.all?[]:addPanel.groups;addPanel.all=false;addPanel.groups=G.includes(g)?G.filter(x=>x!==g):G.concat([g]);addPanel.show=12;
+    $('#addPanel').querySelectorAll('[data-addgrp]').forEach(c=>c.setAttribute('aria-pressed',addPanel.groups.includes(c.dataset.addgrp)));$('#addPanel [data-addall]').setAttribute('aria-pressed','false');addUpdHits()});
+  root.querySelectorAll('[data-addall]').forEach(b=>b.onclick=()=>{addPanel.all=!addPanel.all;if(!addPanel.all&&!addPanel.groups.length)addPanel.groups=passGroups();addPanel.show=12;
+    $('#addPanel').querySelectorAll('[data-addgrp]').forEach(c=>c.setAttribute('aria-pressed',!addPanel.all&&addPanel.groups.includes(c.dataset.addgrp)));b.setAttribute('aria-pressed',addPanel.all);addUpdHits()});
+  root.querySelectorAll('[data-addmore]').forEach(b=>b.onclick=()=>{addPanel.show+=12;addUpdHits()});
+  root.querySelectorAll('[data-addex]').forEach(b=>b.onclick=()=>addExercise(b.dataset.addex));
+  root.querySelectorAll('[data-addset]').forEach(b=>b.onclick=()=>addSetTo(+b.dataset.addset));
+  root.querySelectorAll('[data-addrm]').forEach(b=>b.onclick=()=>removeAdded(+b.dataset.addrm));
   root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
   root.querySelectorAll('[data-restset]').forEach(b=>b.onclick=()=>{const [i,v]=b.dataset.restset.split(':');setRestFor(+i,v)});
   root.querySelectorAll('[data-runlog]').forEach(b=>b.onclick=()=>showRunLog(b.dataset.runlog));
