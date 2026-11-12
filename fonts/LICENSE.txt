@@ -1,0 +1,3 @@
+Manrope (Copyright 2019 The Manrope Project Authors) och IBM Plex Sans (Copyright 2019 IBM Corp.)
+är licensierade under SIL Open Font License, Version 1.1: https://openfontlicense.org
+Filerna är latin-delmängden i woff2-format.

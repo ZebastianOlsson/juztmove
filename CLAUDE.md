@@ -6,11 +6,12 @@ Publiceras med GitHub Pages från `main` (roten). Inloggning och data: Supabase 
 Läs PRODUKT.md innan du bygger nya funktioner eller ändrar flöden.
 
 ## Filer
-- `src/index.src.html` – **källkoden. Ändra bara här.** Innehåller platshållarna `__BUILD__`, `__LIBRARY__`, `__PUBLIC_HEAD__`.
+- `src/index.src.html` – **källkoden. Ändra bara här.** Innehåller platshållarna `__BUILD__`, `__LIBRARY__`, `__PUBLIC_HEAD__`, `__VERSION__`.
 - `src/build.py` – bygger `index.html` i roten. Kör `python src/build.py` efter varje ändring och committa både källan och `index.html`.
-- `index.html` – genererad, ändra aldrig för hand.
+- `index.html`, `version.json` – genererade, ändra aldrig för hand. `version.json` är versionssträngen som appen jämför mot för att visa "Ny version finns".
 - `config.js` – Supabase-URL och publishable key (publik nyckel, får ligga här). Ändra inte.
-- `sw.js` – service worker. Höj `CACHE`-versionen när ikoner eller manifest ändras.
+- `sw.js` – service worker. Höj `CACHE`-versionen när ikoner, manifest eller typsnitt ändras.
+- `fonts/` – Manrope (700/800) och IBM Plex Sans (400/500/600) som woff2, laddas med `@font-face` (inga externa typsnitt).
 - `icons/`, `manifest.webmanifest` – appikon "Stegen" – två skutt i en linje (papper) och en solgul punkt på svart (`icons/logo.svg`).
 
 ## Grafisk profil (tema Dagsljus)
