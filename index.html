@@ -143,7 +143,7 @@ details.card>summary{cursor:pointer;list-style:none}
 .rpeb[aria-pressed="true"]{background:var(--run);border-color:var(--run);color:#fff}
 .prealert{background:var(--run);color:#fff;border-radius:10px;padding:10px;font-weight:600;font-size:18px}
 .nextbox{font-size:15px;color:var(--muted)}.nextbox strong{color:var(--ink)}
-input[type=email]{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;font-size:16px}
+input[type=email],input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;font-size:16px}
 .backupcard{border-left:5px solid var(--warn)}
 .sticky .confirm{flex:1;display:flex;flex-direction:column;gap:8px}.sticky .confirm .cmsg{font-weight:600}.sticky .confirm .row{flex-wrap:nowrap}.sticky .confirm .btn{flex:1}
 #syncStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -405,6 +405,8 @@ const monday = d=>{const x=new Date(d);const wd=(x.getDay()+6)%7;x.setDate(x.get
 const DAYS_SV=['Mån','Tis','Ons','Tor','Fre','Lör','Sön'];
 const fmtDate = d=>d.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'});
 const mmss = s=>Math.floor(s/60)+':'+pad(Math.max(0,s%60));
+const pl=(n,one,many)=>n+' '+(n===1?one:many);
+const BOOT_AT=Date.now();
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2200)}
 /* Tempo bara när raden har tempo angivet. Gissat tempo (e[7]) räknas inte som angivet och visas inte. */
 function exTempo(e){return e&&e[4]&&!e[7]?String(e[4]).trim():''}
@@ -430,7 +432,11 @@ function restFor(ex){
   return Math.max(15,Math.round(defaultRest(ex)*f/5)*5);
 }
 const fmtRest=s=>s<120?s+' s':s%60?Math.floor(s/60)+' min '+(s%60)+' s':(s/60)+' min';
-function estMinutes(w){return Math.round(w.x.reduce((a,e)=>a+(e[8]||3)*(e[3]==='superset'||e[3]==='giant'?2.2:1.6),0))}
+/* Beräknad passlängd: arbete + vila per set, en dryg minut per övningsbyte och några minuters uppvärmning. */
+function exSeconds(e){const sets=e[8]||3,parts=String(e[0]).split(' / ').length,r0=String((e[9]||[])[0]??'');
+  const tm=r0.match(/(\d+)\s*(s|sek|min)\b/i),work=tm?(+tm[1])*(tm[2].toLowerCase()==='min'?60:1):40;
+  return sets*(work*parts+restFor(e))+(e[3]==='drop'?20:0)+75}
+function estMinutes(w){return Math.max(5,Math.round((w.x.reduce((a,e)=>a+exSeconds(e),0)+180)/60))}
 
 /* ---------- State & storage ---------- */
 const DEFAULT_SETTINGS=BUILD==='owner'
@@ -687,7 +693,10 @@ function movesToday(){return day().moves}
 function minsSinceMove(){const m=movesToday();const last=m.length?m[m.length-1].at:null;return last?Math.round((Date.now()-last)/60000):null}
 function streak(){let n=0;for(let i=0;i<400;i++){const k=dkey(addDays(new Date(),-i)),d=S.days[k];const ok=d&&((d.moves||[]).length>=S.settings.moveGoal||d.steps>=S.settings.stepGoal);if(ok)n++;else if(i>0)break}return n}
 let moveIdx=0;
-function nextMove(){const done=new Set(movesToday().map(m=>m.id));const left=MOVES.filter(m=>!done.has(m.id));const pool=left.length?left:MOVES;return pool[(moveIdx+new Date().getHours())%pool.length]}
+/* Förslag som bara passar vissa tider på dygnet (lunchpromenaden runt lunch, jobbsaker under arbetstid). */
+const MOVE_HOURS={lunch:[11,15],telefon:[8,18],'stå':[8,18],dans:[16,23],'ärende':[7,20]};
+function nextMove(){const h=new Date().getHours(),fit=m=>{const w=MOVE_HOURS[m.id];return !w||(h>=w[0]&&h<w[1])};
+  const done=new Set(movesToday().map(m=>m.id));const ok=MOVES.filter(fit),base=ok.length?ok:MOVES;const left=base.filter(m=>!done.has(m.id));const pool=left.length?left:base;return pool[(moveIdx+h)%pool.length]}
 function logMove(id){const d=day();d.moves.push({id,at:Date.now()});markDirty('days',monthOf(today()));moveIdx=0;const n=d.moves.length,g=S.settings.moveGoal;toast(n===g?'Dagens mål nått – snyggt!':n>g?'Extra rörelse – bonus!':`${n} av ${g} rörelsepauser`);render()}
 function setDay(k,patch){Object.assign(day(k),patch);markDirty('days',monthOf(k));render()}
 function addLog(entry){entry.ts=Date.now();S.log.push(entry);markDirty('log',monthOf(entry.date));const T={styrka:'s','löpning':'r','rörlighet':'m'}[entry.type];
@@ -712,7 +721,7 @@ let swap=null;
 /* Schemat är en kö av dagar, inte låst till veckodagar. Man går bara vidare när dagen bockas av
    (ett pass loggas, rörligheten görs, eller man trycker Klar/Hoppa över). Annars väntar samma dag kvar. */
 function seqInit(){const st=S.settings;if(!st.seq||typeof st.seq.pos!=='number'){
-  st.seq={pos:(new Date().getDay()+6)%7,res:null,doneType:null};markDirty('settings');
+  st.seq={pos:(new Date().getDay()+6)%7,res:null,doneType:null,at:today()};markDirty('settings');
   const L=S.log.filter(l=>l.date===today()),typ=L.some(l=>l.type==='styrka')?'s':L.some(l=>l.type==='löpning')?'r':L.some(l=>l.type==='rörlighet')?'m':null;
   if(typ){const t=today();st.seq.pos+=1;st.seq.res=t;st.seq.doneType=typ;if(S.days[t])S.days[t].did=typ}}
   return st.seq}
@@ -733,6 +742,15 @@ function resolveDay(how,t=today()){
   q.pos+=1; q.res=t; q.doneType=typ; day(t).did=how==='skip'?'skip':typ;
   markDirty('settings'); markDirty('days',monthOf(t)); return true;
 }
+/* Rörlighets- och vilodagar som har passerat räknas som avklarade, så att nästa pass står överst. Bara styrke- och löppass väntar kvar. */
+function autoAdvance(){
+  if(BUILD==='public'&&sbCfg()&&sbLoadSess()&&!cloudReady&&!needLogin&&Date.now()-BOOT_AT<5000&&navigator.onLine!==false)return;
+  const st=S.settings;if(!st.onb)return;const q=seqInit(),t=today();if(q.res&&q.res>=t)return;
+  const next=k=>dkey(addDays(new Date(k+'T12:00:00'),1)),from=q.res?next(q.res):q.at;if(!from)return;let ch=false;
+  for(let k=from,g=0;k<t&&g<60;k=next(k),g++){const d=S.days[k];if(d&&d.plan==='v')continue;
+    const typ=d&&d.plan?d.plan:seqType(0);if(typ!=='m')break;
+    q.pos+=1;q.res=k;q.doneType='m';const dd=day(k);if(!dd.did)dd.did='m';markDirty('days',monthOf(k));ch=true}
+  if(ch)markDirty('settings')}
 function waitingInfo(){const q=seqInit(), t=today();if(!q.res||q.res===t)return null;const d=daysBetween(q.res,t);return d>=2?{since:addDays(new Date(q.res+'T12:00:00'),1),days:d-1}:null}
 function logsOn(k){return S.log.filter(l=>l.date===k)}
 /* Ångra "Hoppa över idag": settings.seqUndo={date,pos,res,doneType,plan} gäller bara samma dag. */
@@ -845,12 +863,13 @@ function runTable(r){
    return `<div class="rr t-${sg[1]}" role="row"><span class="num">${fmtMin(a)}–${fmtMin(t)}</span><span><strong>${esc(sg[2])}</strong><br><span class="small muted">${esc(p.feel)}</span></span><span class="num"><strong>${band?fmtK(p.kmh)+' km/h':pace(p.kmh)+' /km'}</strong><br><span class="small muted">${band?String(p.inc).replace('.',',')+' % lutning':fmtK(p.kmh)+' km/h'}</span></span></div>`}).join('')}</div>`;
 }
 /* Belastning: minuter × ansträngning. Akut (7 d) mot kronisk (snitt per vecka, 28 d). */
-function runLoad(){const now=new Date(today()+'T12:00:00');let a=0,c=0;
-  S.log.forEach(l=>{if(l.type!=='löpning')return;const age=(now-new Date(l.date+'T12:00:00'))/864e5;const load=(+l.min||0)*(+l.rpe||6);if(age<7)a+=load;if(age<28)c+=load});
-  const chronic=c/4;return {acute:a,chronic,ratio:chronic>0?a/chronic:0}}
+function runLoad(){const now=new Date(today()+'T12:00:00');let a=0,c=0,oldest=0;const wk=new Set();
+  S.log.forEach(l=>{if(l.type!=='löpning')return;const age=(now-new Date(l.date+'T12:00:00'))/864e5;if(age<0)return;oldest=Math.max(oldest,age);const load=(+l.min||0)*(+l.rpe||6);if(age<7)a+=load;if(age<28){c+=load;wk.add(Math.floor(age/7))}});
+  /* Snittet delas med de veckor som faktiskt har löpning, och jämförelsen gäller först efter tre veckors historik. */
+  const chronic=wk.size?c/wk.size:0;return {acute:a,chronic,ratio:chronic>0?a/chronic:0,ready:oldest>=21&&wk.size>=2}}
 function needEasy(){const st=S.settings;const R=S.log.filter(l=>l.type==='löpning');const last2=R.slice(-2);
   const twoHard=last2.length===2&&last2.every(l=>(+l.rpe||0)>=8);const L=runLoad();
-  return {twoHard,loadHigh:L.chronic>0&&L.ratio>1.3,ratio:L.ratio,pain:!!st.runPainEase}}
+  return {twoHard,loadHigh:L.ready&&L.chronic>0&&L.ratio>1.3,ratio:L.ratio,pain:!!st.runPainEase}}
 /* Kalibrering efter ansträngning mot passets mål + faktisk fart */
 function adaptRun(r,rpe,actualHard){
   const st=S.settings, target=rpeTarget(r); let V=v10Base(); const before=V; let msg='';
@@ -862,7 +881,7 @@ function adaptRun(r,rpe,actualHard){
   if(diff>=2){V-=0.5;msg=`Det var ${rpe}/10 mot målet ${target}. Sänker farten 0,5 km/h nästa gång.`}
   else if(diff>=1){msg=`${rpe}/10 – lite över målet ${target}. Samma fart nästa gång.`}
   else if(diff<=-1){ if(since>=14){V+=diff<=-2?0.5:0.25;st.runLastInc=Date.now();msg=`${rpe}/10 – under målet ${target}. Höjer farten ${diff<=-2?'0,5':'0,25'} km/h.`}
-    else msg=`${rpe}/10 – under målet. Farten höjs högst varannan vecka, nästa höjning om ${Math.ceil(14-since)} dagar.`}
+    else msg=`${rpe}/10 – under målet. Farten höjs högst varannan vecka, nästa höjning om ${pl(Math.ceil(14-since),'dag','dagar')}.`}
   else msg=`${rpe}/10 – precis på målet. Samma fart nästa gång.`;
   st.v10=Math.round(V*100)/100; markDirty('settings');
   const ch=Math.round((V-before)*10)/10; if(Math.abs(ch)>=0.1&&!/Sänker|Höjer/.test(msg))msg+=` Din löpfart justeras ${ch>0?'+':''}${fmtK(ch)} km/h efter farten du faktiskt sprang.`;
@@ -1601,30 +1620,44 @@ function basePrescription(e){
 }
 function genWorkout(focus){
   const tpl=TEMPLATES[focus]||TEMPLATES['Helkropp A'];
-  const mins=S.settings.minutes||45, n=mins<=20?4:mins<=30?5:mins<=45?6:7;
+  const mins=S.settings.minutes||45;
   const theme=pickTheme(), used=new Set(), recent=recentGenNames(2), items=[];
-  for(const f of tpl){ if(items.length>=n)break; const e=pickEx(f,used,recent); if(e){used.add(e.n);items.push(e)} }
+  for(const f of tpl){ const e=pickEx(f,used,recent); if(e){used.add(e.n);items.push(e)} }
   const g=S.settings.goal;
-  let rows=items.map(e=>{const p=basePrescription(e);return {e,sets:p.sets,reps:p.reps,scheme:'straight',tempo:'',note:''}});
-  const SPECIAL=['tib','backwalk','stretch','stepdown'];const comp=rows.filter(r=>r.e.c&&!r.e.t&&r.e.eq!=='k'&&!SPECIAL.includes(r.e.p)), iso=rows.filter(r=>!r.e.c&&!r.e.t&&r.e.p!=='core'&&r.e.eq!=='k'&&r.e.eq!=='gk'&&!SPECIAL.includes(r.e.p));
-  const pyr=r=>{r.sets=4;r.reps=g==='styrka'?['8','6','5','4']:['12','10','8','6'];r.scheme='pyramid';r.note='Öka vikten för varje set när repsen går ner.'};
-  const drop=r=>{const l=r.reps.length-1;r.reps[l]=r.reps[l]+'+'+r.reps[l];r.scheme='drop';r.note='Sista setet: sänk vikten ca 30 % direkt utan vila och kör lika många reps till.'};
-  if(theme==='tempo') rows.forEach(r=>{if(!r.e.t&&r.e.p!=='core'){r.tempo=r.e.c?'3:1:1:0':'2:0:1:1'}});
-  if(theme==='pyramid') comp.slice(0,2).forEach(pyr);
-  if(theme==='dropset') iso.forEach(drop);
-  if(theme==='mix'){ if(comp[0])pyr(comp[0]); if(iso.length) drop(iso[iso.length-1]); }
-  let pairs=[];
-  if(theme==='superset'||theme==='mix'){const cand=iso.filter(r=>r.scheme==='straight');for(let i=0;i+1<cand.length&&pairs.length<(theme==='mix'?1:2);i+=2)pairs.push([cand[i],cand[i+1]])}
-  const restFor=r=>r.e.t||r.e.p==='core'?'30 s':g==='form'?(r.e.c?'60 s':'45 s'):r.e.c?(g==='styrka'?'2 min':'90 s'):'60 s';
-  const rowOut=r=>[r.e.n,'',r.scheme==='pyramid'?r.reps.join(', '):r.scheme==='drop'?`${r.sets} × ${r.reps[0]}, sista setet drop`:`${r.sets} × ${r.reps[0]}`,r.scheme,r.tempo,restFor(r),r.note,0,r.sets,r.reps];
-  const skip=new Set(pairs.flat()), x=[];
-  rows.forEach(r=>{
-    const pr=pairs.find(p=>p[0]===r);
-    if(pr){const [a,b]=pr,s=Math.min(a.sets,b.sets);x.push([a.e.n+' / '+b.e.n,'',`${s} × ${a.reps[0]}/${b.reps[0]}`,'superset',a.tempo,'60 s','Kör övningarna direkt efter varandra och vila sedan.',0,s,[...Array(s)].map((_,i)=>a.reps[i]+'/'+b.reps[i])]);return}
-    if(skip.has(r))return; x.push(rowOut(r));
-  });
-  const groups=[...new Set(items.map(e=>MUSCLE_GROUP[e.m]))];
-  return {i:'gen-'+Date.now().toString(36),p:'GEN',t:focus,g:groups,x,theme,focus};
+  const SPECIAL=['tib','backwalk','stretch','stepdown'];
+  /* Bygger passet med de n första övningarna. adj > 0 lägger till set, adj < 0 tar bort set (minst 2). */
+  const build=(n,adj)=>{
+    let rows=items.slice(0,n).map(e=>{const p=basePrescription(e);return {e,sets:p.sets,reps:[...p.reps],scheme:'straight',tempo:'',note:''}});
+    const elig=rows.filter(r=>!r.e.t&&r.e.p!=='backwalk');
+    for(let k=0;k<Math.abs(adj)&&elig.length;k++){const r=adj>0?elig[k%elig.length]:elig[elig.length-1-(k%elig.length)];
+      if(adj>0){if(r.sets<5){r.sets++;r.reps.push(r.reps[r.reps.length-1])}}else if(r.sets>2){r.sets--;r.reps.pop()}}
+    const comp=rows.filter(r=>r.e.c&&!r.e.t&&r.e.eq!=='k'&&!SPECIAL.includes(r.e.p)), iso=rows.filter(r=>!r.e.c&&!r.e.t&&r.e.p!=='core'&&r.e.eq!=='k'&&r.e.eq!=='gk'&&!SPECIAL.includes(r.e.p));
+    const pyr=r=>{r.sets=4;r.reps=g==='styrka'?['8','6','5','4']:['12','10','8','6'];r.scheme='pyramid';r.note='Öka vikten för varje set när repsen går ner.'};
+    const drop=r=>{const l=r.reps.length-1;r.reps[l]=r.reps[l]+'+'+r.reps[l];r.scheme='drop';r.note='Sista setet: sänk vikten ca 30 % direkt utan vila och kör lika många reps till.'};
+    if(theme==='tempo') rows.forEach(r=>{if(!r.e.t&&r.e.p!=='core'){r.tempo=r.e.c?'3:1:1:0':'2:0:1:1'}});
+    if(theme==='pyramid') comp.slice(0,2).forEach(pyr);
+    if(theme==='dropset') iso.forEach(drop);
+    if(theme==='mix'){ if(comp[0])pyr(comp[0]); if(iso.length) drop(iso[iso.length-1]); }
+    let pairs=[];
+    if(theme==='superset'||theme==='mix'){const cand=iso.filter(r=>r.scheme==='straight');for(let i=0;i+1<cand.length&&pairs.length<(theme==='mix'?1:2);i+=2)pairs.push([cand[i],cand[i+1]])}
+    const restFor=r=>r.e.t||r.e.p==='core'?'30 s':g==='form'?(r.e.c?'60 s':'45 s'):r.e.c?(g==='styrka'?'2 min':'90 s'):'60 s';
+    const rowOut=r=>[r.e.n,'',r.scheme==='pyramid'?r.reps.join(', '):r.scheme==='drop'?`${r.sets} × ${r.reps[0]}, sista setet drop`:`${r.sets} × ${r.reps[0]}`,r.scheme,r.tempo,restFor(r),r.note,0,r.sets,r.reps];
+    const skip=new Set(pairs.flat()), x=[];
+    rows.forEach(r=>{
+      const pr=pairs.find(p=>p[0]===r);
+      if(pr){const [a,b]=pr,s=Math.min(a.sets,b.sets);x.push([a.e.n+' / '+b.e.n,'',`${s} × ${a.reps[0]}/${b.reps[0]}`,'superset',a.tempo,'60 s','Kör övningarna direkt efter varandra och vila sedan.',0,s,[...Array(s)].map((_,i)=>a.reps[i]+'/'+b.reps[i])]);return}
+      if(skip.has(r))return; x.push(rowOut(r));
+    });
+    return x};
+  /* Välj antal övningar och set så att beräknad tid hamnar nära vald passlängd. */
+  const off=x=>Math.abs(estMinutes({x})-mins);
+  let best=null;
+  for(let n=Math.min(2,items.length);n<=items.length;n++){const x=build(n,0),d=off(x);if(!best||d<best.d)best={n,x,d}}
+  if(!best)best={n:0,x:[],d:0};
+  if(best.n&&best.d>mins*0.08){const dir=estMinutes({x:best.x})<mins?1:-1;
+    for(let k=1;k<=10;k++){const x=build(best.n,dir*k),d=off(x);if(d<best.d)best={n:best.n,x,d};else break}}
+  const groups=[...new Set(items.slice(0,best.n).map(e=>MUSCLE_GROUP[e.m]))];
+  return {i:'gen-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),p:'GEN',t:focus,g:groups,x:best.x,theme,focus};
 }
 function lighten(w){if(!w)return w;const id=w.i+'-latt';if(WBYID[id])return WBYID[id];
   const x=w.x.map(e=>{const n=[...e];const sets=Math.max(2,(e[8]||3)-1);n[8]=sets;n[9]=(e[9]||[]).slice(0,sets).map(r=>String(r).split('+')[0]);
@@ -1754,7 +1787,7 @@ function renderOB(){
   if(step==='preview'){
     if(!a.plan) a.plan=weekTemplate(a.strength,a.cardio,true);
     const lab={s:'Styrka',r:'Löpning',m:'Rörlighet'};
-    const tmp={...S.settings,level:a.level,goal:a.goal,sex:a.sex};const save=S.settings;S.settings=tmp;S.settings.weekPlan=a.plan;const sp=a.strength?splitPlan():[];S.settings=save;
+    const tmp={...S.settings,level:a.level,goal:a.goal,sex:a.sex,kneeFocus:!!a.knee,weekPlan:a.plan};const save=S.settings;let sp=[];S.settings=tmp;try{sp=a.plan.includes('s')?kneeSwap(splitPlan()):[]}finally{S.settings=save}
     const sg=[5000,7500,10000,12000][a.stepsNow], mg={mycket:10,varierat:8,lite:6}[a.sit];
     const rl={nyb:'från gång/jogg upp till 30 min löpning',['5k']:'från 5 km mot 10 km',['10k']:'intervaller och tempo'}[a.runLevel];
     body=`<h1>Ditt schema</h1><p class="muted">Tryck på en dag för att byta mellan styrka, löpning och rörlighet.</p>
@@ -1793,7 +1826,7 @@ function bindOB(root){
     if(['goal','days'].includes(k))OB.a.plan=null;
     const y=$('#sheet').scrollTop;renderOB();$('#sheet').scrollTop=y});
   root.querySelectorAll('[data-obstep]').forEach(b=>b.onclick=()=>{const k=b.dataset.obstep,a=OB.a;a[k]=Math.max(0,Math.min(k==='strength'?6:5,a[k]+ +b.dataset.d));if(a.strength+a.cardio>7)a[k]--;a.plan=null;renderOB()});
-  root.querySelectorAll('[data-obday]').forEach(b=>b.onclick=()=>{const i=+b.dataset.obday,p=OB.a.plan;p[i]={m:'s',s:'r',r:'m'}[p[i]];renderOB()});
+  root.querySelectorAll('[data-obday]').forEach(b=>b.onclick=()=>{const i=+b.dataset.obday,p=OB.a.plan;p[i]={m:'s',s:'r',r:'m'}[p[i]];OB.a.strength=p.filter(x=>x==='s').length;OB.a.cardio=p.filter(x=>x==='r').length;const y=$('#sheet').scrollTop;renderOB();$('#sheet').scrollTop=y});
   root.querySelectorAll('[data-obtime]').forEach(i=>i.oninput=()=>{OB.a[i.dataset.obtime]=i.value});
   root.querySelectorAll('[data-obtimeclear]').forEach(b=>b.onclick=()=>{OB.a[b.dataset.obtimeclear]='';const i=$('#obTime');if(i)i.value=''});
   root.querySelectorAll('[data-obnext]').forEach(b=>b.onclick=()=>{OB._dir=1;
@@ -1827,6 +1860,7 @@ function render(){
   document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false'));
   const v=$('#view');
   try{
+    autoAdvance();
     v.innerHTML=({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress})[tab]();
     bind(v);
   }catch(e){
@@ -1844,11 +1878,12 @@ function ring(steps,goal){
    <text x="60" y="58" text-anchor="middle" font-family="Manrope,Helvetica Neue,Arial,sans-serif" font-weight="800" font-size="26" fill="var(--ink)">${steps.toLocaleString('sv-SE')}</text>
    <text x="60" y="78" text-anchor="middle" font-size="11" fill="var(--muted)">av ${goal.toLocaleString('sv-SE')}</text></svg>`;
 }
-function workoutSummary(w){
+function workoutSummary(w0){
+  const w=AW(w0)||w0;
   const groups=w.g.map(g=>`<span class="pill">${esc(g)}</span>`).join(' ');
   const schemes=[...new Set(w.x.map(e=>e[3]).filter(s=>s&&s!=='straight'))].slice(0,3).map(s=>`<span class="pill line">${esc(SCHEME_SV[s]||s)}</span>`).join(' ');
   return `<div class="row">${groups} ${schemes}</div>
-   <div class="small muted num">${w.x.length} övningar · ca ${estMinutes(w)} min · ${esc(w.p==='GEN'?'Genererat pass':PROG[w.p]?.n||w.p)}${w.s?' · Split '+w.s:''}${w.wk!=null?' · v'+w.wk+' d'+w.d:''}</div>`;
+   <div class="small muted num">${pl(w.x.length,'övning','övningar')} · ca ${estMinutes(w)} min · ${esc(w.p==='GEN'?'Eget pass':PROG[w.p]?.n||w.p)}${w.s?' · Split '+w.s:''}${w.wk!=null?' · v'+w.wk+' d'+w.d:''}</div>`;
 }
 let dayOff=0;
 function dayNav(){const dt=addDays(new Date(),dayOff);const lab=dayOff===0?'Idag':dayOff===1?'Imorgon':dayOff===-1?'Igår':dt.toLocaleDateString('sv-SE',{weekday:'long'});
@@ -1866,7 +1901,7 @@ function aheadInfo(off){
     else if(st.mode==='gen'||!WORKOUTS.length){const p=kneeSwap(splitPlan());info.focus=p[((st.splitIdx||0)+before)%p.length];info.w=before===0?genCurrent():genPeek((st.splitIdx||0)+before,info.focus)}
     else if(before===0)info.w=suggestion();
   } else if(typ==='r'){const runToday=logsOn(today()).some(l=>l.type==='löpning');const list=rankRuns(runToday||before>0);info.r=before===0?list[0]:null}
-  else if(typ==='m'){const mo=MOBILITY;info.m=mo[(info.date.getDate())%mo.length]}
+  else if(typ==='m'){info.m=mobFor(info.date)}
   return info;
 }
 
@@ -1878,7 +1913,7 @@ function viewPast(){
   <div class="stack">${dayNav()}
    <p class="small muted" style="margin:0">Här fyller du i det du glömde logga. Det sparas på ${esc(dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'}))}.</p>
    <section class="card stack"><div class="row between"><h3>Steg</h3><span class="small muted num">mål ${goal.toLocaleString('sv-SE')}</span></div>
-    <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pastSteps" type="number" inputmode="numeric" min="0" step="100" value="${+d.steps||''}" placeholder="Antal steg" aria-label="Antal steg"><button class="btn" type="button" data-paststeps="${k}">Spara</button></div>
+    <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pastSteps" type="number" inputmode="numeric" min="0" max="100000" step="100" value="${+d.steps||''}" placeholder="Antal steg" aria-label="Antal steg"><button class="btn" type="button" data-paststeps="${k}">Spara</button></div>
     ${+d.steps?`<div class="small muted">Sparat: ${(+d.steps).toLocaleString('sv-SE')} steg${+d.steps>=goal?' ✓ över målet':''}</div>`:''}</section>
    <section class="card" aria-label="Vardagsrörelse"><h3 style="margin-bottom:4px">Vardagsrörelse</h3>
     <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${!!d.walk}" data-pasttog="walk:${k}" aria-label="Promenad">${d.walk?'✓':''}</button><div class="grow"><strong>Promenad</strong></div></div>
@@ -2026,7 +2061,7 @@ function renderQuickLog(){const {type,k}=qlog,dt=new Date(k+'T12:00:00');const r
     <label class="f" for="qlT">Vad gjorde du?<input id="qlT" type="text" autocomplete="off" placeholder="${esc(def)}" value=""></label>
     <div class="grid2"><label class="f" for="qlMin">Minuter<input id="qlMin" type="text" inputmode="numeric" autocomplete="off" placeholder="${run?30:type==='styrka'?45:10}"></label>
     ${run?`<label class="f" for="qlKm">Km<input id="qlKm" type="text" inputmode="decimal" autocomplete="off" placeholder="5"></label>`:'<span></span>'}</div>
-    ${type!=='rörlighet'?`<div class="setfield"><div class="lab">Hur jobbigt var det? (1–10)</div><div class="chips wrap">${[3,4,5,6,7,8,9,10].map(n=>`<button class="chip" type="button" data-qlfeel="${n}" aria-pressed="${qlog.feel===n}">${n}</button>`).join('')}</div></div>`:''}
+    ${type!=='rörlighet'?`<div class="setfield"><div class="lab">Hur jobbigt var det? (1–10)</div><div class="chips wrap">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" type="button" data-qlfeel="${n}" aria-pressed="${qlog.feel===n}">${n}</button>`).join('')}</div></div>`:''}
    </section></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Avbryt</button><button class="btn" type="button" data-qlsave>Spara</button>`);
 }
@@ -2038,7 +2073,7 @@ function saveQuickLog(){const {type,k,feel}=qlog;const num=id=>{const v=parseFlo
   addLog(e);if(type==='rörlighet'){day(k).mob=true;markDirty('days',monthOf(k))}
   qlog=null;closeSheet();toast('Sparat på '+new Date(k+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long'}))}
 function bindPast(root){
-  root.querySelectorAll('[data-paststeps]').forEach(b=>b.onclick=()=>{const v=parseInt($('#pastSteps').value,10);if(v>=0){setDay(b.dataset.paststeps,{steps:v});toast('Steg sparade')}});
+  root.querySelectorAll('[data-paststeps]').forEach(b=>b.onclick=()=>{const v=parseInt($('#pastSteps').value,10);if(v>100000){toast('Högst 100 000 steg');return}if(v>=0){setDay(b.dataset.paststeps,{steps:v});toast('Steg sparade')}else if(v<0)toast('Steg kan inte vara negativa')});
   root.querySelectorAll('[data-pasttog]').forEach(b=>b.onclick=()=>{const [f,k]=b.dataset.pasttog.split(':');setDay(k,{[f]:!day(k)[f]})});
   root.querySelectorAll('[data-pastmove]').forEach(b=>b.onclick=()=>{const [v,k]=b.dataset.pastmove.split(':');const d=day(k);if(+v>0)d.moves.push({id:'efterhand',at:Date.now()});else d.moves.pop();markDirty('days',monthOf(k));render()});
   root.querySelectorAll('[data-quicklog]').forEach(b=>b.onclick=()=>{const [t,k]=b.dataset.quicklog.split('|');showQuickLog(t,k)});
@@ -2082,12 +2117,12 @@ function viewToday(){
     const gen=S.settings.mode==='gen'||!WORKOUTS.length;
     const doneW=done.find(l=>l.type==='styrka');if(doneW)inHero.add(doneW);
     const w0=doneW&&WBYID[doneW.wid]?WBYID[doneW.wid]:gen?genCurrent():suggestion();
-    const w=!doneW&&d.low?lighten(w0):w0;
+    const w=!doneW&&d.low?lighten(w0):w0, aw=w?AW(w):w;
     hero=`<section class="card hero stack" aria-labelledby="h-pass">${lowToggle()}
       <div class="row between"><span class="eyebrow">Dagens styrkepass</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
       ${!w&&swapped(gen)?swapBackHTML(gen):''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${workoutSummary(w)}
-      <div class="small muted">${w.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${w.x.length>5?' …':''}</div>
+      <div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
       :`<div class="row">${active?resumeBtn():`<button class="btn" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>`}`
       :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
@@ -2115,15 +2150,15 @@ function viewToday(){
       ${did('löpning')?'':skipBox()}
     </section>`;
   } else if(plan==='v'){
-    const m=MOBILITY.find(x=>x.id==='mob-kontor')||MOBILITY[0];
+    const m=mobFor(new Date());
     hero=`<section class="card hero mob stack" aria-labelledby="h-rest">
       <span class="eyebrow">Vilodag</span><h2 id="h-rest">${d.did==='skip'?'Du hoppade över idag':'Vila idag – helt okej'}</h2>
       <p style="margin:0">${d.did==='skip'?`Helt okej. Imorgon: ${esc(passLabel(1))}.`:`Passet (${({s:'styrka',r:'löpning',m:'rörlighet'})[seqType(0)]}) väntar till imorgon – ingenting hoppas över.`}</p>
       <p class="small muted" style="margin:0">Rörelsepauser och steg räknas fortfarande – lite rörelse hjälper återhämtningen.</p>
-      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Lätt rörlighet (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
+      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">${esc(m.t)} (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
     </section>`;
   } else {
-    const m=MOBILITY[new Date().getDate()%MOBILITY.length];
+    const m=mobFor(new Date());
     hero=`<section class="card hero mob stack" aria-labelledby="h-mob">
       <span class="eyebrow">Återhämtning</span>
       <h2 id="h-mob">Rörlighet och en lång promenad</h2>
@@ -2136,13 +2171,12 @@ function viewToday(){
       ${seqInit().res===k?'':skipBox()}
     </section>`;
   }
-  const iss=S.settings.issues||[], pel=iss.includes('bäckenbotten')||iss.includes('gravid');
-  let mobList=MOBILITY.filter(x=>(!x.knee||S.settings.kneeFocus)&&(!x.pelvic||pel));if(S.settings.kneeFocus)mobList=mobList.concat(MOBILITY.filter(x=>x.knee));if(pel)mobList=mobList.concat(MOBILITY.filter(x=>x.pelvic));{const mp=S.settings.mobPref;const f=mp==='kort'?mobList.filter(x=>x.min<10):mp==='lång'?mobList.filter(x=>x.min>=10):mobList;if(f.length)mobList=f}const mobToday=mobList[(new Date().getDate()+1)%mobList.length];
+  const mobToday=mobFor(new Date());
   return `<header class="top"><div><div class="date cap">${esc(fmtDate(new Date()))}</div><h1>Idag</h1></div>
      <button class="btn ghost sm" type="button" data-settings>Inställningar</button></header>
    <div class="stack">
    ${dayNav()}
-   ${wait&&plan!=='v'?`<div class="note waitnote" role="status"><strong>Väntar sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Det blev inget de senaste ${wait.days===1?'dagen':wait.days+' dagarna'}, så schemat står kvar på samma dag. Kör passet idag, skjut upp eller hoppa över det.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
+   ${wait&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
    ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
    ${backupDue()?backupCard():''}
    ${movesCard()}
@@ -2151,7 +2185,7 @@ function viewToday(){
        <div class="stack" style="gap:8px">
          <h3 id="h-steg">Steg idag</h3>
          <div class="row" style="gap:6px"><button class="btn ghost sm" type="button" data-addsteps="1000">+1 000</button><button class="btn ghost sm" type="button" data-addsteps="2500">+2 500</button><button class="btn ghost sm" type="button" data-addsteps="-1000">−1 000</button></div>
-         <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="stepsIn" type="number" inputmode="numeric" min="0" step="100" placeholder="Antal steg" aria-label="Antal steg idag"><button class="btn sm" type="button" data-setsteps>Spara</button></div>
+         <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="stepsIn" type="number" inputmode="numeric" min="0" max="100000" step="100" placeholder="Antal steg" aria-label="Antal steg idag"><button class="btn sm" type="button" data-setsteps>Spara</button></div>
        </div></div>
    </section>
    ${!done.some(isPass)?ciCard():''}
@@ -2250,7 +2284,7 @@ function skipBox(){
 }
 function showRunEdit(ts){
   const l=S.log.find(x=>x.ts===+ts); if(!l) return;
-  openSheet(`<header class="top"><div><div class="date">${esc(l.date)} · komplettera</div><h1>${esc(l.title)}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+  openSheet(`<header class="top"><div><div class="date">${esc(shortDate(l.date))} · komplettera</div><h1>${esc(l.title)}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack"><section class="card stack"><p class="small muted" style="margin:0">Fyll i eller rätta i efterhand – för hand eller genom att läsa av bilder på löpbandet.</p>
     <div class="grid2">
      <label class="f" for="runMin">Tid (min)<input id="runMin" type="text" inputmode="decimal" autocomplete="off" value="${l.min?String(l.min).replace('.',','):''}"></label>
@@ -2262,7 +2296,7 @@ function showRunEdit(ts){
 }
 /* ---------- Loggat styrkepass: läsläge och redigering ---------- */
 const kgTxt=v=>String(v??'').replace('.',',');
-function fmtLogSet(s){return Array.isArray(s[2])&&s[2].length?s[2].map(d=>`${kgTxt(d[0]||'–')}×${d[1]||'?'}`).join(' → '):`${kgTxt(s[0]||'–')} × ${s[1]||'?'}`}
+function fmtLogSet(s){const one=(kg,r,x)=>r?`${kgTxt(kg||'–')}${x}${r}`:kg?`${kgTxt(kg)} kg`:'–';return Array.isArray(s[2])&&s[2].length?s[2].map(d=>one(d[0],d[1],'×')).join(' → '):one(s[0],s[1],' × ')}
 const exTop=e=>Math.max(0,...(e.sets||[]).map(x=>kgNum(x[0])));
 function prevExBefore(l,name){let best=null;S.log.forEach(o=>{if(o===l||!isStrLog(o)||o.ts===l.ts)return;if(o.date>l.date||(o.date===l.date&&(o.ts||0)>=(l.ts||0)))return;
   const e=flatEx(o).find(x=>x.n===name);if(e&&exTop(e)>0&&(!best||o.date>best.o.date||(o.date===best.o.date&&(o.ts||0)>(best.o.ts||0))))best={o,e}});return best}
@@ -2335,6 +2369,8 @@ function renderSE(){
   const q=$('#seQ');if(q){q.oninput=()=>{SE.q=q.value;$('#sePick').innerHTML=sePickList(SE.q);bind($('#sePick'))};if(!q.value)q.focus()}
 }
 const seClean=v=>String(v).replace(',','.').replace(/[^0-9.]/g,'');
+/* Reps får inte vara negativa: ett inledande minustecken tas bort. */
+const repClean=v=>String(v).replace(/^\s*[-−]+\s*/,'');
 function seSyncDrop(s){if(Array.isArray(s[2])){s[0]=s[2][0][0];s[1]=s[2].some(d=>d[1]!=='')?s[2].map(d=>d[1]).join('+'):''}}
 /* Ångra att dagen räknats som gjord när dagens enda styrkepass tas bort eller flyttas till en annan dag. */
 function unresolveToday(){const t=today(),q=seqInit(),d=S.days[t];if(q.res!==t||S.log.some(x=>x.date===t&&x.type==='styrka'))return;if(q.doneType&&q.doneType!=='s')return;
@@ -2362,11 +2398,11 @@ function seDelete(){const idx=S.log.findIndex(x=>x.ts===SE.ts);if(idx<0)return;c
 function bindSE(root){
   const ix=v=>v.split(':').map(Number);
   root.querySelectorAll('[data-sekg]').forEach(x=>x.oninput=()=>{const [i,j]=ix(x.dataset.sekg);SE.ex[i].sets[j][0]=seClean(x.value)});
-  root.querySelectorAll('[data-serp]').forEach(x=>x.oninput=()=>{const [i,j]=ix(x.dataset.serp);SE.ex[i].sets[j][1]=x.value.trim()});
+  root.querySelectorAll('[data-serp]').forEach(x=>x.oninput=()=>{const [i,j]=ix(x.dataset.serp);SE.ex[i].sets[j][1]=repClean(x.value.trim())});
   root.querySelectorAll('[data-sedkg]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sedkg);const s=SE.ex[i].sets[j];s[2][k][0]=seClean(x.value);seSyncDrop(s)});
-  root.querySelectorAll('[data-sedrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sedrp);const s=SE.ex[i].sets[j];s[2][k][1]=x.value.trim();seSyncDrop(s)});
+  root.querySelectorAll('[data-sedrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sedrp);const s=SE.ex[i].sets[j];s[2][k][1]=repClean(x.value.trim());seSyncDrop(s)});
   root.querySelectorAll('[data-seskg]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.seskg);SE.ex[i].sets[j][3][k][0]=seClean(x.value)});
-  root.querySelectorAll('[data-sesrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sesrp);SE.ex[i].sets[j][3][k][1]=x.value.trim()});
+  root.querySelectorAll('[data-sesrp]').forEach(x=>x.oninput=()=>{const [i,j,k]=ix(x.dataset.sesrp);SE.ex[i].sets[j][3][k][1]=repClean(x.value.trim())});
   root.querySelectorAll('[data-serm]').forEach(b=>b.onclick=()=>{const [i,j]=ix(b.dataset.serm);SE.ex[i].sets.splice(j,1);seKeep()});
   root.querySelectorAll('[data-seaddset]').forEach(b=>b.onclick=()=>{const e=SE.ex[+b.dataset.seaddset],ls=e.sets[e.sets.length-1];e.sets.push(e.pn?['','',null,e.pn.map(()=>['',''])]:ls&&Array.isArray(ls[2])?['','',ls[2].map(()=>['',''])]:['','']);seKeep()});
   root.querySelectorAll('[data-sermex]').forEach(b=>b.onclick=()=>{SE.ex.splice(+b.dataset.sermex,1);SE.pick=null;seKeep()});
@@ -2385,10 +2421,12 @@ function bindSE(root){
   root.querySelectorAll('[data-slog]').forEach(b=>b.onclick=()=>showStrengthLog(b.dataset.slog));
   root.querySelectorAll('[data-sledit]').forEach(b=>b.onclick=()=>editStrengthLog(b.dataset.sledit));
 }
+/* Loggar med senaste först: efter datum, sedan efter när de sparades. */
+function logsDesc(){return S.log.slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.ts||0)-(a.ts||0))}
 function logRow(l){
   const icon=l.type==='styrka'?'s':l.type==='löpning'?'r':l.type==='annat'?'o':'m';
   const extra=l.type==='annat'?otherExtra(l):l.type==='löpning'?[l.km?String(l.km).replace('.',',')+' km':'',l.min?String(l.min).replace('.',',')+' min':'',l.avg?fmtK(+l.avg)+' km/h snitt':l.hard?fmtK(+l.hard)+' km/h':'',l.rpe?l.rpe+'/10':''].filter(Boolean).join(' · '):l.type==='styrka'?`${l.vol?Math.round(l.vol).toLocaleString('sv-SE')+' kg totalt · ':''}${l.min||'?'} min`:`${l.min||''} min`;
-  return `<div class="li" style="cursor:default"><span class="dot ${icon}" style="margin-top:6px"></span><div class="grow"><strong>${esc(l.type==='styrka'?svTitle(l.title):isExtraStr(l)?(l.title||OTHER_TITLE.styrka)+' · '+exCountTxt(l.ex.length):l.title)}</strong><div class="small muted num">${esc(l.date)}${extra?' · '+esc(extra):''}</div></div>${isStrLog(l)&&l.ts?`<button class="btn ghost sm" type="button" data-slog="${l.ts}" aria-label="Visa passet">Visa</button>`:''}${l.type==='löpning'&&l.ts?`<button class="btn ghost sm" type="button" data-editrun="${l.ts}" aria-label="Komplettera passet">${CLAUDE_SAMPLE?'📷 ':''}Komplettera</button>`:''}</div>`;
+  return `<div class="li" style="cursor:default"><span class="dot ${icon}" style="margin-top:6px"></span><div class="grow"><strong>${esc(l.type==='styrka'?svTitle(l.title):isExtraStr(l)?(l.title||OTHER_TITLE.styrka)+' · '+exCountTxt(l.ex.length):l.title)}</strong><div class="small muted num">${esc(shortDate(l.date))}${extra?' · '+esc(extra):''}</div></div>${isStrLog(l)&&l.ts?`<button class="btn ghost sm" type="button" data-slog="${l.ts}" aria-label="Visa passet">Visa</button>`:''}${l.type==='löpning'&&l.ts?`<button class="btn ghost sm" type="button" data-editrun="${l.ts}" aria-label="Komplettera passet">${CLAUDE_SAMPLE?'📷 ':''}Komplettera</button>`:''}</div>`;
 }
 let weekOff=0;
 function viewWeek(){
@@ -2400,11 +2438,10 @@ function viewWeek(){
     const past=k<tk; const lt=L.some(l=>l.type==='styrka')?'s':L.some(l=>l.type==='löpning')?'r':null;
     if(past&&!x) x=lt||(dd&&dd.mob?'m':'none');
     const ok=lt||(x==='m'&&(L.some(l=>l.type==='rörlighet')||dd?.mob))||(k===tk&&seqInit().res===tk&&dd?.did!=='skip');
-    return `<button type="button" class="day ${k===tk?'today':''} ${chg?'chg':''}" ${k<tk?'disabled':''} data-weekday="${k}" aria-label="${DAYS_SV[i]}: ${label[x]}. Tryck för att ändra."><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag">${label[x]}${chg?'*':''}</span>${ok?'<span class="done" aria-label="klart">✓</span>':''}${dd&&dd.steps?`<span class="tag muted num">${(dd.steps/1000).toFixed(1)}k</span>`:''}${dd&&dd.moves&&dd.moves.length?`<span class="tag muted num">${dd.moves.length} p</span>`:''}</button>`}).join('');
+    return `<button type="button" class="day ${k===tk?'today':''} ${chg?'chg':''}" ${k<tk?'disabled':''} data-weekday="${k}" aria-label="${DAYS_SV[i]}: ${label[x]}.${k<tk?'':' Tryck för att ändra.'}"><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag">${label[x]}${chg?'*':''}</span>${ok?'<span class="done" aria-label="klart">✓</span>':''}${dd&&dd.steps?`<span class="tag muted num">${(dd.steps/1000).toFixed(1).replace('.',',')}k</span>`:''}${dd&&dd.moves&&dd.moves.length?`<span class="tag muted num">${dd.moves.length} p</span>`:''}</button>`}).join('');
   const wk=S.log.filter(l=>new Date(l.date)>=mon);
   const cnt=t=>wk.filter(l=>l.type===t).length;
-  const stepsWeek=t.map((_,i)=>S.days[dkey(addDays(mon,i))]?.steps||0);
-  const avg=Math.round(stepsWeek.reduce((a,b)=>a+b,0)/Math.max(1,((new Date().getDay()+6)%7)+1));
+  const avg=stepAvg(weekKeys(mon));
   return `<header class="top"><div><div class="date">Vecka ${isoWeek(new Date())}</div><h1>Veckan</h1></div><button class="btn ghost sm" type="button" data-settings>Ändra upplägg</button></header>
   <div class="stack">
    ${weekNav()}
@@ -2418,7 +2455,7 @@ function viewWeek(){
     <p class="small muted" style="margin:0">Varje dag: promenad, ${S.settings.stepGoal.toLocaleString('sv-SE')} steg och lite rörlighet. Ovanpå det ${S.settings.strength} styrkepass och ${S.settings.cardio} löppass. ${S.settings.mode==='program'?'Styrkan följer ditt program där du är.':S.settings.mode==='gen'||!WORKOUTS.length?'Styrkepassen byggs efter schemat '+esc(splitPlan().join(' → '))+', med nya övningar och ett annat upplägg (tempo, pyramid, superset, dropset) än förra gången.':'Styrkepassen väljs från biblioteket så att de skiljer sig från det du nyss gjort.'}</p>
     <p class="small muted" style="margin:0">Missar du en dag följer förslaget med till nästa gång du öppnar appen.</p></section>
    ${upcomingList(dkey(addDays(new Date(),1)),dkey(addDays(mon,6)),'Resten av veckan')}
-   <section class="card"><h3>Senaste passen</h3><div class="list">${S.log.slice(-6).reverse().map(logRow).join('')||'<p class="muted small">Inget loggat än.</p>'}</div></section>
+   <section class="card"><h3>Senaste passen</h3><div class="list">${logsDesc().slice(0,6).map(logRow).join('')||'<p class="muted small">Inget loggat än.</p>'}</div></section>
   </div>`;
 }
 function weekTitle(){return weekOff===0?'Den här veckan':weekOff===1?'Nästa vecka':weekOff===-1?'Förra veckan':weekOff<0?'För '+(-weekOff)+' veckor sedan':'Om '+weekOff+' veckor'}
@@ -2463,7 +2500,7 @@ function viewWeekPast(){
     const has=t=>L.some(l=>l.type===t);
     const x=has('styrka')?'s':has('löpning')?'r':(has('rörlighet')||dd?.mob)?'m':L.length?'o':dd?.did==='skip'?'skip':'none';
     const ok=L.length>0||!!dd?.mob, can=off>=-14&&off<0;
-    return `<button type="button" class="day" ${can?`data-peek="${off}"`:'disabled'} aria-label="${DAYS_SV[i]}: ${label[x]}${can?'. Tryck för att visa dagen.':''}"><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag" ${x==='skip'?'style="font-size:9.5px;letter-spacing:-.02em;overflow-wrap:normal"':''}>${label[x]}</span>${ok?'<span class="done" aria-label="klart">✓</span>':''}${dd&&dd.steps?`<span class="tag muted num">${(dd.steps/1000).toFixed(1)}k</span>`:''}${dd&&dd.moves&&dd.moves.length?`<span class="tag muted num">${dd.moves.length} p</span>`:''}</button>`}).join('');
+    return `<button type="button" class="day" ${can?`data-peek="${off}"`:'disabled'} aria-label="${DAYS_SV[i]}: ${label[x]}${can?'. Tryck för att visa dagen.':''}"><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag" ${x==='skip'?'style="font-size:9.5px;letter-spacing:-.02em;overflow-wrap:normal"':''}>${label[x]}</span>${ok?'<span class="done" aria-label="klart">✓</span>':''}${dd&&dd.steps?`<span class="tag muted num">${(dd.steps/1000).toFixed(1).replace('.',',')}k</span>`:''}${dd&&dd.moves&&dd.moves.length?`<span class="tag muted num">${dd.moves.length} p</span>`:''}</button>`}).join('');
   const wk=S.log.filter(l=>l.date>=keys[0]&&l.date<=keys[6]);
   const cnt=t=>wk.filter(l=>l.type===t).length;
   const steps=keys.reduce((a,k)=>a+(+S.days[k]?.steps||0),0);
@@ -2475,7 +2512,7 @@ function viewWeekPast(){
    <section class="card"><div class="stat" style="grid-template-columns:repeat(2,1fr);row-gap:14px">
      <div><div class="k num">${cnt('styrka')}</div><div class="small muted">Styrkepass</div></div>
      <div><div class="k num">${cnt('löpning')}</div><div class="small muted">Löppass</div></div>
-     <div><div class="k num">${Math.round(steps/7).toLocaleString('sv-SE')}</div><div class="small muted">Snittsteg/dag</div></div>
+     <div><div class="k num">${stepAvg(keys).toLocaleString('sv-SE')}</div><div class="small muted">Snittsteg/dag</div></div>
      <div><div class="k num">${mins?fmtDur(mins):'–'}</div><div class="small muted">Träningstid</div></div></div></section>
    <section class="card"><h3>Veckans pass</h3><div class="list">${wk.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.ts||0)-(b.ts||0)).map(logRow).join('')||'<p class="muted small">Inget loggat den här veckan.</p>'}</div></section>
    <button class="btn ghost" type="button" data-weekoff="0">Tillbaka till den här veckan</button>
@@ -2525,7 +2562,7 @@ function AW(w,opt){
   x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const orig=[];
     const np=parts.map(p=>{if(!isAvoided(p))return p;const s2=subFor(p,used);if(!s2)return p;used.add(s2);orig.push(p);return s2});
     if(!orig.length)return e;changed=true;const n=[...e];n[0]=np.join(' / ');n[1]=[e[1],'ersätter '+orig.join(' och ')].filter(Boolean).join(' · ');n[10]={orig};return n});
-  return changed?{...w,x}:w;
+  return changed?{...w,x,g:(w.g||[]).filter(g=>!avoidGroups().includes(g))}:w;
 }
 function toggleGroup(g){const st=S.settings;const a=avoidGroups();st.avoidGroups=a.includes(g)?a.filter(x=>x!==g):a.concat([g]);st.genCur=null;markDirty('settings');showSettings()}
 let sheetCtx=null;
@@ -2562,8 +2599,8 @@ function svTitle(t){
   return (pre?pre+': '+j:cap1(j))+suf;
 }
 const wTitle=w=>svTitle(w&&w.t||'Pass');
-function wMeta(w){const sc=[...new Set(w.x.map(e=>e[3]).filter(s=>s&&!['straight','other','varied','total'].includes(s)))].slice(0,2).map(s=>SCHEME_SV[s]||s);
-  return `${w.x.length} övningar · ca ${estMinutes(w)} min${sc.length?' · '+sc.join(', '):''}`}
+function wMeta(w0){const w=AW(w0)||w0;const sc=[...new Set(w.x.map(e=>e[3]).filter(s=>s&&!['straight','other','varied','total'].includes(s)))].slice(0,2).map(s=>SCHEME_SV[s]||s);
+  return `${pl(w.x.length,'övning','övningar')} · ca ${estMinutes(w)} min${sc.length?' · '+sc.join(', '):''}`}
 function doneDates(){const m=new Map();S.log.forEach(l=>{if(l.type==='styrka'&&l.wid)m.set(String(l.wid).replace(/-latt$/,''),l.date)});return m}
 const shortDate=k=>new Date(k+'T12:00:00').toLocaleDateString('sv-SE',{day:'numeric',month:'short'});
 
@@ -2576,11 +2613,11 @@ function viewLibrary(){
    <div class="stack">${passTabs()}${body}</div>`;
 }
 /* En rad i en passlista */
-function passRow(w,o={}){
+function passRow(w0,o={}){const w=AW(w0)||w0;
   const st=o.state||'';const right=st==='next'?'<span class="pill">Nästa</span>':st==='done'?`<span class="small muted num">✓ ${o.date?esc(shortDate(o.date)):'klart'}</span>`:'<span class="chev" aria-hidden="true">›</span>';
   const src=o.src?(w.p==='DP'?`Split ${w.s} · v${w.wk} d${w.d} · `:(PROG[w.p]?.n?PROG[w.p].n+' · ':'')):'';
   return `<button class="li prow ${st}" type="button" data-open="${w.i}"><span class="pdot ${st}" aria-hidden="true">${st==='done'?'✓':''}</span><div class="grow"><strong>${o.label?esc(o.label)+' · ':''}${esc(wTitle(w))}</strong><div class="small muted num">${esc(src+wMeta(w))}</div></div>${right}</button>`}
-function heroPass(w,eyebrow,sub,note){if(!w)return '';
+function heroPass(w0,eyebrow,sub,note){if(!w0)return '';const w=AW(w0);
   return `<section class="card hero stack"><span class="eyebrow">${esc(eyebrow)}</span><h2>${esc(wTitle(w))}</h2>${sub?`<div class="small muted">${esc(sub)}</div>`:''}
    <div class="row">${(w.g||[]).map(g=>`<span class="pill">${esc(g)}</span>`).join(' ')}</div><div class="small muted num">${esc(wMeta(w))}</div>
    ${note?`<p class="small muted" style="margin:0">${note}</p>`:''}
@@ -2617,8 +2654,8 @@ function programBrowser(DD){
   return `<section class="card stack"><div class="row between" style="flex-wrap:nowrap;gap:10px"><h3>Programmen</h3>
      <select id="progView" aria-label="Välj program" class="selsm">${progs.map(p=>`<option value="${p.k}" ${p.k===progView?'selected':''}>${esc(p.n)}</option>`).join('')}</select></div>
    ${splits.length?`<div class="daynav" role="group" aria-label="Byt split"><button class="btn ghost sm" type="button" data-psplit="-1" ${si<=0?'disabled':''} aria-label="Föregående split">‹</button>
-     <div class="dn2"><strong>Split ${progSplit}</strong><span class="small muted">${weeks.length} veckor · ${list.length} pass</span></div>
-     <button class="btn ghost sm" type="button" data-psplit="1" ${si>=splits.length-1?'disabled':''} aria-label="Nästa split">›</button></div>`:`<p class="small muted" style="margin:0">${weeks.length} veckor · ${list.length} pass</p>`}
+     <div class="dn2"><strong>Split ${progSplit}</strong><span class="small muted">${pl(weeks.length,'vecka','veckor')} · ${list.length} pass</span></div>
+     <button class="btn ghost sm" type="button" data-psplit="1" ${si>=splits.length-1?'disabled':''} aria-label="Nästa split">›</button></div>`:`<p class="small muted" style="margin:0">${pl(weeks.length,'vecka','veckor')} · ${list.length} pass</p>`}
    ${weeks.map(wk=>{const ws=list.filter(w=>w.wk===wk);const dn=ws.filter(w=>stateOf(w)==='done').length;
      return `<details class="wk" ${wk===openWk?'open':''}><summary><strong>${wk===0?'Introvecka':'Vecka '+wk}</strong><span class="small muted num">${dn?dn+' av '+ws.length+' klara':ws.length+' pass'}</span></summary>
       <div class="list">${ws.map(w=>passRow(w,{state:stateOf(w),date:DD.get(w.i),label:'Dag '+w.d})).join('')}</div></details>`}).join('')}
@@ -2628,7 +2665,8 @@ function recentStrength(){const L=S.log.filter(l=>l.type==='styrka').slice(-5).r
     return `<div class="li" style="cursor:default;align-items:center"><div class="grow"><strong>${esc(svTitle(l.title))}</strong><div class="small muted num">${esc(shortDate(l.date))}${l.min?' · '+l.min+' min':''}${l.vol?' · '+Math.round(l.vol).toLocaleString('sv-SE')+' kg':''}</div></div><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost sm" type="button" data-slog="${l.ts}">Visa</button>${w?`<button class="btn ghost sm" type="button" data-again="${l.ts}">Kör igen</button>`:''}</div></div>`}).join('')}</div></section>`}
 function planGen(){
   const st=S.settings,p=kneeSwap(splitPlan()),idx=(st.splitIdx||0)%p.length,w=genCurrent();
-  return heroPass(w,'Nästa styrkepass','Byggt åt dig – nya övningar och nytt upplägg varje gång',`${w.x.slice(0,4).map(e=>esc(e[0])).join(' · ')}${w.x.length>4?' …':''}`)+
+  const awx=AW(w).x;
+  return heroPass(w,'Nästa styrkepass','Byggt åt dig – nya övningar och nytt upplägg varje gång',`${awx.slice(0,4).map(e=>esc(e[0])).join(' · ')}${awx.length>4?' …':''}`)+
    `<section class="card stack"><h3>Ditt schema</h3><p class="small muted" style="margin:0">Styrkepassen roterar i den här ordningen. Varje gång byggs ett nytt pass med andra övningar och ett annat upplägg (${Object.values(THEMES).slice(1,5).join(', ').toLowerCase()}).</p>
     <ol class="rot">${p.map((f,i)=>`<li class="${i===idx?'on':''}"><span>${esc(f)}</span>${i===idx?'<span class="pill">Nästa</span>':''}</li>`).join('')}</ol>
     <p class="small muted" style="margin:0">Antal pass, mål och utrustning ändrar du under Inställningar.</p></section>`+recentStrength();
@@ -2662,7 +2700,7 @@ function viewExList(){
   const res=EXDB.filter(e=>(!exGroup||MUSCLE_GROUP[e.m]===exGroup)&&(!q||e.n.toLowerCase().includes(q)));
   return `<input type="search" id="exQ" placeholder="Sök övning" value="${esc(exQ)}" aria-label="Sök övning">
    <div class="chips wrap" role="group" aria-label="Muskelgrupp">${['','Ben','Bröst','Rygg','Axlar','Armar','Vader','Bål'].map(g=>`<button class="chip" type="button" data-exg="${g}" aria-pressed="${exGroup===g}">${g||'Alla'}</button>`).join('')}</div>
-   <section class="card"><div class="small muted num" style="margin-bottom:4px">${res.length} övningar · tryck för instruktioner</div><div class="list">${res.map(e=>`<button class="li exrow" type="button" data-ex="${esc(e.n)}">${animSVG(exAnimKey(e.n),56)||'<span class="noanim" aria-hidden="true"></span>'}<div class="grow"><strong>${esc(e.n)}</strong>${isAvoided(e.n)?' <span class="pill line">Undviks</span>':''}<div class="small muted">${esc(MUSCLE_GROUP[e.m])} · ${[...e.eq].map(c=>EQ_SV[c]).join(', ')}</div></div><span class="chev" aria-hidden="true">›</span></button>`).join('')||'<p class="small muted">Ingen övning matchar.</p>'}</div></section>`;
+   <section class="card"><div class="small muted num" style="margin-bottom:4px">${pl(res.length,'övning','övningar')} · tryck för instruktioner</div><div class="list">${res.map(e=>`<button class="li exrow" type="button" data-ex="${esc(e.n)}">${animSVG(exAnimKey(e.n),56)||'<span class="noanim" aria-hidden="true"></span>'}<div class="grow"><strong>${esc(e.n)}</strong>${isAvoided(e.n)?' <span class="pill line">Undviks</span>':''}<div class="small muted">${esc(MUSCLE_GROUP[e.m])} · ${[...e.eq].map(c=>EQ_SV[c]).join(', ')}</div></div><span class="chev" aria-hidden="true">›</span></button>`).join('')||'<p class="small muted">Ingen övning matchar.</p>'}</div></section>`;
 }
 function exStats(name){const pts=[];let last=null,n=0;
   S.log.filter(isStrLog).forEach(l=>flatEx(l).forEach(e=>{if(!String(e.n).split(' / ').includes(name))return;n++;const kg=Math.max(0,...(e.sets||[]).map(s=>+s[0]||0));if(kg)pts.push({d:l.date,y:kg});last={d:l.date,sets:e.sets}}));
@@ -2713,10 +2751,10 @@ const ANIM_GROUP={};
  ['Axlar','ohp dbohp lateral frontraise facepull revfly pike'],['Armar','curl cablecurl pressdown skull overhead kickback'],
  ['Bål','plank sideplank crunch legraise deadbug twist climber quadruped carry']].forEach(([g,ks])=>ks.split(' ').forEach(k=>ANIM_GROUP[k]=g));
 function muscleOf(n){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];if(/neck|nack/i.test(f))return 'Nacke';if(/forearm|wrist|underarm|handled/i.test(f))return 'Armar';return ANIM_GROUP[animKeyRaw(f)]||null}
-const setDone=s=>!!(s&&(+s[0]||+s[1]||s[2]));
+const setDone=s=>!!(s&&(kgNum(s[0])>0||(String(s[1]??'').trim()!==''&&String(s[1]).trim()!=='0')||(Array.isArray(s[2])&&s[2].length)));
 /* Volym för ett loggat set: dropset (s[2] = [[kg,reps],...]) summeras över alla drops. */
 const setVol=s=>Array.isArray(s[2])&&s[2].length?s[2].reduce((a,d)=>a+(kgNum(d[0])||0)*(parseInt(d[1])||0),0):(+s[0]||0)*(parseInt(s[1])||0);
-const setTxt=(s,dash)=>Array.isArray(s[2])&&s[2].length?s[2].map(d=>`${String(d[0]||'–')}×${d[1]||'?'}`).join(' → '):`${dash?s[0]||'–':s[0]}×${s[1]||'?'}`;
+const setTxt=(s,dash)=>{const one=(kg,r)=>r?`${String(kg||'–')}×${r}`:kg?`${kg} kg`:'–';return Array.isArray(s[2])&&s[2].length?s[2].map(d=>one(d[0],d[1])).join(' → '):one(s[0],s[1])};
 /* Supersets loggas med parts:[{n,sets}] per delövning. flatEx gör om en loggpost till enskilda övningar:
    poster utan parts som förut, poster med parts → varje delövning för sig. */
 function flatEx(l){const out=[];(l&&l.ex||[]).forEach(e=>{if(Array.isArray(e.parts)&&e.parts.length)e.parts.forEach(p=>out.push({...p,sets:p.sets||[],of:e.n}));else out.push(e)});return out}
@@ -2801,12 +2839,12 @@ function viewProgress(){
   const pPR=prs.filter(p=>p.d>=from).length;
   /* Insikter i text */
   const ins=[];
-  if(stk.cur>=2)ins.push(`<strong>${stk.cur} dagar i rad</strong> med rörelse${stk.cur>=stk.best?' – ditt längsta hittills!':`. Rekordet är ${stk.best}.`}`);
+  if(stk.cur>=2)ins.push(`<strong>${pl(stk.cur,'dag','dagar')} i rad</strong> med rörelse${stk.cur>=stk.best?' – ditt längsta hittills!':`. Rekordet är ${stk.best}.`}`);
   if(twMin&&lwMin){const d=twMin-lwMin;ins.push(d>=10?`Du har tränat <strong>${fmtHM(d)} mer</strong> än hela förra veckan.`:d<=-10?`${fmtHM(lwMin-twMin)} kvar för att matcha förra veckan – det går fortfarande.`:'Ungefär lika mycket träning som förra veckan. Stabilt.')}
   else if(twMin)ins.push(`Veckan är igång: <strong>${fmtHM(twMin)}</strong> träning hittills.`);
   const thisPR=prs.filter(p=>p.d>=tw.a);if(thisPR.length)ins.push(`<strong>${thisPR.length>1?thisPR.length+' nya personbästa':'Nytt personbästa'}</strong> den här veckan: ${esc(thisPR[0].n)} ${fmtNum(thisPR[0].kg,1)} kg.`);
-  const st7=[...Array(7)].map((_,i)=>+(S.days[dkey(addDays(new Date(),-i))]?.steps)||0),avg7=st7.reduce((a,b)=>a+b,0)/7;
-  if(avg7)ins.push(avg7>=goal?`Snitt <strong>${fmtNum(avg7)} steg</strong> senaste veckan – över målet.`:`Snitt ${fmtNum(avg7)} steg senaste veckan, ${fmtNum(goal-avg7)} under målet.`);
+  const avg7=stepAvg(weekKeys(monday(new Date())));
+  if(avg7)ins.push(avg7>=goal?`Snitt <strong>${fmtNum(avg7)} steg</strong> om dagen den här veckan – över målet.`:`Snitt <strong>${fmtNum(avg7)} steg</strong> om dagen den här veckan. Målet är ${fmtNum(goal)}.`);
   const wd=[0,0,0,0,0,0,0];S.log.filter(isPass).forEach(l=>wd[(new Date(l.date+'T12:00:00').getDay()+6)%7]++);const bw=wd.indexOf(Math.max(...wd));
   if(S.log.filter(isPass).length>=8)ins.push(`<strong>${['Måndag','Tisdag','Onsdag','Torsdag','Fredag','Lördag','Söndag'][bw]}</strong> är dagen du tränar oftast.`);
   if(ms.next[0]&&ms.next[0].p>=0.75)ins.push(`Nästan där: <strong>${esc(ms.next[0].txt)}</strong> ${esc(ms.next[0].lab.toLowerCase())} – ${fmtNum(ms.next[0].left,ms.next[0].k==='km'||ms.next[0].k==='ton'?1:0)} kvar.`);
@@ -2828,41 +2866,45 @@ function viewProgress(){
    <section class="card stack prog-hero"><span class="eyebrow">${esc(per[1])}</span>
      <div class="tiles"><div><div class="k num">${pPass}</div><div class="small muted">pass</div></div><div><div class="k num">${pMin>=600?fmtNum(pMin/60):fmtNum(pMin)}</div><div class="small muted">${pMin>=600?'timmar':'minuter'}</div></div>
        <div><div class="k num">${fmtNum(pKm,pKm<100?1:0)}</div><div class="small muted">km löpning</div></div><div><div class="k num">${pVol>=1000?fmtNum(pVol/1000,1):fmtNum(pVol)}</div><div class="small muted">${pVol>=1000?'ton lyft':'kg lyft'}</div></div></div>
-     ${pVol>=1500?`<p class="small muted" style="margin:0">${fmtNum(pVol/1000,1)} ton motsvarar ungefär ${pVol>=5000?fmtNum(pVol/5000,1)+' afrikanska elefanter':fmtNum(pVol/1500,1)+' personbilar'}.${pPR?` Och ${pPR} nya personbästa på vägen.`:''}</p>`:pPR?`<p class="small muted" style="margin:0">${pPR} nya personbästa under perioden.</p>`:''}
+     ${pVol>=1500?`<p class="small muted" style="margin:0">${fmtNum(pVol/1000,1)} ton motsvarar ungefär ${pVol>=5000?fmtNum(pVol/5000,1)+' afrikanska elefanter':fmtNum(pVol/1500,1)+' personbilar'}.${pPR?` Och ${pl(pPR,'nytt personbästa','nya personbästa')} på vägen.`:''}</p>`:pPR?`<p class="small muted" style="margin:0">${pl(pPR,'nytt personbästa','nya personbästa')} under perioden.</p>`:''}
    </section>
    ${ins.length?`<section class="card stack"><h3>Läget just nu</h3><ul class="ins">${ins.slice(0,4).map(t=>`<li>${t}</li>`).join('')}</ul></section>`:''}
    <section class="card stack"><div class="row between"><h3>Den här veckan</h3><span class="small muted">v${tw.nr} mot v${lw.nr}</span></div>
      <div class="cmp"><div><div class="small muted">Pass</div><div class="k2 num">${tw.pass}</div>${delta(tw.pass,lw.pass,'')}</div><div><div class="small muted">Träningstid</div><div class="k2 num">${fmtHM(twMin)||'0 min'}</div>${delta(twMin,lwMin,'min')}</div>
        <div><div class="small muted">Löpning</div><div class="k2 num">${fmtNum(tw.km,1)} km</div>${delta(tw.km,lw.km,'km')}</div><div><div class="small muted">Lyft</div><div class="k2 num">${tw.vol>=1000?fmtNum(tw.vol/1000,1)+' t':fmtNum(tw.vol)+' kg'}</div>${delta(tw.vol/1000,lw.vol/1000,'t')}</div></div></section>
-   <section class="card stack"><div class="row between"><h3>Aktivitet</h3><span class="small muted">${stk.cur?`${stk.cur} dagar i rad`:''}</span></div>
+   <section class="card stack"><div class="row between"><h3>Aktivitet</h3><span class="small muted">${stk.cur?`${pl(stk.cur,'dag','dagar')} i rad`:''}</span></div>
      ${heatmap()}<div class="row between small muted"><span id="hmTip">Tryck på en dag för att se vad du gjorde.</span><span class="hmleg">Mindre ${[0,1,2,3,4].map(i=>`<i style="background:var(--h${i})"></i>`).join('')} Mer</span></div></section>
    <section class="card stack"><h3>Träningstid per vecka</h3>${legend}${weekBars(weeks)}<div class="small muted" id="wkTip">Tryck på en vecka för detaljer. Snitt senaste 4 veckorna: ${fmtHM(weeks.slice(-4).reduce((a,w)=>a+w.s+w.r+w.m+w.o,0)/4)||'0 min'}.</div></section>
    ${stepsCard()}
    ${R.length?`<section class="card stack"><div class="row between"><h3>Löpning</h3><span class="pill run">${PR_.length} pass · ${esc(per[1].toLowerCase())}</span></div>
      <div class="tiles"><div><div class="k num">${S.settings.runLevel==='5k'?fiveKTime():tenKTime()}</div><div class="small muted">beräknad ${S.settings.runLevel==='5k'?'5':'10'} km</div></div><div><div class="k num">${longest?fmtNum(+longest.km,1):'–'}</div><div class="small muted">längsta, km</div></div><div><div class="k num">${fastest?fmtK(+fastest.avg):'–'}</div><div class="small muted">snabbaste snitt, km/h</div></div></div>
-     <p class="small muted" style="margin:0">Den beräknade tiden bygger på farten appen planerar dina pass efter, och den uppdateras när du loggar. ${fastest?`Snabbaste passet: ${esc(fastest.title)} ${esc(fastest.date)}.`:''}</p>
+     <p class="small muted" style="margin:0">Den beräknade tiden bygger på farten appen planerar dina pass efter, och den uppdateras när du loggar. ${fastest?`Snabbaste passet: ${esc(fastest.title)} ${esc(shortDate(fastest.date))}.`:''}</p>
      <h4>Kilometer per vecka</h4>${kmBars(weeks)}
      ${runSpeedBlock()}</section>`:''}
    ${S.log.some(l=>l.type==='styrka')?`<section class="card stack"><h3>Styrka</h3>
      ${pw&&S.settings.mode==='program'?`<div><div class="row between small"><strong>Splitprogrammet</strong><span class="muted num">${pi+1} av ${DP_SEQ.length} pass</span></div><div class="pbar"><span style="width:${(pi+1)/DP_SEQ.length*100}%"></span></div><div class="small muted">Senast: ${esc(progLabel(pw))}</div></div>`:''}
      <h4>Set per muskelgrupp, senaste 4 veckorna</h4>${hbars(mgRows,'set')}
      ${least&&mgRows[0][1]>0?`<p class="small muted" style="margin:0">${least[1]===0?`${esc(least[0])} har inte fått några set alls`:`${esc(least[0])} har fått minst`} – kanske något för nästa pass?</p>`:''}
-     ${prs.length?`<h4>Senaste personbästa</h4><div class="list">${prs.slice(0,6).map(p=>`<div class="li" style="cursor:default"><div class="grow"><strong>${esc(p.n)}</strong><div class="small muted num">${esc(p.d)} · från ${fmtNum(p.from,1)} kg${p.first<p.from?` (började på ${fmtNum(p.first,1)})`:''}</div></div><span class="num"><strong>${fmtNum(p.kg,1)} kg</strong> <span class="dl up">+${fmtNum(p.kg-p.from,1)}</span></span></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Logga vikter i passen så dyker dina personbästa upp här.</p>'}
+     ${prs.length?`<h4>Senaste personbästa</h4><div class="list">${prs.slice(0,6).map(p=>`<div class="li" style="cursor:default"><div class="grow"><strong>${esc(p.n)}</strong><div class="small muted num">${esc(shortDate(p.d))} · från ${fmtNum(p.from,1)} kg${p.first<p.from?` (började på ${fmtNum(p.first,1)})`:''}</div></div><span class="num"><strong>${fmtNum(p.kg,1)} kg</strong> <span class="dl up">+${fmtNum(p.kg-p.from,1)}</span></span></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Logga vikter i passen så dyker dina personbästa upp här.</p>'}
      ${weightBlock(hist)}</section>`:''}
    <section class="card stack"><h3>Milstolpar</h3>
      ${ms.next.slice(0,3).map(m=>`<div><div class="row between small"><span><strong>${esc(m.lab)}</strong> · nästa: ${esc(m.txt)}</span><span class="muted num">${Math.floor(m.p*100)} %</span></div><div class="pbar"><span style="width:${Math.min(100,m.p*100)}%"></span></div></div>`).join('')}
      ${ms.got.length?`<div class="badges">${ms.got.map(g=>`<span class="badge"><strong>${esc(g.txt)}</strong><span>${esc(g.lab)}</span></span>`).join('')}</div>`:'<p class="small muted" style="margin:0">Din första milstolpe kommer efter första passet.</p>'}</section>
    ${ciHistoryCard()}
-   <details class="card"><summary><h3 style="display:inline">Historik</h3> <span class="small muted">${S.log.length} loggade</span></summary><div class="list">${S.log.slice().reverse().slice(0,40).map(logRow).join('')||'<p class="small muted">Inget loggat än.</p>'}</div></details>
+   <details class="card"><summary><h3 style="display:inline">Historik</h3> <span class="small muted">${S.log.length} loggade</span></summary><div class="list">${logsDesc().slice(0,40).map(logRow).join('')||'<p class="small muted">Inget loggat än.</p>'}</div></details>
   </div>`;
 }
+/* Stegsnitt: samma beräkning överallt. Räknar bara dagar från och med första dagen med steg, till och med idag. */
+function stepAvg(keys){const first=Object.keys(S.days).filter(k=>+S.days[k].steps>0).sort()[0],tk=today();if(!first)return 0;
+  const use=keys.filter(k=>k>=first&&k<=tk);return use.length?Math.round(use.reduce((a,k)=>a+(+(S.days[k]&&S.days[k].steps)||0),0)/use.length):0}
+const weekKeys=mon=>[...Array(7)].map((_,i)=>dkey(addDays(mon,i)));
 function stepsCard(){
   const days=[...Array(14)].map((_,i)=>addDays(new Date(),i-13)),goal=S.settings.stepGoal;
   const vals=days.map(d=>+(S.days[dkey(d)]?.steps)||0),max=Math.max(goal*1.2,...vals);
   const bars=vals.map((v,i)=>`<div class="${v>=goal?'hit':''}" style="height:${Math.max(2,v/max*100)}%" data-tip="${esc(days[i].toLocaleDateString('sv-SE',{weekday:'short',day:'numeric',month:'short'})+': '+fmtNum(v)+' steg')}" data-tipfor="stTip"></div>`).join('');
   const hit=vals.filter(v=>v>=goal).length,best=Math.max(...vals),bi=vals.indexOf(best),tot=vals.reduce((a,b)=>a+b,0);
   return `<section class="card stack"><div class="row between"><h3>Steg, 14 dagar</h3><span class="small muted">Mål ${fmtNum(goal)}</span></div>
-   <div class="tiles"><div><div class="k num">${hit}/14</div><div class="small muted">dagar över målet</div></div><div><div class="k num">${fmtNum(tot/14)}</div><div class="small muted">snitt per dag</div></div><div><div class="k num">${fmtNum(tot*0.00075,0)}</div><div class="small muted">km till fots, ca</div></div></div>
+   <div class="tiles"><div><div class="k num">${hit}/14</div><div class="small muted">dagar över målet</div></div><div><div class="k num">${fmtNum(stepAvg(days.map(dkey)))}</div><div class="small muted">snitt per dag</div></div><div><div class="k num">${fmtNum(tot*0.00075,0)}</div><div class="small muted">km till fots, ca</div></div></div>
    <div style="position:relative"><div class="bars">${bars}</div><div style="position:absolute;left:0;right:0;bottom:${goal/max*100}%;border-top:1px dashed var(--muted)" aria-hidden="true"></div></div>
    <div class="bars-x">${days.map(d=>`<span>${d.getDate()}</span>`).join('')}</div>
    <div class="small muted" id="stTip">${best?`Bästa dagen: ${esc(days[bi].toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'short'}))} med ${fmtNum(best)} steg.`:'Fyll i steg på Idag så syns de här.'}</div></section>`;
@@ -2923,8 +2965,9 @@ function ciCard(){
   const s=ciStats();
   const bits=[`${s.pass} av ${Math.max(s.exp,s.pass)} pass`,s.avg?`snitt ${s.avg.toLocaleString('sv-SE')} steg`:'',s.runs?`löpningen ${String(Math.round(s.rpe*10)/10).replace('.',',')}/10`:''].filter(Boolean);
   return `<section class="card stack checkin"><span class="eyebrow">Avstämning</span><h3>Hur går det?</h3>
-   <p class="small" style="margin:0">Senaste ${s.days} dagarna: ${esc(bits.join(' · '))}.</p>
-   <div class="row" style="gap:6px"><button class="btn sm" type="button" data-ciok>Funkar bra</button><button class="btn ghost sm" type="button" data-ciopen>Svara (30 s)</button><button class="btn ghost sm" type="button" data-cilater>Senare</button></div>
+   <p class="small" style="margin:0">${s.days===1?'Senaste dagen':'Senaste '+s.days+' dagarna'}: ${esc(bits.join(' · '))}.</p>
+   <p class="small muted" style="margin:0">${ciQuestions().length} korta frågor, sedan får du förslag som du själv godkänner.</p>
+   <div class="row" style="gap:6px"><button class="btn sm" type="button" data-ciok>Funkar bra</button><button class="btn ghost sm" type="button" data-ciopen>Svara (1 min)</button><button class="btn ghost sm" type="button" data-cilater>Senare</button></div>
    <button class="linkbtn small muted" type="button" data-cioff>Vill inte ha avstämningar</button></section>`;
 }
 /* Frågorna – vissa visas bara när loggen pekar på det */
@@ -2957,7 +3000,8 @@ function renderCheckin(){
 function ciProposals(a){
   const st=S.settings,s=ciStats();const d={str:0,car:0,maxDown:0,step:0,move:0,lvl:0,v10:0,mob:null,mix:false};
   const tight=a.time==='mycket'||a.why==='tid';
-  if(tight){if(!st.maxMin||st.maxMin>45)d.maxDown=1;else if(st.strength>2)d.str--;else if(st.cardio>1)d.car--}
+  const genM=st.mode==='gen'||!WORKOUTS.length,curLen=+st.maxMin||(genM?+st.minutes:0)||0,shorter=curLen?[60,45,30].find(v=>v<curLen):60;
+  if(tight){if(shorter)d.maxDown=1;else if(st.strength>2)d.str--;else if(st.cardio>1)d.car--}
   if(a.feel==='tufft'||a.why==='ork'){if((st.level||2)>1)d.lvl--;else if(st.strength>=3)d.str--}
   if(a.feel==='latt'&&!tight){if((st.level||2)<3)d.lvl++;if(s.avg>=st.stepGoal)d.step+=1000}
   if(a.run==='tung')d.v10-=0.3;if(a.run==='latt')d.v10+=0.25;
@@ -2967,7 +3011,7 @@ function ciProposals(a){
   const P=[];const str=Math.max(1,Math.min(6,(+st.strength||0)+d.str)),car=Math.max(0,Math.min(4,(+st.cardio||0)+d.car));
   if(str!==+st.strength&&str+car<=7)P.push({id:'str',t:`${str} styrkepass i veckan i stället för ${st.strength}`,f:x=>{x.strength=str;x.weekPlan=null;x.genCur=null}});
   if(car!==+st.cardio&&str+car<=7)P.push({id:'car',t:`${car} löppass i veckan i stället för ${st.cardio}`,f:x=>{x.cardio=car;x.weekPlan=null;x.genCur=null}});
-  if(d.maxDown){const nx=!st.maxMin||st.maxMin>60?60:45;P.push({id:'max',t:`Kortare pass: max ${nx} minuter`,f:x=>{x.maxMin=nx;x.minutes=Math.min(x.minutes||60,nx)}})}
+  if(d.maxDown&&shorter){const nx=shorter;P.push({id:'max',t:curLen?`Kortare styrkepass: ${genM?'ca':'max'} ${nx} minuter i stället för ${curLen}`:`Kortare styrkepass: max ${nx} minuter`,f:x=>{x.maxMin=nx;x.minutes=genM?nx:Math.min(x.minutes||60,nx);x.genCur=null}})}
   const lv=Math.max(1,Math.min(3,(st.level||2)+d.lvl));if(lv!==(st.level||2))P.push({id:'lvl',t:lv>(st.level||2)?'Mer utmanande styrkepass (fler upplägg som dropset och pyramid)':'Enklare styrkepass en period (raka set och tempo)',f:x=>{x.level=lv;x.genCur=null}});
   const sg=Math.max(4000,Math.min(20000,st.stepGoal+d.step));if(sg!==st.stepGoal)P.push({id:'step',t:`Stegmål ${sg.toLocaleString('sv-SE')} i stället för ${st.stepGoal.toLocaleString('sv-SE')}`,f:x=>{x.stepGoal=sg}});
   const mg=Math.max(4,Math.min(12,(st.moveGoal||8)+d.move));if(mg!==(st.moveGoal||8))P.push({id:'move',t:`${mg} rörelsepauser om dagen i stället för ${st.moveGoal||8}`,f:x=>{x.moveGoal=mg}});
@@ -3050,13 +3094,23 @@ const firstNum=v=>{const m=String(v??'').match(/\d+/);return m?+m[0]:NaN};
 function weightSuggest(e){
   const [name,,,scheme,,,,,sets,reps]=e; const last=lastExLog(name); if(!last) return null;
   const big=/knäböj|squat|marklyft|deadlift|benpress|leg press|hip thrust|rumänsk|romanian|rdl|hack/i.test(name);
-  const step=big?5:2.5, dumb=/hantel|dumbbell/i.test(name)?2:step;
-  let hit=0,miss=0,n=0;
-  last.sets.forEach((s,j)=>{const done=firstNum(s[1]),tgt=firstNum((last.t&&last.t[j])??reps?.[j]??reps?.[0]);if(!isNaN(done)&&!isNaN(tgt)&&+s[0]){n++;if(done>=tgt)hit++;else if(done<=tgt-3)miss++}});
-  if(!n) return null;
-  const inc=hit===n?dumb:miss>n/2?-dumb:0;
-  const kgs=[...Array(sets||3)].map((_,j)=>{const p=last.sets[Math.min(j,last.sets.length-1)];const k=+p[0]||0;return k?Math.max(0,Math.round((k+inc)*4)/4):''});
-  const note=inc>0?`Öka ${String(inc).replace('.',',')} kg – du klarade alla reps förra gången.`:inc<0?`Sänk ${String(-inc).replace('.',',')} kg – förra gången blev det många reps kvar.`:'Samma vikt som förra gången – sikta på alla reps.';
+  const step=big?5:2.5, hant=/hantel|dumbbell/i.test(name), dumb=hant?2:step, n=sets||3, L=last.sets;
+  const tgt=j=>firstNum(reps?.[j]??reps?.[0]), lt=Array.isArray(last.t)&&last.t.length?last.t:null;
+  /* Samma upplägg som förra gången: samma reps-mål per set (äldre loggar utan mål räknas som samma). */
+  const same=!lt||[...Array(Math.min(n,lt.length))].every((_,j)=>{const a=firstNum(lt[j]),b=tgt(j);return (isNaN(a)&&isNaN(b))||a===b});
+  let orm=0;L.forEach(s=>{const kg=kgNum(s[0]),r=firstNum(s[1]);if(kg>0&&r>0)orm=Math.max(orm,epley(kg,r))});
+  if(!same&&orm>0&&tgt(0)>0){
+    /* Annat reps-mål eller upplägg: räkna om via uppskattat 1RM (Epley) mot dagens reps per set. */
+    const rs=hant?2:2.5,kgs=[...Array(n)].map((_,j)=>{const r=tgt(j);if(!(r>0)){const p=L[Math.min(j,L.length-1)];return +p[0]||''}const w=Math.floor(orm/(1+r/30)/rs+1e-9)*rs;return w>0?r2(w):''});
+    return {kgs,inc:0,note:'Annat upplägg än förra gången – vikten är omräknad till dagens reps.',recalc:true}}
+  let hit=0,miss=0,cnt=0;
+  L.forEach((s,j)=>{const done=firstNum(s[1]),tg=firstNum((lt&&lt[j])??reps?.[j]??reps?.[0]);if(!isNaN(done)&&!isNaN(tg)&&+s[0]){cnt++;if(done>=tg)hit++;else if(done<=tg-3)miss++}});
+  if(!cnt) return null;
+  /* Öka bara om alla planerade set gjordes med full reps förra gången. */
+  const allHit=hit===cnt&&cnt>=n;
+  const inc=allHit?dumb:miss>cnt/2?-dumb:0;
+  const kgs=[...Array(n)].map((_,j)=>{const p=L[Math.min(j,L.length-1)];const k=+p[0]||0;return k?Math.max(0,Math.round((k+inc)*4)/4):''});
+  const note=inc>0?`Öka ${String(inc).replace('.',',')} kg – du klarade alla reps i alla set förra gången.`:inc<0?`Sänk ${String(-inc).replace('.',',')} kg – förra gången blev det många reps kvar.`:'Samma vikt som förra gången – sikta på alla reps.';
   return {kgs,inc,note};
 }
 /* Förifyllda vikter: Epley-1RM från upp till 3 senaste passen (median av bästa set per pass),
@@ -3115,7 +3169,7 @@ function clearPrefill(){ensurePre();active.sets.forEach((r,i)=>r.forEach((s,j)=>
   Object.keys(active.spreOn).forEach(key=>{const [i,j,k]=key.split(':').map(Number);const s=active.sets[i]&&active.sets[i][j];if(s&&s[4]&&s[4][k]){s[4][k][0]='';syncSup(s)}delete active.spreOn[key];delete active.spreKg[key]});active.preMiss=0}
 function prefillBar(){
   ensurePre();const w=activeW(),nPre=active.pre.flat().filter(Boolean).length+Object.keys(active.spreOn).length;
-  if(nPre)return `<div class="prefill"><span class="small muted num">${nPre} set förifyllda${active.preMiss?' · '+active.preMiss+' saknar data':''}</span><button class="linkbtn small" type="button" data-prefillclear>Töm förslag</button></div>`;
+  if(nPre)return `<div class="prefill"><span class="small muted num">${nPre} set ${nPre===1?'förifyllt':'förifyllda'}${active.preMiss?' · '+active.preMiss+' saknar data':''}</span><button class="linkbtn small" type="button" data-prefillclear>Töm förslag</button></div>`;
   const pl=prefillPlan(w,active.sets);
   return pl.ok&&pl.fill?`<div class="prefill"><button class="btn ghost" type="button" data-prefill>Förifyll vikter (${pl.fill} av ${pl.all} set)</button></div>`:'';
 }
@@ -3300,6 +3354,11 @@ function removeAdded(i){const e=active.w.x[i];if(!isAdded(e))return;ensurePre();
   restOpen=-1;rerenderActiveKeep();toast('Övningen togs bort')}
 function finishWorkout(){
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false}); let vol=0;
+  /* Ifylld vikt utan reps: fyll i reps från målet (även övning B i superset och varje drop), så att inget sparas som "50 × ?". */
+  w.x.forEach((e,i)=>(active.sets[i]||[]).forEach((s,j)=>{const tg=String((e[9]||[])[j]??(e[9]||[])[0]??'');
+    if(Array.isArray(s[4])){const pt=tg.split('/');if(s[2]||s[4].some(d=>d[0]!==''||d[1]!==''))s[4].forEach((d,k)=>{if(d[1]==='')d[1]=String(pt[k]??pt[0]??'')});return}
+    if(Array.isArray(s[3])){const pt=tg.split('+');s[3].forEach((d,k)=>{if(d[1]===''&&((k?d[0]:s[0])!==''||(s[2]&&!k)))d[1]=String(pt[k]??pt[0]??'')});return}
+    if(s[0]&&!s[1])s[1]=tg}));
   const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);active.sets[i].forEach(syncSup);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};if(isAdded(e))o.add=true;
     const PN=supParts(e);if(PN.length>1&&active.sets[i].some(s=>Array.isArray(s[4]))){
       o.parts=PN.map((pn,k)=>{const idx=active.sets[i].map((s,j)=>j).filter(j=>{const d=active.sets[i][j][4];return d&&d[k]&&(d[k][0]!==''||d[k][1]!=='')});
@@ -3501,7 +3560,11 @@ const GOAL_SV={styrka:'Bli starkare',muskler:'Bygga muskler',rumpa:'Rumpa & ben'
 const RUNPREF_SV={auto:'band vintertid, ute annars',band:'alltid löpband',ute:'alltid ute'};
 const ISSUE_SV={knä:'Knän',rygg:'Ländrygg',axel:'Axlar',fot:'Fötter eller vader',gravid:'Gravid eller nyförlöst',mens:'Kunna markera mensdagar'};
 function mobRoutines(){const iss=S.settings.issues||[],pel=iss.includes('bäckenbotten')||iss.includes('gravid');
-  let l=MOBILITY.filter(x=>(!x.knee||S.settings.kneeFocus)&&(!x.pelvic||pel));const mp=S.settings.mobPref;const f=mp==='kort'?l.filter(x=>x.min<10):mp==='lång'?l.filter(x=>x.min>=10):l;return f.length?f:l}
+  let l=MOBILITY.filter(x=>(!x.knee||S.settings.kneeFocus)&&(!x.pelvic||pel));const mp=S.settings.mobPref;
+  /* Längden gäller de allmänna rutinerna – knä- och bålrutinerna man själv valt till är alltid med. */
+  const f=mp==='kort'?l.filter(x=>x.knee||x.pelvic||x.min<10):mp==='lång'?l.filter(x=>x.knee||x.pelvic||x.min>=10):l;return f.length?f:l}
+/* Rutinen för en viss dag – samma överallt (toppkortet, raden under Vardagsrörelse, Vecka och Framåt). */
+function mobFor(date){const l=mobRoutines();return l[(date||new Date()).getDate()%l.length]}
 /* små byggklossar */
 const sOpt=(key,label,opts,cur)=>`<div class="setfield"><div class="lab">${label}</div><div class="chips wrap">${opts.map(([v,l])=>`<button class="chip" type="button" data-set="${key}" data-val="${esc(v)}" aria-pressed="${String(cur)===String(v)}">${esc(l)}</button>`).join('')}</div></div>`;
 const sCards=(key,label,opts,cur)=>`<div class="setfield"><div class="lab">${label}</div><div class="opts">${opts.map(([v,t,d])=>`<button class="opt" type="button" data-set="${key}" data-val="${esc(v)}" aria-pressed="${String(cur)===String(v)}"><strong>${esc(t)}</strong>${d?`<span class="small muted">${esc(d)}</span>`:''}</button>`).join('')}</div></div>`;
@@ -3552,7 +3615,7 @@ function showSettings(){
   const mob=`${sOpt('mobPref','Längd på rörlighetspassen',[['kort','Korta (under 10 min)'],['','Blandat'],['lång','Längre (10–15 min)']],st.mobPref||'')}
    ${sTog('pelvic','Bål & bäckenbotten',iss.includes('bäckenbotten'),'Lägger in korta rutiner för bål och bäckenbotten bland rörligheten.')}
    <p class="small muted" style="margin:0">Rutinerna som roterar just nu: ${esc(mr.map(m=>m.t).join(', '))}.${st.kneeFocus?' Knärutinerna kommer från ”Knästarka benpass” under Styrka.':''}</p>`;
-  const mSum=`${({kort:'Korta pass',lång:'Längre pass'})[st.mobPref]||'Blandad längd'} · ${mr.length} rutiner`;
+  const mSum=`${({kort:'Korta pass',lång:'Längre pass'})[st.mobPref]||'Blandad längd'} · ${pl(mr.length,'rutin','rutiner')}`;
   /* Vardagsmotion */
   const daily=`${sStep('stepGoal','Stegmål per dag',+st.stepGoal||10000,2000,25000,v=>v.toLocaleString('sv-SE'))}
    ${sTog('adaptSteps','Höj stegmålet automatiskt',!!st.adaptSteps,'Höjs med 1 000 steg när du klarat målet minst 5 dagar en vecka, upp till 10 000.')}
@@ -3644,8 +3707,8 @@ function bindSettings(root){
 
 /* ---------- Events ---------- */
 function bind(root){
-  root.querySelectorAll('[data-addsteps]').forEach(b=>b.onclick=()=>{const k=today();setDay(k,{steps:Math.max(0,day(k).steps+ +b.dataset.addsteps)})});
-  root.querySelectorAll('[data-setsteps]').forEach(b=>b.onclick=()=>{const v=parseInt($('#stepsIn').value,10);if(v>=0){setDay(today(),{steps:v});toast('Steg sparade')}});
+  root.querySelectorAll('[data-addsteps]').forEach(b=>b.onclick=()=>{const k=today();setDay(k,{steps:Math.min(100000,Math.max(0,(+day(k).steps||0)+ +b.dataset.addsteps))})});
+  root.querySelectorAll('[data-setsteps]').forEach(b=>b.onclick=()=>{const v=parseInt($('#stepsIn').value,10);if(v>100000){toast('Högst 100 000 steg');return}if(v>=0){setDay(today(),{steps:v});toast('Steg sparade')}else if(v<0)toast('Steg kan inte vara negativa')});
   root.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const k=today(),f=b.dataset.toggle;const v=!day(k)[f];if(f==='mob'&&v&&plannedFor(new Date())==='m')resolveDay('m');setDay(k,{[f]:v})});
   bindOB(root);
   root.querySelectorAll('[data-whyall]').forEach(b=>b.onclick=showWhy);
@@ -3736,15 +3799,15 @@ function bind(root){
     inp.oninput=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);active.sets[i][j][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');if(active.sets[i][j][3]){syncDrop(active.sets[i][j]);updDropPH(i,j)}
       if(active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;inp.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}};
     inp.onchange=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);followKg(i,j,inp._old);inp._old=active.sets[i][j][0];updPrefillBar()}});
-  root.querySelectorAll('[data-prefill]').forEach(b=>b.onclick=()=>{const n=doPrefill();rerenderActiveKeep();toast(n?n+' set förifyllda':'Inga tomma set att fylla')});
+  root.querySelectorAll('[data-prefill]').forEach(b=>b.onclick=()=>{const n=doPrefill();rerenderActiveKeep();toast(n?n+(n===1?' set förifyllt':' set förifyllda'):'Inga tomma set att fylla')});
   root.querySelectorAll('[data-prefillclear]').forEach(b=>b.onclick=()=>{clearPrefill();rerenderActiveKeep()});
   root.querySelectorAll('[data-startpre]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.startpre,null,true));
   root.querySelectorAll('[data-skg]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.skg.split(':').map(Number);const s=active.sets[i][j];if(!s[4]||!s[4][k])return;s[4][k][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');syncSup(s);
     if(active.spreOn&&active.spreOn[inp.dataset.skg]){delete active.spreOn[inp.dataset.skg];inp.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}});
-  root.querySelectorAll('[data-srp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.srp.split(':').map(Number);const s=active.sets[i][j];if(!s[4]||!s[4][k])return;s[4][k][1]=inp.value;syncSup(s)});
+  root.querySelectorAll('[data-srp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.srp.split(':').map(Number);const s=active.sets[i][j];if(!s[4]||!s[4][k])return;s[4][k][1]=repClean(inp.value);syncSup(s)});
   root.querySelectorAll('[data-dkg]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.dkg.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][0]=inp.value.replace(',','.').replace(/[^0-9.]/g,'');updDropPH(i,j)});
-  root.querySelectorAll('[data-drp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.drp.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][1]=inp.value;syncDrop(s)});
-  root.querySelectorAll('[data-rp]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.rp.split(':');active.sets[i][j][1]=inp.value});
+  root.querySelectorAll('[data-drp]').forEach(inp=>inp.oninput=()=>{const [i,j,k]=inp.dataset.drp.split(':').map(Number);const s=active.sets[i][j];if(!s[3]||!s[3][k])return;s[3][k][1]=repClean(inp.value);syncDrop(s)});
+  root.querySelectorAll('[data-rp]').forEach(inp=>inp.oninput=()=>{const [i,j]=inp.dataset.rp.split(':');active.sets[i][j][1]=repClean(inp.value)});
   root.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const [i,j]=b.dataset.ok.split(':').map(Number);const s=active.sets[i][j];s[2]=!s[2];
     if(s[2]&&Array.isArray(s[3])){const e=activeRow(i),ph=dropPH(e,i,j),pt=String(e[9]?.[j]||'').split('+');syncDrop(s);
       s[3].forEach((d,k)=>{if(!d[0]&&ph[k]!==''){d[0]=String(ph[k]);if(!k)s[0]=d[0]}if(!d[1])d[1]=pt[k]||''});
