@@ -2418,10 +2418,19 @@ function AW(w,opt){
 }
 function toggleGroup(g){const st=S.settings;const a=avoidGroups();st.avoidGroups=a.includes(g)?a.filter(x=>x!==g):a.concat([g]);st.genCur=null;markDirty('settings');showSettings()}
 let sheetCtx=null;
-function rerenderSheet(){if(!sheetCtx)return;if(sheetCtx.t==='slog')return SE&&SE.ts===sheetCtx.ts?renderSE():showStrengthLog(sheetCtx.ts);if(sheetCtx.t==='set')return showSettings();if(sheetCtx.t==='active'&&active)renderActive();else if(sheetCtx.t==='w')showWorkout(sheetCtx.id);else if(sheetCtx.t==='ex')showExercise(sheetCtx.name)}
-function toggleAvoid(name,on){const st=S.settings;const a=avoidList().filter(x=>x.toLowerCase()!==String(name).toLowerCase());if(on)a.push(name);st.avoid=a;st.genCur=null;markDirty('settings');
+/* Ritar om samma ark och behåller scrollläget (openSheet nollställer det, vilket bara är rätt för nya ark). */
+function rerenderSheet(){if(!sheetCtx)return;const sh=$('#sheet'),y=sh.scrollTop,ctx=JSON.stringify(sheetCtx);renderSheetCtx();
+  if(sheetCtx&&JSON.stringify(sheetCtx)===ctx&&sh.classList.contains('open'))sh.scrollTop=y}
+function renderSheetCtx(){if(!sheetCtx)return;if(sheetCtx.t==='slog')return SE&&SE.ts===sheetCtx.ts?renderSE():showStrengthLog(sheetCtx.ts);if(sheetCtx.t==='set')return showSettings();if(sheetCtx.t==='active'&&active)renderActive();else if(sheetCtx.t==='w')showWorkout(sheetCtx.id);else if(sheetCtx.t==='ex')showExercise(sheetCtx.name)}
+function toggleAvoid(name,on,btn){
+  /* Kom ihåg vilken övningsrad som klickades och var den låg på skärmen, så att man står kvar vid den efter omritningen. */
+  const sh=$('#sheet'),open=sh.classList.contains('open'),exEl=open&&btn&&btn.closest?btn.closest('#sheetBody .ex'):null;
+  const exs=[...document.querySelectorAll('#sheetBody .ex')],idx=exEl?exs.indexOf(exEl):-1,y=sh.scrollTop,off=exEl?exEl.getBoundingClientRect().top-sh.getBoundingClientRect().top:0;const st=S.settings;const a=avoidList().filter(x=>x.toLowerCase()!==String(name).toLowerCase());if(on)a.push(name);st.avoid=a;st.genCur=null;markDirty('settings');
   if(on){const sub=subFor(name,new Set());toast(`${name} undviks${sub?' – byts mot t.ex. '+sub:''}. Ångra under Inställningar.`)}else toast(`${name} är med igen`);
-  if(document.querySelector('#sheet.open'))rerenderSheet();else render()}
+  if(!document.querySelector('#sheet.open'))return render();
+  rerenderSheet();
+  const nx=idx>=0?document.querySelectorAll('#sheetBody .ex')[idx]:null;
+  if(nx)sh.scrollTop+=nx.getBoundingClientRect().top-sh.getBoundingClientRect().top-off;else sh.scrollTop=y}
 /* ---------- Pass-fliken: Ditt upplägg · Hitta pass · Övningar ---------- */
 /* Svenska namn på passen. Översätter bara när alla ord känns igen – annars visas originalet. */
 const MUSCLE_SV={CHEST:'bröst',BICEPS:'biceps',TRICEPS:'triceps',SHOULDERS:'axlar',SHOULDER:'axlar','REAR DELTS':'baksida axlar',TRAPS:'trapezius',LATS:'lats',BACK:'rygg',NECK:'nacke',
@@ -3555,8 +3564,8 @@ function bind(root){
   root.querySelectorAll('[data-flen]').forEach(b=>b.onclick=()=>{findLen=+b.dataset.flen;libShow=20;render()});
   root.querySelectorAll('[data-freset]').forEach(b=>b.onclick=()=>{findGroup='';findLen=0;findProg='';libQ='';libShow=20;render()});
   root.querySelectorAll('[data-genbuild]').forEach(b=>b.onclick=()=>{const w=genWorkout(b.dataset.genbuild);regW(w);showWorkout(w.i)});
-  root.querySelectorAll('[data-avoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.avoid,true));
-  root.querySelectorAll('[data-unavoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.unavoid,false));
+  root.querySelectorAll('[data-avoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.avoid,true,b));
+  root.querySelectorAll('[data-unavoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.unavoid,false,b));
   root.querySelectorAll('[data-avgrp]').forEach(b=>b.onclick=()=>toggleGroup(b.dataset.avgrp));
   root.querySelectorAll('[data-mobpeek]').forEach(b=>b.onclick=()=>{showMobility(b.dataset.mobpeek)});
   root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>showExercise(b.dataset.ex));
