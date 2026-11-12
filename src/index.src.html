@@ -295,7 +295,7 @@ const MOBILITY = [
   ['Vadstretch, rakt knä',60,'30 s per sida.'],['Vadstretch, böjt knä',60,'30 s per sida.'],['Framsida lår stående',60,'30 s per sida.'],
   ['Hamstring på trappsteg',60,'30 s per sida.'],['Duvan',90,'45 s per sida.'],['Höftböjare i utfall',90,'45 s per sida.']]},
  {id:'mob-kna',t:'Knästark 15',min:15,knee:1,note:'Ingen smärta över 3 av 10. Börja med kroppsvikt och öka långsamt. Har du en skada: stäm av med fysioterapeut.',
-  credit:'Inspirerat av knees over toes-träning (@kneesovertoesguy) och comebacks efter korsbandsskador (@aclwonders).',items:[
+  items:[
   ['Bakåtgång',120,'Korta steg baklänges, tryck ifrån med framfoten. På löpband: lutning, låg fart, håll i dig.'],
   ['Tibialislyft mot vägg',60,'Rygg mot vägg, hälarna en bit ut. Lyft tårna – det ska bränna i smalbenet.'],
   ['Patrick step',90,'Stå på ett trappsteg och sänk ena hälen långsamt mot golvet, knät går fram över tårna. 45 s per ben.'],
@@ -1546,6 +1546,34 @@ function keepOrig(){const st=S.settings;if(st.genCur&&(!st.genOrig||st.genOrig.d
 function strengthChanged(gen){const st=S.settings;if(gen)return !!(st.genOrig&&st.genOrig.date===today()&&st.genCur&&st.genOrig.w.i!==st.genCur.i);return !!(sugFocus||(sugCache&&sugIdx%Math.max(1,sugCache.length)!==0))}
 function restoreToday(){const st=S.settings;sugIdx=0;sugFocus='';sugCache=null;runIdx=0;
   if(st.genOrig&&st.genOrig.date===today()){st.genCur=st.genOrig.w;regW(st.genCur);markDirty('settings')}render();toast('Tillbaka till dagens pass')}
+/* ---------- Byt pass (bara visning: kön, programmet och urvalet är oförändrade) ---------- */
+const progMode=()=>S.settings.mode==='program'&&DP_SEQ.length>0;
+/* Avsteg: valt fokus/förslag skiljer sig från programmet eller schemat idag. */
+function swapped(gen){if(!gen)return strengthChanged(false);const c=S.settings.genCur;return strengthChanged(true)||!!(c&&c.focus&&c.focus!==nextFocus())}
+function swapBack(){const gen=S.settings.mode==='gen'||!WORKOUTS.length;if($('#sheet').classList.contains('open'))closeSheet();restoreToday();
+  if(gen){const st=S.settings,f=nextFocus();if(st.genCur&&st.genCur.focus!==f){st.genCur=genWorkout(f);regW(st.genCur);markDirty('settings');render()}}}
+function swapBackHTML(gen){const pm=!gen&&progMode();
+  return `<div class="row" style="align-items:center;gap:8px"><span class="small muted">${pm?'Avsteg från programmet idag':gen?'Avsteg från ditt schema idag':'Annat pass än dagens förslag'}</span><button class="linkbtn small tall" type="button" data-swback>${pm?'Tillbaka till mitt program':gen?'Tillbaka till mitt schema':'Tillbaka till dagens förslag'}</button></div>`}
+function passLineHTML(w,gen){
+  if(swapped(gen))return swapBackHTML(gen);
+  if(gen)return `<div class="small muted">Ditt schema${w.focus?' · '+esc(w.focus):''}${THEMES[w.theme]?' · '+esc(THEMES[w.theme]):''}</div>`;
+  if(progMode()&&w.s!=null)return `<div class="small muted num">Ditt program · ${esc(progLabel(w))}</div>`;
+  return w.s!=null&&w.wk!=null?`<div class="small muted num">${esc(progLabel(w))}</div>`:''}
+function showSwap(){
+  const gen=S.settings.mode==='gen'||!WORKOUTS.length,ch=swapped(gen),pm=!gen&&progMode();
+  const cur=gen?(S.settings.genCur&&S.settings.genCur.focus):sugFocus;
+  const groups=gen?[...new Set(kneeSwap(splitPlan()))].filter(f=>f!=='Knästarka ben'):GROUPS;
+  openSheet(`<header class="top"><div><div class="date">Dagens styrkepass</div><h1 class="h1sm">Vill du köra något annat idag?</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+   <div class="stack">
+    <div class="opts"><button class="opt" type="button" data-swback aria-pressed="${!ch}"><strong>${pm?'Fortsätt med mitt program':gen?'Fortsätt med mitt schema':'Dagens förslag'}</strong><span class="small muted">${pm?'Nästa pass i programmet, där du är nu.':gen?'Nästa fokus i ditt schema.':'Passet appen föreslår idag.'}</span></button></div>
+    <section class="card stack"><h3 style="margin:0">Annat fokus</h3>
+     <div class="chips wrap big44">${groups.map(g=>`<button class="chip" type="button" ${gen?`data-swgen="${esc(g)}"`:`data-swfocus="${esc(g)}"`} aria-pressed="${ch&&cur===g}">${esc(g)}</button>`).join('')}</div>
+     <p class="small muted" style="margin:0">${gen?'Du får ett pass med det fokuset. Schemat fortsätter där du var nästa gång.':'Du får ett pass från biblioteket. Programmet fortsätter där du var nästa gång.'}</p></section>
+    <div class="opts">
+     <button class="opt" type="button" ${gen?'data-swgen="Knästarka ben"':'data-swknee'} aria-pressed="${gen&&ch&&cur==='Knästarka ben'}"><strong>Knästarka ben</strong><span class="small muted">Benpass med bakåtgång, step-downs och split squats med knät över tårna – för starka och tåliga knän.</span></button>
+     <button class="opt" type="button" data-swnext><strong>Ett annat pass med samma fokus</strong><span class="small muted">${gen?'Nya övningar med samma fokus.':'Nästa förslag med samma fokus.'}</span></button>
+    </div></div>`);
+}
 const RESTORE_BTN='<button class="btn ghost sm restore" type="button" data-restore>↩ Tillbaka till dagens pass</button>';
 function regenerate(){keepOrig();const f=S.settings.genCur?.focus;S.settings.genCur=genWorkout(f||nextFocus());markDirty('settings');regW(S.settings.genCur)}
 
@@ -1620,7 +1648,7 @@ function renderOB(){
   if(step==='issues') body=`<h1>Något som krånglar?</h1><p class="muted">Övningar som belastar området väljs bort. Välj inget om allt känns bra.</p><div class="opts">
     ${obOpt('issues','knä','Knän','',1)}${obOpt('issues','rygg','Ländrygg','',1)}${obOpt('issues','axel','Axlar','',1)}${obOpt('issues','fot','Fötter eller vader','',1)}</div>
     <div class="eyebrow" style="margin-top:12px">Tillägg</div><div class="opts">${obOpt('issues','bäckenbotten','Bål & bäckenbotten','Korta rutiner läggs in bland rörligheten',1)}${a.sex==='m'?'':obOpt('issues','gravid','Gravid eller nyförlöst','Inga hopp, försiktigare start. Stäm av med barnmorska eller fysioterapeut.',1)}${a.sex==='m'?'':obOpt('issues','mens','Kunna markera mensdagar','Knappen för lättare dag heter ”Mens eller låg energi”',1)}</div>
-    <div class="eyebrow" style="margin-top:12px">Knästarka benpass</div><div class="opts">${obOpt('knee',1,'Ja, gör mina benpass knästarka','Bakåtgång, step-downs, split squats med knät över tårna, tibialislyft. Inspirerat av knees over toes-träning.')}${obOpt('knee',0,'Nej, vanliga benpass')}</div>`;
+    <div class="eyebrow" style="margin-top:12px">Knästarka benpass</div><div class="opts">${obOpt('knee',1,'Ja, gör mina benpass knästarka','Bakåtgång, step-downs, split squats med knät över tårna, tibialislyft.')}${obOpt('knee',0,'Nej, vanliga benpass')}</div>`;
   if(step==='sit') body=`<h1>Hur ser din vardag ut?</h1><p class="muted">Styr hur många rörelsepauser appen föreslår.</p><div class="opts">
     ${obOpt('sit','mycket','Jag sitter mycket','Kontor, skärm, bil')}${obOpt('sit','varierat','Blandat')}${obOpt('sit','lite','Jag rör mig mycket i jobbet')}</div>`;
   if(step==='preview'){
@@ -1957,16 +1985,12 @@ function viewToday(){
     const w=!doneW&&d.low?lighten(w0):w0;
     hero=`<section class="card hero stack" aria-labelledby="h-pass">${lowToggle()}
       <div class="row between"><span class="eyebrow">Dagens styrkepass</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
-      ${gen?`<div class="chips" role="group" aria-label="Fokus">${[...new Set([...kneeSwap(splitPlan()),'Knästarka ben'])].map(f=>`<button class="chip" type="button" data-genfocus="${esc(f)}" aria-pressed="${w&&w.focus===f}">${esc(f)}</button>`).join('')}</div>
-      <div class="note">${w&&w.focus===nextFocus()?'Nästa pass i ditt schema':'Annat fokus än schemat – schemat fortsätter där du var'} · upplägg: <strong>${esc(THEMES[w?.theme]||'')}</strong></div>`
-      :`<div class="chips" role="group" aria-label="Fokus"><button class="chip" type="button" data-kneepass>Knästarka ben</button>${['',...GROUPS].map(g=>`<button class="chip" type="button" data-focus="${g}" aria-pressed="${sugFocus===g}">${g||'Alla'}</button>`).join('')}</div>`}
-      ${!gen&&w&&!doneW&&S.settings.mode==='program'&&!sugFocus?((sugCache?sugIdx%Math.max(1,sugCache.length):0)===0?`<div class="note">Nästa pass i ditt program: <strong>${esc(progLabel(w))}</strong>. Senast körde du ${esc(progLabel(WBYID[S.settings.lastProg]||w))}.</div>`:`<div class="note">Avvikelse från programmet – ett pass från biblioteket. Programmet fortsätter där du var nästa gång.</div>`):''}
-      ${!w&&strengthChanged(gen)?RESTORE_BTN:''}
-      ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${workoutSummary(w)}
+      ${!w&&swapped(gen)?swapBackHTML(gen):''}
+      ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${workoutSummary(w)}
       <div class="small muted">${w.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${w.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
-      :`<div class="row"><button class="btn" type="button" data-start="${w.i}">Starta passet</button><button class="btn ghost" type="button" ${gen?'data-regen':'data-next'}>Annat förslag</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>${strengthChanged(gen)?RESTORE_BTN:''}`}`
-      :`<p class="muted">Inga pass matchar filtret. Välj ett annat fokus eller fler program i inställningarna.</p>`}
+      :`<div class="row"><button class="btn" type="button" data-start="${w.i}">Starta passet</button><button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>`}`
+      :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
       ${did('styrka')?'':skipBox()}
     </section>`;
   } else if(plan==='r'){
@@ -3296,7 +3320,7 @@ function showWhy(){
    ${sec('Varje steg räknas','Stora studier visar att risken för förtida död sjunker ju fler steg man tar per dag. Nyttan planar ut runt 8 000–10 000 steg för vuxna under 60 och 6 000–8 000 för äldre. Störst skillnad gör de första extra tusentalen för den som går lite idag.')}
    ${sec('En promenad efter maten','Redan några minuters gång efter en måltid dämpar blodsockertoppen. Promenaden efter lunch är därför en av de mest lönsamma pauserna.')}
    ${sec('Små doser blir stora','8 pauser à 2 minuter är 16 minuter rörelse om dagen – nästan två timmar i veckan – utan att du behöver boka in något.')}
-   ${sec('Rörlighet och tåliga knän','Leder, senor och brosk anpassar sig efter den belastning de får. Gradvis belastning genom hela rörelseomfånget – även med knät framför tårna – bygger tåliga knän. Det är grundtanken i knees over toes-träning: börja lätt, öka långsamt, håll dig smärtfri.')}
+   ${sec('Rörlighet och tåliga knän','Leder, senor och brosk anpassar sig efter den belastning de får. Gradvis belastning genom hela rörelseomfånget – även med knät framför tårna – bygger tåliga knän. Börja lätt, öka långsamt och håll dig smärtfri.')}
    ${sec('Styrka håller hela livet','Muskler skyddar lederna, tar hand om blodsockret och gör vardagen lättare med åren. Två styrkepass i veckan räcker långt.')}
    <p class="small muted">Källor: Paluch m.fl., Lancet Public Health 2022 (steg och dödlighet); Buffey m.fl., Sports Medicine 2022 (gång efter måltid); WHO:s riktlinjer för fysisk aktivitet och stillasittande 2020.</p>
   </div>`);
@@ -3495,6 +3519,12 @@ function bind(root){
     swap=null;S.days[k]=S.days[k]||{steps:0,walk:false,mob:false};setDay(k,{plan:t0});setDay(today(),{plan:t1});dayOff=0;render();try{window.scrollTo(0,0)}catch(e){}toast('Klart – dagarna har bytt plats')});
   root.querySelectorAll('[data-low]').forEach(b=>b.onclick=()=>{const d=day();setDay(today(),{low:!d.low});toast(!d.low?'Normal dag':'Lättare pass idag: ett set mindre, ingen dropset/pyramid')});
   root.querySelectorAll('[data-restore]').forEach(b=>b.onclick=restoreToday);
+  root.querySelectorAll("[data-swappass]").forEach(b=>b.onclick=showSwap);
+  root.querySelectorAll('[data-swback]').forEach(b=>b.onclick=swapBack);
+  root.querySelectorAll('[data-swfocus]').forEach(b=>b.onclick=()=>{sugFocus=b.dataset.swfocus;sugIdx=0;sugCache=null;closeSheet()});
+  root.querySelectorAll('[data-swgen]').forEach(b=>b.onclick=()=>{keepOrig();S.settings.genCur=genWorkout(b.dataset.swgen);markDirty('settings');regW(S.settings.genCur);closeSheet()});
+  root.querySelectorAll('[data-swknee]').forEach(b=>b.onclick=()=>{const w=genWorkout('Knästarka ben');S.settings.genCur=w;markDirty('settings');regW(w);showWorkout(w.i)});
+  root.querySelectorAll('[data-swnext]').forEach(b=>b.onclick=()=>{const gen=S.settings.mode==='gen'||!WORKOUTS.length;if(gen)regenerate();else sugIdx++;closeSheet()});
   root.querySelectorAll('[data-nextrun]').forEach(b=>b.onclick=()=>{runIdx++;render()});
   root.querySelectorAll('[data-runwhere]').forEach(b=>b.onclick=()=>{const cur=runWhere();S.settings.runPref=cur==='band'?'ute':'band';markDirty('settings');runIdx=0;render()});
   root.querySelectorAll('[data-swap]').forEach(b=>b.onclick=()=>{swap=null;setDay(today(),{plan:b.dataset.swap})});
