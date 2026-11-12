@@ -145,6 +145,8 @@ details.card>summary{cursor:pointer;list-style:none}
 .nextbox{font-size:15px;color:var(--muted)}.nextbox strong{color:var(--ink)}
 input[type=email]{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;font-size:16px}
 .backupcard{border-left:5px solid var(--warn)}
+.sticky .confirm{flex:1;display:flex;flex-direction:column;gap:8px}.sticky .confirm .cmsg{font-weight:600}.sticky .confirm .row{flex-wrap:nowrap}.sticky .confirm .btn{flex:1}
+#syncStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .restore{align-self:flex-start;border-color:var(--accent);color:var(--accent);font-weight:600}
 .sugg{margin-top:6px;font-size:14px;font-weight:500;padding:6px 10px;border-radius:8px;background:var(--bg)}
 .sugg.up{background:var(--accent-soft)}
@@ -440,9 +442,16 @@ function lsLoad(){try{const v=JSON.parse(localStorage.getItem(LS)||'null');if(v)
 function lsSave(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 lsLoad();
 let DB=null, UID=null, cloud='lokal';
-const dirty=new Set(); let saveTimer=null, saving=false;
+const dirty=new Set(), noMerge=new Set(); let saveTimer=null, saving=false;
+/* Osparade ändringar (dirty) och senast kända molnversion av dagarna (dayBase) överlever en omstart. */
+const DK='rs-dirty', BK='rs-daybase';
+let dayBase={}, cloudReady=false, netFail=false, needLogin=false;
+function dirtySave(){try{localStorage.setItem(DK,JSON.stringify({uid:S.uid||null,k:[...dirty],nm:[...noMerge]}))}catch(e){}}
+function baseSave(){try{localStorage.setItem(BK,JSON.stringify({uid:S.uid||null,days:dayBase}))}catch(e){}}
+(function(){try{const v=JSON.parse(localStorage.getItem(DK)||'null');if(v&&Array.isArray(v.k)&&(v.uid||null)===(S.uid||null)){v.k.forEach(k=>dirty.add(k));(v.nm||[]).forEach(k=>noMerge.add(k))}
+  const b=JSON.parse(localStorage.getItem(BK)||'null');if(b&&b.days&&typeof b.days==='object'&&(b.uid||null)===(S.uid||null))dayBase=b.days}catch(e){}})();
 function monthOf(k){return k.slice(0,7)}
-function markDirty(kind,month){dirty.add(kind==='settings'?'settings':kind+'-'+month);lsSave();clearTimeout(saveTimer);saveTimer=setTimeout(flush,800)}
+function markDirty(kind,month){dirty.add(kind==='settings'?'settings':kind+'-'+month);lsSave();dirtySave();clearTimeout(saveTimer);saveTimer=setTimeout(flush,800);updSync()}
 async function flush(){
   if(SB&&SBUSER) return flushSB();
   if(!DB||!UID||saving)return; saving=true;
@@ -470,42 +479,128 @@ function sbSaveSess(x){try{x?localStorage.setItem(SBK,JSON.stringify(x)):localSt
 async function sbFetch(path,opt={},auth=true){
   const c=sbCfg(); const h={apikey:c.supabaseAnonKey,'Content-Type':'application/json',...(opt.headers||{})};
   if(auth){const ss=await sbSession();if(ss)h.Authorization='Bearer '+ss.access_token}
-  const r=await fetch(c.supabaseUrl+path,{...opt,headers:h});const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null}catch(e){}
-  if(!r.ok){const m=(j&&(j.msg||j.error_description||j.message||j.error))||('HTTP '+r.status);const e=new Error(m);e.status=r.status;throw e}
+  let r;try{r=await fetch(c.supabaseUrl+path,{...opt,headers:h})}catch(e){netFail=true;updSync();throw e}
+  netFail=false;const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null}catch(e){}
+  if(!r.ok){const m=(j&&(j.msg||j.error_description||j.message||j.error))||('HTTP '+r.status);const e=new Error(m);e.status=r.status;if(auth&&r.status===401)authLost();throw e}
   return j;
 }
-function sbStore(j){const x={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(+j.expires_in||3600),user:j.user};sbSaveSess(x);SBUSER=x.user;return x}
+function sbStore(j){const x={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(+j.expires_in||3600),user:j.user};sbSaveSess(x);SBUSER=x.user;needLogin=false;authLost._t=0;return x}
 async function sbSession(){let x=sbLoadSess();if(!x)return null;
-  if(x.expires_at-60<Date.now()/1000){try{const j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:x.refresh_token})},false);x=sbStore(j)}catch(e){if(e.status===400||e.status===401){sbSaveSess(null);SBUSER=null;return null}}}
+  if(x.expires_at-60<Date.now()/1000){try{const j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:x.refresh_token})},false);x=sbStore(j)}catch(e){if(e.status===400||e.status===401){sbSaveSess(null);SBUSER=null;if(S.uid)authLost();return null}}}
   return x}
+/* Inloggningen gäller inte längre: behåll allt lokalt och be användaren logga in igen (ingen tyst utloggning). */
+function authLost(){needLogin=true;updSync();if(!authLost._t){authLost._t=1;toast('Logga in igen för att spara i molnet – allt finns kvar på telefonen')}}
+const jeq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const dayEmpty=d=>!d||(!(+d.steps)&&!d.walk&&!d.mob&&!(d.moves||[]).length&&Object.keys(d).every(k=>['steps','walk','mob','moves'].includes(k)));
+function cloudSplit(rows){const days={},log=[];let settings=null;
+  (rows||[]).forEach(r=>{const b=JSON.parse(JSON.stringify(r.body||{}));if(r.doc==='settings')settings=b.settings||null;else if(r.doc.startsWith('days-'))Object.assign(days,b.days||{});else if(r.doc.startsWith('log-'))log.push(...(Array.isArray(b.log)?b.log:[]))});
+  return {settings,days,log}}
+/* Loggar slås ihop per ts. Finns samma pass på båda håll vinner den senast redigerade, annars den lokala om månaden har osparade ändringar.
+   dead = borttagna pass (settings.delTs). scope = månader som hämtats (null = alla). */
+function mergeLogs(cloudLog,localLog,isDirty,dead,scope){const months=new Set(),by=new Map();
+  cloudLog.forEach(l=>{if(!l)return;if(dead.has(l.ts)){months.add(monthOf(l.date));return}by.set(l.ts,l)});
+  localLog.forEach(l=>{if(!l||dead.has(l.ts))return;const c=by.get(l.ts),m=monthOf(l.date);
+    if(!c){by.set(l.ts,l);if(!scope||scope.has(m))months.add(m);return}
+    if(jeq(c,l))return;const le=+l.edited||0,ce=+c.edited||0;
+    if(le>ce||(le===ce&&isDirty(m))){by.set(l.ts,l);months.add(m);months.add(monthOf(c.date))}});
+  return {log:[...by.values()].sort((a,b)=>a.ts-b.ts),months}}
+/* En dag slås ihop fält för fält. Med en känd tidigare molnversion (b) vinner den sida som ändrat fältet;
+   utan den gäller flest steg, bockar från båda håll och den längsta listan med rörelsepauser. */
+function mergeDay(c,d,b){
+  if(!b){const m={...d,...c,steps:Math.max(+c.steps||0,+d.steps||0),walk:!!(c.walk||d.walk),mob:!!(c.mob||d.mob)};
+    const cm=c.moves||[],dm=d.moves||[];if(cm.length||dm.length)m.moves=dm.length>cm.length?dm:cm;return m}
+  const nv=x=>Array.isArray(x)&&!x.length?undefined:x,out={};
+  new Set([...Object.keys(c),...Object.keys(d),...Object.keys(b)]).forEach(f=>{const lv=d[f],cv=c[f],bv=b[f];let v;
+    if(jeq(nv(lv),nv(bv)))v=cv;else if(jeq(nv(cv),nv(bv)))v=lv;
+    else if(f==='steps')v=Math.max(+lv||0,+cv||0);
+    else if(f==='moves'){const seen=new Set(),u=[];[...(cv||[]),...(lv||[])].forEach(x=>{const k=x.id+':'+x.at;if(!seen.has(k)){seen.add(k);u.push(x)}});v=u.sort((x,y)=>x.at-y.at)}
+    else v=lv!==undefined?lv:cv;
+    if(v!==undefined)out[f]=v});
+  return out}
+function mergeDays(cloudDays,localDays,base,scope){const out={...cloudDays},months=new Set();
+  Object.entries(localDays||{}).forEach(([k,d])=>{const m=monthOf(k);if(scope&&!scope.has(m)){out[k]=d;return}
+    const c=cloudDays[k];if(!c){out[k]=d;if(!dayEmpty(d))months.add(m);return}
+    const mm=mergeDay(c,d,base[k]);out[k]=mm;if(!jeq(mm,c))months.add(m)});
+  return {days:out,months}}
+function softRender(){const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&$('#view').contains(a))return;render()}
+/* Före varje skrivning av dagar och loggar: hämta molnets version av just de dokumenten och slå ihop,
+   så att en gammal flik eller en annan enhet inte skrivs över. */
+function premerge(rows,need){const sRow=rows.find(r=>r.doc==='settings'),C=cloudSplit(rows.filter(r=>r.doc!=='settings'));
+  const cDel=(sRow&&sRow.body&&sRow.body.settings&&sRow.body.settings.delTs)||[],mine=S.settings.delTs||[];
+  const dead=new Set([...mine,...cDel]);if(cDel.some(t=>!mine.includes(t)))S.settings.delTs=[...dead].slice(-300);
+  const lm=new Set(need.filter(k=>k.startsWith('log-')).map(k=>k.slice(4))),dm=new Set(need.filter(k=>k.startsWith('days-')).map(k=>k.slice(5)));
+  let ch=false;
+  if(lm.size){const r=mergeLogs(C.log,S.log,()=>true,dead,lm);if(r.log.length!==S.log.length||r.log.some((l,i)=>l!==S.log[i])){S.log=r.log;ch=true}}
+  if(dm.size){const r=mergeDays(C.days,S.days,dayBase,dm);if(!jeq(r.days,S.days)){S.days=r.days;ch=true}}
+  if(ch){lsSave();regLogs();sugCache=null;softRender()}}
+const casFail={};
 async function flushSB(){
-  if(saving)return; saving=true;
+  if(saving||needLogin)return;
+  if(!cloudReady){loadSB(true);return}
+  saving=true;let ok=true,again=false;
   try{
-    for(const key of [...dirty]){dirty.delete(key);
-      try{await sbFetch('/rest/v1/user_docs',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{user_id:SBUSER.id,doc:key,body:docBody(key),updated_at:new Date().toISOString()}])})}
-      catch(e){dirty.add(key);if(e.status===401){SBUSER=null;cloud='lokal';render()}break}}
-  }finally{saving=false;if(dirty.size)saveTimer=setTimeout(flush,4000)}
+    const keys=[...dirty],need=keys.filter(k=>k!=='settings'&&!noMerge.has(k));let rows=[];
+    if(need.length){rows=await sbFetch('/rest/v1/user_docs?select=doc,body,updated_at&doc=in.('+need.concat(['settings']).join(',')+')')||[];premerge(rows,need)}
+    const at={};rows.forEach(r=>{at[r.doc]=r.updated_at});
+    const up=row=>sbFetch('/rest/v1/user_docs',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([row])});
+    for(const key of keys){dirty.delete(key);const body=docBody(key),row={user_id:SBUSER.id,doc:key,body,updated_at:new Date().toISOString()};
+      try{let done=false,clash=false;
+        /* Dagar och loggar skrivs bara om molnets version är den vi nyss slog ihop med. Har någon annan hunnit emellan: slå ihop igen. */
+        if(need.includes(key)&&(casFail[key]||0)<3){
+          try{
+            if(at[key]){const r=await sbFetch('/rest/v1/user_docs?doc=eq.'+encodeURIComponent(key)+'&updated_at=eq.'+encodeURIComponent(at[key]),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({body,updated_at:row.updated_at})});
+              if(Array.isArray(r)){if(r.length)done=true;else clash=true}}
+            else{await sbFetch('/rest/v1/user_docs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify([row])});done=true}
+          }catch(e){if(e.status===409)clash=true;else if(!e.status||e.status===401)throw e}
+          if(clash){casFail[key]=(casFail[key]||0)+1;dirty.add(key);again=true;continue}
+        }
+        if(!done)await up(row);
+        delete casFail[key];noMerge.delete(key);
+        if(key.startsWith('days-')){const m=key.slice(5);Object.keys(dayBase).forEach(k=>{if(monthOf(k)===m)delete dayBase[k]});Object.assign(dayBase,JSON.parse(JSON.stringify(body.days)))}}
+      catch(e){dirty.add(key);ok=false;break}}
+  }catch(e){ok=false}
+  finally{saving=false;dirtySave();baseSave();clearTimeout(saveTimer);if(dirty.size&&!needLogin&&SBUSER)saveTimer=setTimeout(flush,again?150+Math.random()*500:ok?800:(navigator.onLine===false?30000:8000));updSync()}
 }
-function applyDocs(rows){const days={},log=[];let settings=null;
-  rows.forEach(r=>{const b=JSON.parse(JSON.stringify(r.body||{}));if(r.doc==='settings')settings=b.settings;else if(r.doc.startsWith('days-'))Object.assign(days,b.days||{});else if(r.doc.startsWith('log-'))log.push(...(b.log||[]))});
-  S={settings:{...DEFAULT_SETTINGS,...(settings||{})},days,log:log.sort((a,b)=>a.ts-b.ts)}}
-async function loadSB(){
-  let data;try{data=await sbFetch('/rest/v1/user_docs?select=doc,body')}catch(e){cloud='lokal';render();return}
-  const uid=SBUSER&&SBUSER.id,mine=!S.uid||S.uid===uid;
-  const libRow=(data||[]).find(r=>r.doc==='library');data=(data||[]).filter(r=>r.doc!=='library');
-  if(libRow&&libRow.body&&setLibrary(libRow.body.lib)){try{localStorage.setItem(LIBK,JSON.stringify({uid,lib:libRow.body.lib}))}catch(e){}}
-  else{try{localStorage.removeItem(LIBK)}catch(e){}}
-  if(!data||!data.length){if(!mine){S={settings:{...DEFAULT_SETTINGS},days:{},log:[]}}S.uid=uid;queueAll();cloud='moln';flush();render();afterLogin();return}
-  const local=mine?S:null;applyDocs(data);S.uid=uid;
-  /* Slå ihop med det som loggats på telefonen utan konto eller innan senaste synk, så att inget försvinner */
-  if(local){let changed=false;const have=new Set(S.log.map(l=>l.ts));
-    (local.log||[]).forEach(l=>{if(!have.has(l.ts)){S.log.push(l);dirty.add('log-'+monthOf(l.date));changed=true}});
-    Object.entries(local.days||{}).forEach(([k,d])=>{const c=S.days[k];if(!c){S.days[k]=d;dirty.add('days-'+monthOf(k));changed=true;return}
-      const m={...c,steps:Math.max(+c.steps||0,+d.steps||0),walk:!!(c.walk||d.walk),mob:!!(c.mob||d.mob),moves:(d.moves||[]).length>(c.moves||[]).length?d.moves:c.moves};
-      if(JSON.stringify(m)!==JSON.stringify(c)){S.days[k]=m;dirty.add('days-'+monthOf(k));changed=true}});
-    S.log.sort((a,b)=>a.ts-b.ts);if(changed)flush()}
-  cloud='moln';lsSave();regLogs();render();afterLogin();
+/* Läser in allt från molnet och slår ihop med det som finns på telefonen. Dokument med osparade lokala ändringar
+   (särskilt settings: kön, platsen i programmet, nästa pass, löpfarten) vinner och skickas upp. quiet = i bakgrunden. */
+async function loadSB(quiet){
+  if(saving){clearTimeout(loadSB._t);loadSB._t=setTimeout(()=>loadSB(quiet),1500);return false}
+  saving=true;let data;
+  try{data=await sbFetch('/rest/v1/user_docs?select=doc,body')}
+  catch(e){saving=false;if(!cloudReady){cloud='lokal';clearTimeout(loadSB._r);loadSB._r=setTimeout(()=>{if(!cloudReady&&SBUSER&&!needLogin)loadSB(true)},30000)}updSync();if(!quiet)render();return false}
+  try{
+    const uid=SBUSER&&SBUSER.id,mine=!S.uid||S.uid===uid,same=!!S.uid&&S.uid===uid;
+    const libRow=(data||[]).find(r=>r.doc==='library');data=(data||[]).filter(r=>r.doc!=='library');
+    if(libRow&&libRow.body&&setLibrary(libRow.body.lib)){try{localStorage.setItem(LIBK,JSON.stringify({uid,lib:libRow.body.lib}))}catch(e){}}
+    else{try{localStorage.removeItem(LIBK)}catch(e){}}
+    if(!mine){dirty.clear();noMerge.clear();dayBase={};S={settings:{...DEFAULT_SETTINGS},days:{},log:[]}}
+    const C=cloudSplit(data);let settings;
+    if(C.settings&&!(same&&dirty.has('settings')))settings={...DEFAULT_SETTINGS,...C.settings};
+    else{settings=S.settings;dirty.add('settings')}
+    const cDel=(C.settings&&C.settings.delTs)||[],lDel=S.settings.delTs||[],dead=new Set([...cDel,...lDel]);
+    if(dead.size&&(settings.delTs||[]).length!==dead.size){settings.delTs=[...dead].slice(-300);dirty.add('settings')}
+    const lr=mergeLogs(C.log,S.log||[],m=>same&&dirty.has('log-'+m),dead,null),dr=mergeDays(C.days,S.days||{},dayBase,null);
+    lr.months.forEach(m=>dirty.add('log-'+m));dr.months.forEach(m=>dirty.add('days-'+m));
+    S={settings,days:dr.days,log:lr.log,uid};
+    dayBase=JSON.parse(JSON.stringify(C.days));baseSave();
+    cloudReady=true;cloud='moln';lsSave();dirtySave();regLogs();sugCache=null;
+  }finally{saving=false}
+  if(dirty.size){clearTimeout(saveTimer);saveTimer=setTimeout(flush,50)}
+  updSync();quiet?softRender():render();if(!quiet)afterLogin();return true;
 }
+/* Hämta om från molnet: när appen varit dold en stund och inget pass pågår, och när nätet kommer tillbaka. */
+function syncNow(){if(BUILD!=='public'||!SB||!SBUSER||needLogin)return;
+  if(!cloudReady||!(active||runState||mobState))loadSB(true);else flush()}
+function syncHTML(){
+  if(BUILD!=='public'||!SB)return `Sparas ${cloud==='moln'?'i ditt konto och syns på alla enheter':'i den här webbläsaren'}.`;
+  if(needLogin||(!SBUSER&&S.uid))return 'Logga in igen för att spara i molnet. <button class="btn ghost sm" type="button" data-login>Logga in</button>';
+  if(!SBUSER)return 'Sparas bara på den här telefonen.';
+  const off=netFail||navigator.onLine===false;
+  if(!cloudReady)return off?'Väntar på nät – sparas på telefonen så länge':'Hämtar från ditt konto …';
+  if(dirty.size)return off?'Väntar på nät – sparas på telefonen så länge':'Sparar …';
+  return 'Sparat i ditt konto';
+}
+function updSync(){const el=document.getElementById('syncStatus');if(!el)return;const h=syncHTML();if(el._h===h)return;el._h=h;el.innerHTML=h;bind(el)}
 async function initSupabase(){
   if(!sbCfg()) return; SB=true;
   try{const c=JSON.parse(localStorage.getItem(LIBK)||'null'),ss=sbLoadSess();if(c&&ss&&ss.user&&c.uid===ss.user.id)setLibrary(c.lib)}catch(e){}
@@ -1994,7 +2089,7 @@ function viewToday(){
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${workoutSummary(w)}
       <div class="small muted">${w.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${w.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
-      :`<div class="row"><button class="btn" type="button" data-start="${w.i}">Starta passet</button><button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>`}`
+      :`<div class="row">${active?resumeBtn():`<button class="btn" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>`}`
       :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
       ${did('styrka')?'':skipBox()}
     </section>`;
@@ -2060,6 +2155,7 @@ function viewToday(){
        </div></div>
    </section>
    ${!done.some(isPass)?ciCard():''}
+   ${active&&!(plan==='s'&&!did('styrka'))?`<section class="card stack"><span class="eyebrow">Pågående pass</span><strong>${esc(wTitle(active.w||WBYID[active.wid]))}</strong><div class="row">${resumeBtn()}</div></section>`:''}
    ${hero}
    ${done.some(isPass)?ciCard():''}
    <section class="card" aria-labelledby="h-vardag"><h3 id="h-vardag" style="margin-bottom:4px">Vardagsrörelse</h3>
@@ -2069,7 +2165,7 @@ function viewToday(){
      <div style="padding-top:8px"><button class="btn ghost sm" type="button" data-otherlog="${k}">+ Annan träning</button></div>
    </section>
    ${done.filter(l=>!inHero.has(l)).length?`<section class="card"><h3>${inHero.size?'Mer loggat idag':'Loggat idag'}</h3><div class="list">${done.filter(l=>!inHero.has(l)).map(logRow).join('')}</div></section>`:''}
-   <p class="small muted">Sparas ${cloud==='moln'?'i ditt konto och syns på alla enheter':'i den här webbläsaren'}.</p>
+   <p class="small muted" id="syncStatus" role="status">${syncHTML()}</p>
    </div>`;
 }
 function movesCard(){
@@ -2097,7 +2193,7 @@ let mvState=null, movesOpen=false;
 function showMove(id,startNow){
   const m=MOVES.find(x=>x.id===id); if(!m) return; const inf=MOVE_INFO[id]||{};
   if(mvState&&mvState.t)clearInterval(mvState.t);
-  mvState={id,left:inf.sek||0,run:false,t:null,active:!!startNow};
+  mvState={id,left:inf.sek||0,run:false,t:null,active:!!startNow,end:0,half:false};
   renderMove();
   if(startNow&&inf.sek) toggleMoveTimer();
 }
@@ -2116,15 +2212,30 @@ function renderMove(){
     :`<button class="btn" type="button" data-mvdone>Klart ✓</button>`;
   stickyBar(btns);
 }
+function mvTick(){const s=mvState;if(!s||!s.run||!s.end)return;const inf=MOVE_INFO[s.id]||{};
+  s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));const el=$('#mvT');if(el)el.textContent=mmss(s.left);
+  if(inf.byt&&!s.half&&s.left<=Math.floor(inf.sek/2)&&s.left>0){s.half=true;signal('side');const sd=$('#mvSide');if(sd)sd.textContent='Andra sidan';toast('Byt sida')}
+  if(s.left<=0){clearInterval(s.t);signal('done');finishMove()}}
 function toggleMoveTimer(){
-  const inf=MOVE_INFO[mvState.id]||{}; mvState.active=true; mvState.run=!mvState.run; clearInterval(mvState.t);
-  if(mvState.run) mvState.t=setInterval(()=>{mvState.left--;const el=$('#mvT');if(el)el.textContent=mmss(Math.max(0,mvState.left));
-    if(inf.byt&&mvState.left===Math.floor(inf.sek/2)){try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}const sd=$('#mvSide');if(sd)sd.textContent='Andra sidan';toast('Byt sida')}
-    if(mvState.left<=0){clearInterval(mvState.t);try{navigator.vibrate&&navigator.vibrate([300,100,300])}catch(e){}finishMove()}},1000);
+  audioInit();mvState.active=true;if(mvState.run&&mvState.end)mvState.left=Math.max(0,Math.ceil((mvState.end-Date.now())/1000));
+  mvState.run=!mvState.run;clearInterval(mvState.t);
+  if(mvState.run){mvState.end=Date.now()+mvState.left*1000;mvState.t=setInterval(mvTick,250)}
   const pb=document.querySelector('[data-mvplay]');if(pb)pb.textContent=mvState.run?'Pausa':'Fortsätt';
   const db=document.querySelector('[data-mvdone]');if(db)db.textContent='Klar';
 }
 function finishMove(){const id=mvState.id;clearInterval(mvState.t);mvState=null;closeSheet();logMove(id)}
+/* Kontroll av en inklistrad säkerhetskopia. Ger en feltext, eller '' om den går att läsa in. */
+function backupError(v){const bad='Det där ser inte ut som en säkerhetskopia',isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x),dk=/^\d{4}-\d{2}-\d{2}$/;
+  if(!isO(v)||!Array.isArray(v.log)||!isO(v.days))return bad;
+  if(v.settings!=null&&!isO(v.settings))return bad;
+  const st=v.settings||{};
+  for(const k of ['stepGoal','strength','cardio','moveGoal','level','minutes','maxMin','stepsNow','splitIdx','runStep','v10','restFixed','coolKmh','coolInc','nybJog','lastBackup']){
+    if(st[k]!=null&&(typeof st[k]!=='number'||!isFinite(st[k])))return 'Säkerhetskopian har ett ogiltigt värde i inställningarna ('+k+')'}
+  if(st.seq!=null&&(!isO(st.seq)||typeof st.seq.pos!=='number'))return bad;
+  for(const k of ['issues','programs','avoid','avoidGroups','weekPlan','checkins'])if(st[k]!=null&&!Array.isArray(st[k]))return bad;
+  if(!v.log.every(l=>isO(l)&&typeof l.type==='string'&&typeof l.date==='string'&&dk.test(l.date)&&typeof l.ts==='number'&&isFinite(l.ts)&&(l.ex==null||Array.isArray(l.ex))))return 'Säkerhetskopian innehåller pass som inte går att läsa';
+  if(!Object.entries(v.days).every(([k,d])=>dk.test(k)&&isO(d)&&(d.steps==null||typeof d.steps==='number')&&(d.moves==null||Array.isArray(d.moves))))return 'Säkerhetskopian innehåller dagar som inte går att läsa';
+  return ''}
 function backupDue(){const st=S.settings;return cloud!=='moln'&&S.log.length>0&&(!st.lastBackup||Date.now()-st.lastBackup>7*864e5)}
 function backupCard(){return `<section class="card stack backupcard"><h3>Spara en kopia av dina loggar</h3>
   <p class="small" style="margin:0">Dina loggar sparas bara i den här webbläsaren. Byter du telefon eller rensar webbläsaren försvinner de. Kopiera all data och klistra in den i en anteckning – det tar fem sekunder.</p>
@@ -2246,7 +2357,7 @@ function seSave(){
   S.log[idx]=c;markDirty('log',monthOf(orig.date));if(monthOf(date)!==monthOf(orig.date))markDirty('log',monthOf(date));
   if(orig.type==='styrka'&&orig.date===today()&&date!==today())unresolveToday();
   if(c.wobj)regW(c.wobj);sugCache=null;SE=null;showStrengthLog(c.ts);toast('Passet är uppdaterat')}
-function seDelete(){const idx=S.log.findIndex(x=>x.ts===SE.ts);if(idx<0)return;const l=S.log[idx];S.log.splice(idx,1);markDirty('log',monthOf(l.date));
+function seDelete(){const idx=S.log.findIndex(x=>x.ts===SE.ts);if(idx<0)return;const l=S.log[idx];S.log.splice(idx,1);S.settings.delTs=[...(S.settings.delTs||[]),l.ts].slice(-300);markDirty('settings');markDirty('log',monthOf(l.date));
   if(l.type==='styrka'&&l.date===today())unresolveToday();SE=null;sugCache=null;closeSheet();toast('Passet är borttaget')}
 function bindSE(root){
   const ix=v=>v.split(':').map(Number);
@@ -2909,11 +3020,30 @@ function ciHistoryCard(){const H=(S.settings.checkins||[]).slice().reverse();if(
   return `<section class="card stack"><h3>Avstämningar</h3><div class="list">${H.slice(0,6).map(h=>`<div class="li" style="cursor:default"><div class="grow"><strong>${esc(new Date(h.date+'T12:00:00').toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))} · ${esc(h.quick?'Funkar bra':CI_FEEL[h.feel]||'Besvarad')}</strong>${h.applied&&h.applied.length?`<div class="small muted">${h.applied.map(esc).join(' · ')}</div>`:h.quick?'':'<div class="small muted">Inga ändringar</div>'}${h.note?`<div class="small muted">”${esc(h.note)}”</div>`:''}</div></div>`).join('')}</div></section>`}
 
 /* ---------- Sheets: pass, löpning, rörlighet, inställningar ---------- */
-function openSheet(html,after){const s=$('#sheet');$('#sheetBody').innerHTML=html;s.classList.add('open');s.scrollTop=0;s.scrollLeft=0;try{window.scrollTo(0,window.scrollY)}catch(e){};document.body.style.overflow='hidden';bind($('#sheetBody'));after&&after()}
-function closeSheet(){sheetCtx=null;$('#sheet').classList.remove('open');document.body.style.overflow='';const st=document.querySelector('.sticky');st&&st.remove();stopRest();render()}
+function openSheet(html,after){const s=$('#sheet');$('#sheetBody').innerHTML=html;s.classList.add('open');s.scrollTop=0;s.scrollLeft=0;try{window.scrollTo(0,window.scrollY)}catch(e){};document.body.style.overflow='hidden';bind($('#sheetBody'));after&&after();wakeSync()}
+function closeSheet(){sheetCtx=null;$('#sheet').classList.remove('open');document.body.style.overflow='';const st=document.querySelector('.sticky');st&&st.remove();if(!active)stopRest();wakeSync();render()}
 function lastSetsFor(name){for(let i=S.log.length-1;i>=0;i--){const e=flatEx(S.log[i]).find(x=>x.n===name);if(e&&e.sets?.some(s=>s[0]))return e.sets}return null}
 
 let active=null; // pågående pass
+/* Pågående pass sparas på telefonen vid varje ändring och återställs om appen laddas om. */
+const ACTK='rs-active';
+function saveActive(){try{if(active)localStorage.setItem(ACTK,JSON.stringify({uid:S.uid||null,a:active}))}catch(e){}}
+function clearActive(){try{localStorage.removeItem(ACTK)}catch(e){}}
+(function(){try{const v=JSON.parse(localStorage.getItem(ACTK)||'null');
+  if(v&&v.a&&v.a.wid&&Array.isArray(v.a.sets)&&v.a.w&&Array.isArray(v.a.w.x)&&(!v.uid||!S.uid||v.uid===S.uid)){active=v.a;if(!WBYID[active.wid])WBYID[active.wid]=active.w}}catch(e){}})();
+['input','change','click'].forEach(ev=>document.addEventListener(ev,()=>{if(active)saveActive()}));
+window.addEventListener('pagehide',()=>{if(active)saveActive()});
+/* Set som användaren själv har fyllt i (förifyllda vikter räknas inte). */
+function filledSets(){if(!active)return 0;let n=0;active.sets.forEach((r,i)=>r.forEach((s,j)=>{
+  if(Array.isArray(s[4])){if(s[2]||s[4].some((d,k)=>d[1]!==''||(d[0]!==''&&!(active.spreOn&&active.spreOn[i+':'+j+':'+k]))))n++;return}
+  if(s[2]||s[1]||(s[0]&&!(active.pre&&active.pre[i]&&active.pre[i][j])))n++}));return n}
+function resumeBtn(){const a=active.sets.flat();return `<button class="btn" type="button" data-resume>Fortsätt passet (${a.filter(s=>s[2]).length}/${a.length} set)</button>`}
+/* Bekräftelse i appens egen knapprad (ersätter raden längst ner tills man valt). */
+function confirmBar(msg,yes,onYes,no){const old=document.querySelector('.sticky'),prev=old?old.querySelector('.in').innerHTML:null;
+  stickyBar(`<div class="confirm"><div class="cmsg" role="alert">${esc(msg)}</div><div class="row"><button class="btn ghost" type="button" data-cno>${esc(no||'Avbryt')}</button><button class="btn" type="button" data-cyes>${esc(yes)}</button></div></div>`);
+  const s=document.querySelector('.sticky'),back=()=>{if(prev!=null)stickyBar(prev);else s.remove()};
+  s.querySelector('[data-cno]').onclick=back;
+  s.querySelector('[data-cyes]').onclick=()=>{back();onYes()}}
 /* Viktförslag: klarade du alla reps förra gången → öka. Missade du mycket → sänk. Annars samma vikt. */
 function lastExLog(name){for(let i=S.log.length-1;i>=0;i--){const e=flatEx(S.log[i]).find(x=>x.n===name);if(e&&e.sets&&e.sets.some(s=>+s[0]))return e}return null}
 const firstNum=v=>{const m=String(v??'').match(/\d+/);return m?+m[0]:NaN};
@@ -3072,14 +3202,15 @@ function showWorkout(id){
 function stickyBar(inner){document.querySelector('.sticky')?.remove();const d=document.createElement('div');d.className='sticky';d.innerHTML=`<div class="in">${inner}</div>`;document.body.appendChild(d);bind(d)}
 function startWorkout(id,date,pre){
   const w=WBYID[id];if(!w)return;
+  if(active&&active.wid!==id&&filledSets()){toast('Du har ett pågående pass – avsluta eller avbryt det först');return renderActive()}
   if(!active||active.wid!==id){restOpen=-1;addPanel=null;const aw=AW(w);active={wid:id,start:Date.now(),w:aw,date:date&&date<today()?date:null,sets:aw.x.map(e=>[...Array(e[8]||3)].map(()=>['','',false]))};
     ensurePre();if(pre||(S.settings.autoPrefill&&prefillPlan(activeW(),active.sets).ok))doPrefill()}
   else if(pre)doPrefill();
-  renderActive();
+  saveActive();renderActive();
 }
 let restOpen=-1;
 function activeW(){return active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false})}
-function activeRow(i){return activeW().x[i]||WBYID[active.wid].x[i]}
+function activeRow(i){return activeW().x[i]||(WBYID[active.wid]||active.w).x[i]}
 function rerenderActiveKeep(){const y=$('#sheet').scrollTop;renderActive();$('#sheet').scrollTop=y}
 /* Spara vilotid per övningsnamn (gäller nästa gång övningen dyker upp, oavsett pass). */
 function setRestFor(i,v){const e=activeRow(i);if(!e)return;const n=String(e[0]),st=S.settings;
@@ -3178,23 +3309,43 @@ function finishWorkout(){
     vol+=exVol(o);
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
-  const min=Math.max(1,Math.round((Date.now()-active.start)/60000));
+  const min=Math.min(240,Math.max(1,Math.round((Date.now()-active.start)/60000)));
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w.x.some(isAdded)?{...w,x:w.x.filter(e=>!isAdded(e))}:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
   if(w.p==='DP'&&S.settings.mode==='program'&&w.i.replace(/-latt$/,'')===programNext().i){S.settings.lastProg=w.i;markDirty('settings')}
   const fdate=active.date||today();
-  active=null; sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate);
+  active=null; clearActive(); sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate);
 }
 /* Vilotimern räknar mot en sluttid så att den stämmer efter skärmlås eller appbyte. */
 let restT=null,restLeft=0,restEnd=0;
 function startRest(sec){restEnd=Date.now()+sec*1000;$('#restTimer').classList.add('on');clearInterval(restT);restT=setInterval(tickRest,250);tickRest()}
 function tickRest(){if(!restEnd)return;restLeft=Math.max(0,Math.ceil((restEnd-Date.now())/1000));$('#restLeft').textContent=mmss(restLeft);
-  if(restLeft<=0){stopRest();try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}toast('Vilan är slut')}}
+  if(restLeft<=0){stopRest();signal('rest');toast('Vilan är slut')}}
 function stopRest(){clearInterval(restT);restEnd=0;$('#restTimer').classList.remove('on')}
 function nudgeRest(d){if(!restEnd)return;restEnd=Math.max(Date.now(),restEnd+d*1000);tickRest()}
 $('#restAdd').addEventListener('click',()=>nudgeRest(15));
 $('#restSub').addEventListener('click',()=>nudgeRest(-15));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&restEnd)tickRest()});
+/* Ljudsignal (WebAudio) utöver vibration – vibration finns inte i Safari på iPhone. Ljudet låses upp vid ett tryck. */
+let AC=null;
+function audioInit(){try{if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(C)AC=new C()}if(AC&&AC.state==='suspended')AC.resume()}catch(e){}}
+function tone(pat){try{audioInit();if(!AC)return;let t=AC.currentTime+0.02;pat.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02);t+=d+0.08})}catch(e){}}
+function signal(k){const v={seg:[300,100,300],pre:[150,80,150],side:[200,100,200],done:[300,100,300],rest:[200,100,200]}[k]||150;try{navigator.vibrate&&navigator.vibrate(v)}catch(e){}
+  tone(k==='pre'?[[660,.12]]:k==='next'?[[880,.18]]:k==='rest'||k==='done'?[[880,.15],[1175,.25]]:[[880,.15],[880,.15]])}
+/* Håll skärmen tänd under pågående styrke-, löp- och rörlighetspass. */
+let wakeL=null,wakeP=false;
+const wantWake=()=>!!(runState||mobState||(active&&sheetCtx&&sheetCtx.t==='active'&&$('#sheet').classList.contains('open')));
+async function wakeSync(){try{if(!('wakeLock' in navigator))return;
+  if(wantWake()){if(!wakeL&&!wakeP&&!document.hidden){wakeP=true;try{wakeL=await navigator.wakeLock.request('screen');wakeL.addEventListener('release',()=>{wakeL=null})}finally{wakeP=false}if(!wantWake())wakeSync()}}
+  else if(wakeL){const l=wakeL;wakeL=null;l.release()}}catch(e){}}
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){hiddenAt=Date.now();if(active)saveActive();if(dirty.size&&SB&&SBUSER){clearTimeout(saveTimer);flush()}return}
+  wakeSync();if(runState&&runState.run)runTick();if(mobState&&mobState.run)mobTick();if(mvState&&mvState.run)mvTick();
+  if(hiddenAt&&Date.now()-hiddenAt>30000)syncNow();hiddenAt=0});
+window.addEventListener('online',()=>{netFail=false;updSync();syncNow()});
+window.addEventListener('offline',()=>updSync());
 $('#restStop').addEventListener('click',stopRest);
 
 let runLog={rpe:0,pain:0,area:'',actual:null};
@@ -3289,16 +3440,18 @@ function renderRun(){
    <details class="card"><summary>Hela passet</summary><div class="list">${r.seg.map((x,j)=>`<div class="li" style="cursor:default;padding:6px 0;${j===i?'font-weight:600':''}${j<i?';opacity:.5':''}"><span class="dot ${x[1]==='h'?'r':x[1]==='s'||x[1]==='w'?'s':'m'}" style="margin-top:6px"></span><div class="grow">${esc(x[2])}</div><span class="small muted num">${band?fmtK(segPlan(r,x,j).kmh):pace(segPlan(r,x,j).kmh)} · ${mmss(Math.round(x[0]*60))}</span></div>`).join('')}</div></details></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-runskip>Nästa del</button><button class="btn run" type="button" data-runplay>${run?'Pausa':'Starta'}</button>`);
 }
-function recordSeg(){const s=runState;const sec=s.segTotal-Math.max(0,s.left);if(sec<=0)return;const seg=s.r.seg[s.i];const p=curPlan();
+function recordSeg(){const s=runState;if(s.run&&s.end)s.left=Math.ceil((s.end-Date.now())/1000);const sec=s.segTotal-Math.max(0,s.left);if(sec<=0)return;const seg=s.r.seg[s.i];const p=curPlan();
   s.actual.push({typ:seg[1],kmh:p.kmh,inc:p.inc,sec,f:seg[1]==='h'?hFactor(s.r,seg,s.i):null})}
-function runTick(){const s=runState;s.left--;const el=$('#runT');if(el)el.textContent=mmss(Math.max(0,s.left));
-  if(s.left===7&&s.r.seg[s.i+1]){s.pre=true;const pa=$('#preA');if(pa)pa.hidden=false;try{navigator.vibrate&&navigator.vibrate([150,80,150])}catch(e){}}
-  if(s.left<=0)runNext(0)}
-function beep(){try{navigator.vibrate&&navigator.vibrate(120)}catch(e){}}
+/* Löptimern räknar mot en sluttid (s.end) så att den stämmer efter skärmlås – och går vidare flera delar om tiden passerat. */
+function runGo(){const s=runState;if(!s)return;clearInterval(s.t);s.end=Date.now()+s.left*1000;s.t=setInterval(runTick,250)}
+function runTick(){const s=runState;if(!s||!s.run||!s.end)return;let g=0;
+  while(runState===s&&(s.left=Math.ceil((s.end-Date.now())/1000))<=0&&g++<300){const end=s.end;runNext(0);if(runState!==s)return;s.end=end+s.left*1000}
+  s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));const el=$('#runT');if(el)el.textContent=mmss(s.left);
+  if(s.left<=7&&s.left>0&&!s.pre&&s.r.seg[s.i+1]){s.pre=true;const pa=$('#preA');if(pa)pa.hidden=false;signal('pre')}}
 function runNext(carry){
   const s=runState;recordSeg();s.i++;s.adj=0;s.pre=false;s.ask=false;
-  if(s.i>=s.r.seg.length){clearInterval(s.t);const rid=s.r.id,act=s.actual;runState=null;showRunLog(rid,null,act);return}
-  s.left=Math.round(s.r.seg[s.i][0]*60)+(carry||0);s.segTotal=s.left;try{navigator.vibrate&&navigator.vibrate([300,100,300])}catch(e){}
+  if(s.i>=s.r.seg.length){clearInterval(s.t);signal('done');const rid=s.r.id,act=s.actual;runState=null;showRunLog(rid,null,act);return}
+  s.left=Math.round(s.r.seg[s.i][0]*60)+(carry||0);s.segTotal=s.left;signal('seg');
   const was=s.run;renderRun();if(was){s.run=true;const pb=document.querySelector('[data-runplay]');if(pb)pb.textContent='Pausa'}
 }
 let mobState=null;
@@ -3316,14 +3469,15 @@ function renderMob(){
    <div class="card"><div class="small muted" style="margin-bottom:4px">Tryck på en rörelse för att se hur den görs.</div><div class="list">${m.items.map((x,j)=>`<button class="li" type="button" data-mobgo="${j}" aria-current="${j===i}" style="width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;color:inherit;font:inherit;${j===i?'font-weight:600':''}"><span class="num muted" style="width:20px">${j<i&&mobState.done&&mobState.done.has(j)?'✓':j+1}</span><div class="grow">${esc(x[0])}</div><span class="small muted num">${mmss(x[1])}</span></button>`).join('')}</div></div></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-mobskip>Hoppa över</button><button class="btn mob" type="button" data-mobplay>${run?'Pausa':'Starta'}</button>`);
 }
-function mobTick(){
-  mobState.left--; const el=$('#mobT'); if(el)el.textContent=mmss(mobState.left);
-  if(mobState.left<=0) mobNext();
+function mobGo(){const s=mobState;if(!s)return;clearInterval(s.t);s.end=Date.now()+s.left*1000;s.t=setInterval(mobTick,250)}
+function mobTick(){const s=mobState;if(!s||!s.run||!s.end)return;let g=0;
+  while(mobState===s&&(s.left=Math.ceil((s.end-Date.now())/1000))<=0&&g++<100){const end=s.end;mobNext();if(mobState!==s)return;s.end=end+s.left*1000}
+  s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));const el=$('#mobT');if(el)el.textContent=mmss(s.left);
 }
 function mobNext(){
   const s=mobState; if(s.done&&s.left<s.m.items[s.i][1])s.done.add(s.i); s.i++;
-  if(s.i>=s.m.items.length){clearInterval(s.t);const min=s.m.min;addLog({type:'rörlighet',date:today(),title:s.m.t,min});day().mob=true;markDirty('days',monthOf(today()));mobState=null;closeSheet();toast('Rörlighet klar');return}
-  s.left=s.m.items[s.i][1]; try{navigator.vibrate&&navigator.vibrate(150)}catch(e){} renderMob();
+  if(s.i>=s.m.items.length){clearInterval(s.t);signal('done');const min=s.m.min;addLog({type:'rörlighet',date:today(),title:s.m.t,min});day().mob=true;markDirty('days',monthOf(today()));mobState=null;closeSheet();toast('Rörlighet klar');return}
+  s.left=s.m.items[s.i][1]; signal('next'); renderMob();
 }
 function progOptions(split,sel){return DP_SEQ.filter(w=>w.s===split).map(w=>`<option value="${w.i}" ${w.i===sel?'selected':''}>v${w.wk} d${w.d} – ${esc(wTitle(w))}</option>`).join('')}
 function showWhy(){
@@ -3525,8 +3679,8 @@ function bind(root){
   root.querySelectorAll('[data-npw]').forEach(b=>b.onclick=saveNewPw);
   {const pw=root.querySelector('#lgPw');if(pw)pw.onkeydown=e=>{if(e.key==='Enter')lgGo()}}
   root.querySelectorAll('[data-lgskip]').forEach(b=>b.onclick=()=>{S.settings.skipLogin=true;lsSave();closeSheet();if(!S.settings.onb)showOnboarding()});
-  root.querySelectorAll('[data-login]').forEach(b=>b.onclick=()=>{loginState={step:'email',email:''};showLogin()});
-  root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';const hadLib=WORKOUTS.length>0&&BUILD==='public';try{localStorage.removeItem(LIBK)}catch(e){}closeSheet();toast('Utloggad – data finns kvar på telefonen');if(hadLib)setTimeout(()=>location.reload(),800)});
+  root.querySelectorAll('[data-login]').forEach(b=>b.onclick=()=>{loginState={mode:'login',email:(SBUSER&&SBUSER.email)||loginState.email||''};showLogin()});
+  root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';cloudReady=false;const hadLib=WORKOUTS.length>0&&BUILD==='public';try{localStorage.removeItem(LIBK)}catch(e){}closeSheet();toast('Utloggad – data finns kvar på telefonen');if(hadLib)setTimeout(()=>location.reload(),800)});
   root.querySelectorAll('[data-painok]').forEach(b=>b.onclick=()=>{S.settings.painAlert=null;markDirty('settings');render()});
   root.querySelectorAll('[data-dayoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.dayoff;dayOff=v===0?0:Math.max(-14,Math.min(13,dayOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-takeahead]').forEach(b=>b.onclick=()=>{const off=+b.dataset.takeahead,dt=addDays(new Date(),off),k=dkey(dt);const t0=plannedFor(new Date()),t1=plannedFor(dt);
@@ -3573,7 +3727,9 @@ function bind(root){
   {const eq=root.querySelector('#exQ');if(eq){eq.oninput=()=>{exQ=eq.value;const pos=eq.selectionStart;render();const n=$('#exQ');if(n){n.focus();n.setSelectionRange(pos,pos)}}}}
   root.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.start));
   root.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{if(mobState){clearInterval(mobState.t);mobState=null}closeSheet()});
-  root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{active=null;closeSheet();toast('Passet avbröts')});
+  root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{const n=filledSets(),drop=()=>{active=null;clearActive();closeSheet();toast('Passet avbröts')};
+    if(n)confirmBar(`Kasta passet? ${n} set är ${n===1?'ifyllt':'ifyllda'}`,'Kasta passet',drop,'Fortsätt passet');else drop()});
+  root.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>{if(active)renderActive()});
   root.querySelectorAll('[data-finish]').forEach(b=>b.onclick=finishWorkout);
   root.querySelectorAll('[data-kg]').forEach(inp=>{
     inp.onfocus=()=>{const [i,j]=inp.dataset.kg.split(':').map(Number);inp._old=active.sets[i][j][0]};
@@ -3598,14 +3754,14 @@ function bind(root){
       s[4].forEach((d,k)=>{const key=i+':'+j+':'+k;if(!d[0]){const ph=supPH(e,k,j);if(ph!=='')d[0]=String(ph)}if(!d[1])d[1]=pt[k]??'';
         const a=document.querySelector(`[data-skg="${key}"]`);if(a){a.value=String(d[0]).replace('.',',');a.parentElement.querySelector('.pdot')?.remove()}const r=document.querySelector(`[data-srp="${key}"]`);if(r)r.value=d[1];
         if(active.spreOn)delete active.spreOn[key]});syncSup(s);updPrefillBar()}
-    if(s[2]&&!s[0]&&!Array.isArray(s[4])){const sg=weightSuggest(WBYID[active.wid].x[i]);const p=lastSetsFor(WBYID[active.wid].x[i][0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
-    if(s[2]&&!s[1]){s[1]=WBYID[active.wid].x[i][9]?.[j]||''}
+    if(s[2]&&!s[0]&&!Array.isArray(s[4])){const sg=weightSuggest(activeRow(i));const p=lastSetsFor(activeRow(i)[0]);if(sg&&sg.kgs[j]!=='')s[0]=String(sg.kgs[j]);else if(p&&p[j]&&p[j][0])s[0]=p[j][0];else if(j>0&&active.sets[i][j-1][0])s[0]=active.sets[i][j-1][0]}
+    if(s[2]&&!s[1]){s[1]=activeRow(i)[9]?.[j]||''}
     if(Array.isArray(s[3]))s[3][0][0]=s[0];
     if(s[2]&&active.pre&&active.pre[i]&&active.pre[i][j]){active.pre[i][j]=false;b.parentElement.querySelector(`[data-kg="${i}:${j}"]`)?.parentElement.querySelector('.pdot')?.remove();updPrefillBar()}
     b.setAttribute('aria-pressed',s[2]);b.textContent=s[2]?'✓':'';
     const row=b.parentElement;const kgI=row.querySelector(`[data-kg="${i}:${j}"]`);if(kgI)kgI.value=String(s[0]).replace('.',',');const rpI=row.querySelector(`[data-rp="${i}:${j}"]`);if(rpI)rpI.value=s[1];
     const all=active.sets.flat();$('#sheetBody .date').textContent=`${all.filter(x=>x[2]).length}/${all.length} set klara`;
-    if(s[2])startRest(restFor(activeRow(i)))});
+    if(s[2]){audioInit();startRest(restFor(activeRow(i)))}});
   root.querySelectorAll('[data-addopen]').forEach(b=>b.onclick=openAddPanel);
   root.querySelectorAll('[data-addclose]').forEach(b=>b.onclick=()=>{const o=addPanel&&addPanel.ctx==='oth';addPanel=null;if(o){othRead();othKeep()}else rerenderActiveKeep()});
   root.querySelectorAll('[data-addgrp]').forEach(b=>b.onclick=()=>{const g=b.dataset.addgrp,G=addPanel.all?[]:addPanel.groups;addPanel.all=false;addPanel.groups=G.includes(g)?G.filter(x=>x!==g):G.concat([g]);addPanel.show=12;
@@ -3627,19 +3783,19 @@ function bind(root){
   bindSE(root);
   root.querySelectorAll('[data-saveedit]').forEach(b=>b.onclick=()=>{const l=S.log.find(x=>x.ts===+b.dataset.saveedit);if(!l)return;const num=id=>parseFloat(String($(id).value).replace(',','.'))||0;
     const min=num('#runMin'),km=num('#runKm');let avg=num('#runAvg');if(!avg&&km&&min)avg=km/(min/60);
-    if(min){l.min=min;if(l.rpe)l.load=Math.round(min*l.rpe)}l.km=km||l.km||0;l.avg=avg?Math.round(avg*10)/10:(l.avg||0);l.note=$('#runNote').value.trim();
+    if(min){l.min=min;if(l.rpe)l.load=Math.round(min*l.rpe)}l.km=km||l.km||0;l.avg=avg?Math.round(avg*10)/10:(l.avg||0);l.note=$('#runNote').value.trim();l.edited=Date.now();
     markDirty('log',monthOf(l.date));closeSheet();toast('Passet är uppdaterat')});
   root.querySelectorAll('[data-saverun]').forEach(b=>b.onclick=()=>saveRun(RUNS.find(x=>x.id===b.dataset.saverun)));
   root.querySelectorAll('[data-runstart]').forEach(b=>b.onclick=()=>startRun(b.dataset.runstart));
-  root.querySelectorAll('[data-runplay]').forEach(b=>b.onclick=()=>{const s=runState;s.run=!s.run;clearInterval(s.t);if(s.run){if(!s.start)s.start=Date.now();s.t=setInterval(runTick,1000)}b.textContent=s.run?'Pausa':'Starta'});
-  root.querySelectorAll('[data-runskip]').forEach(b=>b.onclick=()=>{const s=runState;if(s.left>10&&s.r.seg[s.i+1]&&s.start){s.ask=true;renderRun();if(s.run){const pb=document.querySelector('[data-runplay]');if(pb)pb.textContent='Pausa'}return}clearInterval(s.t);const was=s.run;runNext(0);if(runState&&was){runState.t=setInterval(runTick,1000)}});
-  root.querySelectorAll('[data-skipmode]').forEach(b=>b.onclick=()=>{const s=runState;clearInterval(s.t);const was=s.run;const carry=b.dataset.skipmode==='carry'?Math.max(0,s.left):0;s.left=0;runNext(carry);if(runState&&was){runState.t=setInterval(runTick,1000)}if(carry)toast(`${mmss(carry)} läggs på nästa del`)});
+  root.querySelectorAll('[data-runplay]').forEach(b=>b.onclick=()=>{const s=runState;audioInit();if(s.run&&s.end)s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));s.run=!s.run;clearInterval(s.t);if(s.run){if(!s.start)s.start=Date.now();runGo()}b.textContent=s.run?'Pausa':'Starta'});
+  root.querySelectorAll('[data-runskip]').forEach(b=>b.onclick=()=>{const s=runState;if(s.left>10&&s.r.seg[s.i+1]&&s.start){s.ask=true;renderRun();if(s.run){const pb=document.querySelector('[data-runplay]');if(pb)pb.textContent='Pausa'}return}clearInterval(s.t);const was=s.run;runNext(0);if(runState&&was)runGo()});
+  root.querySelectorAll('[data-skipmode]').forEach(b=>b.onclick=()=>{const s=runState;clearInterval(s.t);const was=s.run;if(s.run&&s.end)s.left=Math.ceil((s.end-Date.now())/1000);const carry=b.dataset.skipmode==='carry'?Math.max(0,s.left):0;s.left=0;s.end=0;runNext(carry);if(runState&&was)runGo();if(carry)toast(`${mmss(carry)} läggs på nästa del`)});
   root.querySelectorAll('[data-adj]').forEach(b=>b.onclick=()=>{const s=runState;s.adj=Math.round((s.adj+ +b.dataset.adj)*10)/10;const was=s.run;renderRun();if(was){const pb=document.querySelector('[data-runplay]');if(pb)pb.textContent='Pausa'}});
   root.querySelectorAll('[data-runclose]').forEach(b=>b.onclick=()=>{const s=runState;clearInterval(s.t);if(!s.start){runState=null;closeSheet();return}recordSeg();const rid=s.r.id,act=s.actual;runState=null;showRunLog(rid,null,act)});
   root.querySelectorAll('[data-mob]').forEach(b=>b.onclick=()=>showMobility(b.dataset.mob));
-  root.querySelectorAll('[data-mobplay]').forEach(b=>b.onclick=()=>{const s=mobState;s.run=!s.run;clearInterval(s.t);if(s.run)s.t=setInterval(mobTick,1000);b.textContent=s.run?'Pausa':'Starta'});
+  root.querySelectorAll('[data-mobplay]').forEach(b=>b.onclick=()=>{const s=mobState;audioInit();if(s.run&&s.end)s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));s.run=!s.run;clearInterval(s.t);if(s.run)mobGo();b.textContent=s.run?'Pausa':'Starta'});
   root.querySelectorAll('[data-mobgo]').forEach(b=>b.onclick=()=>{const s=mobState;if(!s)return;const j=+b.dataset.mobgo;clearInterval(s.t);s.run=false;s.i=j;s.left=s.m.items[j][1];renderMob();try{document.querySelector('.sheet')&&(document.querySelector('.sheet').scrollTop=0)}catch(e){}});
-  root.querySelectorAll('[data-mobskip]').forEach(b=>b.onclick=()=>{const run=mobState.run;clearInterval(mobState.t);mobNext();if(mobState&&run){mobState.run=true;mobState.t=setInterval(mobTick,1000);const pb=document.querySelector('[data-mobplay]');if(pb)pb.textContent='Pausa'}});
+  root.querySelectorAll('[data-mobskip]').forEach(b=>b.onclick=()=>{const run=mobState.run;clearInterval(mobState.t);mobNext();if(mobState&&run){mobState.run=true;mobGo();const pb=document.querySelector('[data-mobplay]');if(pb)pb.textContent='Pausa'}});
   root.querySelectorAll('[data-settings]').forEach(b=>b.onclick=showSettings);
   const ss=root.querySelector('#sSplit'); if(ss) ss.onchange=()=>{$('#sLast').innerHTML=progOptions(+ss.value,'')};
   root.querySelectorAll('[data-savesettings]').forEach(b=>b.onclick=()=>{const st=S.settings;if(+$('#sStr').value!==st.strength||+$('#sCar').value!==st.cardio){st.weekPlan=null;st.genCur=null}st.strength=+$('#sStr').value;st.cardio=+$('#sCar').value;if($('#sCi'))ciConf().every=+$('#sCi').value;st.stepGoal=Math.max(1000,+$('#sSteps').value||10000);st.maxMin=+$('#sMax').value;st.runPref=$('#sRun').value;{const raw=$('#sTenK').value.trim();const tk=parseTenK(raw);if(tk&&raw!==String(st.tenK||'')){st.tenK=raw;st.v10=Math.round(600/tk*100)/100}
@@ -3655,13 +3811,18 @@ function bind(root){
     setLibrary(lib);try{localStorage.setItem(LIBK,JSON.stringify({uid:SBUSER.id,lib}))}catch(e){}
     const st=S.settings;st.programs=lib.programs.map(p=>p.k);if(DP_SEQ.length){st.mode='program';if(j.lastProg&&WBYID[j.lastProg])st.lastProg=j.lastProg;else if(!WBYID[st.lastProg])st.lastProg=DP_SEQ[0].i;st.progKey='DP'}else st.mode='mix';
     st.genCur=null;markDirty('settings');showSettings();toast(`Klart – ${WORKOUTS.length} pass inlästa. Nästa pass: ${DP_SEQ.length?wTitle(programNext()):''}`)});
-  root.querySelectorAll('[data-libremove]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/rest/v1/user_docs?doc=eq.library',{method:'DELETE'})}catch(e){toast('Kunde inte ta bort: '+e.message);return}
-    try{localStorage.removeItem(LIBK)}catch(e){}S.settings.mode='gen';S.settings.genCur=null;markDirty('settings');lsSave();toast('Programmet är borttaget');setTimeout(()=>location.reload(),800)});
+  root.querySelectorAll('[data-libremove]').forEach(b=>b.onclick=()=>confirmBar('Ta bort programmet? Passen försvinner ur appen. Dina loggar finns kvar.','Ta bort programmet',async()=>{
+    try{await sbFetch('/rest/v1/user_docs?doc=eq.library',{method:'DELETE'})}catch(e){toast('Kunde inte ta bort: '+e.message);return}
+    try{localStorage.removeItem(LIBK)}catch(e){}S.settings.mode='gen';S.settings.genCur=null;markDirty('settings');lsSave();toast('Programmet är borttaget');setTimeout(()=>location.reload(),800)},'Behåll'));
   root.querySelectorAll('[data-export]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(S));S.settings.lastBackup=Date.now();markDirty('settings');toast('Kopierat')}catch(e){toast('Kunde inte kopiera')}});
   root.querySelectorAll('[data-backup]').forEach(b=>b.onclick=doBackup);
   root.querySelectorAll('[data-backuplater]').forEach(b=>b.onclick=()=>{S.settings.lastBackup=Date.now();markDirty('settings');render()});
-  root.querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>{try{const v=JSON.parse($('#imp').value);if(!v.log||!v.days)throw 0;S={settings:{...DEFAULT_SETTINGS,...v.settings},days:v.days,log:v.log};
-    dirty.add('settings');new Set(Object.keys(S.days).map(monthOf)).forEach(m=>dirty.add('days-'+m));new Set(S.log.map(l=>monthOf(l.date))).forEach(m=>dirty.add('log-'+m));lsSave();flush();closeSheet();toast('Data inläst')}catch(e){toast('Det där ser inte ut som en säkerhetskopia')}});
+  root.querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>{let v;try{v=JSON.parse($('#imp').value)}catch(e){v=null}
+    const err=backupError(v);if(err){toast(err);return}
+    const nl=S.log.length,nd=Object.keys(S.days).filter(k=>!dayEmpty(S.days[k])).length;
+    confirmBar(`Det här ersätter ${nl} pass och ${nd} ${nd===1?'dag':'dagar'} med ${v.log.length} pass och ${Object.keys(v.days).length} ${Object.keys(v.days).length===1?'dag':'dagar'} från kopian.`,'Ersätt',()=>{
+      queueAll();S={settings:{...DEFAULT_SETTINGS,...(v.settings||{})},days:v.days,log:v.log.slice().sort((a,b)=>a.ts-b.ts),uid:S.uid||null};
+      queueAll();dirty.forEach(k=>{if(k!=='settings')noMerge.add(k)});dayBase={};baseSave();lsSave();dirtySave();regLogs();sugCache=null;sugIdx=0;clearTimeout(saveTimer);flush();closeSheet();toast('Data inläst')},'Avbryt')});
   const q=root.querySelector('#libQ'); if(q){q.oninput=()=>{libQ=q.value;libShow=40;const pos=q.selectionStart;render();const n=$('#libQ');n.focus();n.setSelectionRange(pos,pos)}}
   root.querySelectorAll('[data-lprog]').forEach(b=>b.onclick=()=>{libProg=b.dataset.lprog;libShow=40;render()});
   root.querySelectorAll('[data-lgroup]').forEach(b=>b.onclick=()=>{libGroup=b.dataset.lgroup;libShow=40;render()});
