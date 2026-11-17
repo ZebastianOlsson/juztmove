@@ -392,9 +392,16 @@ const LIBK='rs-lib';
 /* Supersets/giant sets i biblioteket kan ha snedstreck utan mellanslag ("A/B"). Koden delar på ' / ',
    så namnen normaliseras – bara i minnet, det sparade biblioteket ändras aldrig. */
 const splitSup=n=>String(n).split(/\s*\/\s*/);
+/* Övningar vars anteckning beskriver drops inom samma set ("10 rep set- … ; 20 rep set- … ; 30 rep set- …")
+   läggs upp som dropset: reps "10+20+30" per set, en rad per drop. e[12] = {tri:true, lab:[text per drop]}. */
+function repSeq(note){const t=String(note||''),re=/(\d+)\s*-?\s*reps?\s*set\s*[-–:]?\s*([^;.]*)/gi,out=[];let m;while((m=re.exec(t)))out.push([+m[1],m[2].trim()]);
+  return out.length>=2?out:null}
 function normLibW(w){if(!w||!Array.isArray(w.x))return w;let ch=false;
-  const x=w.x.map(e=>{if(!Array.isArray(e)||(e[3]!=='superset'&&e[3]!=='giant')||!String(e[0]).includes('/'))return e;
-    const nn=splitSup(e[0]).filter(Boolean).join(' / ');if(nn===e[0])return e;ch=true;const n=[...e];n[0]=nn;return n});
+  const x=w.x.map(e=>{if(!Array.isArray(e))return e;let n=e;
+    if((e[3]==='superset'||e[3]==='giant')&&String(e[0]).includes('/')){const nn=splitSup(e[0]).filter(Boolean).join(' / ');if(nn!==e[0]){n=[...n];n[0]=nn}}
+    const sq=!String(n[0]).includes('/')&&n[3]!=='superset'&&n[3]!=='giant'?repSeq(n[6])||repSeq(n[1]):null;
+    if(sq){const sets=n[8]||(n[9]||[]).length||3,rp=sq.map(x=>x[0]).join('+');n=[...n];n[3]='drop';n[8]=sets;n[9]=[...Array(sets)].map(()=>rp);n[2]=`${sets} × ${rp}`;n[12]={tri:true,lab:sq.map(x=>x[1])}}
+    if(n!==e)ch=true;return n});
   return ch?{...w,x}:w}
 function setLibrary(lib){if(!lib||!Array.isArray(lib.workouts)||!Array.isArray(lib.programs))return false;
   LIB.programs.length=0;LIB.programs.push(...lib.programs);Object.keys(PROG).forEach(k=>delete PROG[k]);lib.programs.forEach(p=>PROG[p.k]=p);
@@ -1698,8 +1705,9 @@ function genWorkout(focus){
   return {i:'gen-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),p:'GEN',t:focus,g:groups,x:best.x,theme,focus};
 }
 function lighten(w){if(!w)return w;const id=w.i+'-latt';if(WBYID[id])return WBYID[id];
-  const x=w.x.map(e=>{const n=[...e];const sets=Math.max(2,(e[8]||3)-1);n[8]=sets;n[9]=(e[9]||[]).slice(0,sets).map(r=>String(r).split('+')[0]);
-    if(e[3]==='drop'||e[3]==='pyramid'){n[3]='straight';n[2]=`${sets} × ${n[9][n[9].length-1]||n[9][0]||''}`}else n[2]=String(e[2]).replace(/^\d+ ×/,sets+' ×');n[6]=((e[6]?e[6]+' ':'')+'Lättare dag: ca 10 % lägre vikt.').trim();return n});
+  const x=w.x.map(e=>{const n=[...e];const sets=Math.max(2,(e[8]||3)-1),tri=!!(e[12]&&e[12].tri);n[8]=sets;n[9]=(e[9]||[]).slice(0,sets).map(r=>tri?String(r):String(r).split('+')[0]);
+    if(tri)n[2]=`${sets} × ${n[9][0]||''}`;
+    else if(e[3]==='drop'||e[3]==='pyramid'){n[3]='straight';n[2]=`${sets} × ${n[9][n[9].length-1]||n[9][0]||''}`}else n[2]=String(e[2]).replace(/^\d+ ×/,sets+' ×');n[6]=((e[6]?e[6]+' ':'')+'Lättare dag: ca 10 % lägre vikt.').trim();return n});
   const l={...w,i:id,t:(w.t||'Pass')+' (lättare)',x};WBYID[id]=l;return l}
 function regW(w){if(w&&w.i)WBYID[w.i]=w}
 /* Kommande genererade pass byggs i förväg när man tittar framåt och sparas, så att samma pass väntar när dagen kommer. */
@@ -3345,6 +3353,7 @@ function exerciseHTML(e,i,mode,noTempo){
    <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest&&mode!=='run'?` · vila ${esc(rest)}`:''}</div>
    ${mode==='run'?restEditHTML(e,i):''}
    ${tempo&&!noTempo?`<div class="tempobox"><span class="tempotag num">Tempo ${esc(tempo)}</span>${tt?`<span class="tempotxt">${esc(tt)}</span>`:''}</div>`:''}
+   ${e[12]&&e[12].tri&&Array.isArray(e[12].lab)?`<div class="small" style="margin-top:6px"><strong>Dropset i varje set:</strong> ${String(reps?.[0]||'').split('+').map((r,k)=>`${esc(r)} reps${e[12].lab[k]?' ('+esc(e[12].lab[k])+')':''}`).join(' → ')}. Byt vikt och grepp mellan dropsen utan vila.</div>`:''}
    ${notes?`<div class="note" style="margin-top:6px">${esc(notes)}</div>`:''}
    ${(()=>{const h=String(name).split(' / ').map(x=>[x,howTo(x)]).filter(x=>x[1]);return h.length?`<details class="howto"><summary>Så gör du</summary>${h.map(([x,t])=>`<p class="small" style="margin:4px 0 0">${h.length>1?`<strong>${esc(x)}:</strong> `:''}${esc(t)}</p>`).join('')}</details>`:''})()}
    ${prevTxt&&mode==='run'?`<div class="small muted" style="margin-top:4px">Förra gången: ${esc(prevTxt)}</div>`:''}
@@ -3864,7 +3873,7 @@ function bind(root){
   root.querySelectorAll('[data-dayoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.dayoff;dayOff=v===0?0:Math.max(-14,Math.min(13,dayOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-takeahead]').forEach(b=>b.onclick=()=>{const off=+b.dataset.takeahead,dt=addDays(new Date(),off),k=dkey(dt);const t0=plannedFor(new Date()),t1=plannedFor(dt);
     swap=null;S.days[k]=S.days[k]||{steps:0,walk:false,mob:false};setDay(k,{plan:t0});setDay(today(),{plan:t1});dayOff=0;render();try{window.scrollTo(0,0)}catch(e){}toast('Klart – dagarna har bytt plats')});
-  root.querySelectorAll('[data-low]').forEach(b=>b.onclick=()=>{const d=day();setDay(today(),{low:!d.low});toast(!d.low?'Normal dag':'Lättare pass idag: ett set mindre, ingen dropset/pyramid')});
+  root.querySelectorAll('[data-low]').forEach(b=>b.onclick=()=>{const d=day();setDay(today(),{low:!d.low});toast(!d.low?'Normal dag':'Lättare pass idag: ett set mindre, ca 10 % lägre vikt och enklare upplägg')});
   root.querySelectorAll('[data-restore]').forEach(b=>b.onclick=restoreToday);
   root.querySelectorAll("[data-swappass]").forEach(b=>b.onclick=showSwap);
   root.querySelectorAll('[data-swback]').forEach(b=>b.onclick=swapBack);
