@@ -284,7 +284,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='9ddc3cd7be';
+const BUILD='public', VERSION='ab26cb43df';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -435,7 +435,15 @@ function toast(msg){const t=$('#toast');t.textContent=msg;toastPos();
   t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),Math.max(2200,Math.min(5000,String(msg).length*60)))}
 /* Tempo bara när raden har tempo angivet. Gissat tempo (e[7]) räknas inte som angivet och visas inte. */
 function exTempo(e){return e&&e[4]&&!e[7]?String(e[4]).trim():''}
-function exSub(e){const t=exTempo(e);return [e[2]?String(e[2]):'',t?'tempo '+t:''].filter(Boolean).join(' · ')}
+/* Rubrik för set och reps, byggd från e[8]/e[9] (inte från programmets text i e[2]) så att den alltid stämmer med raderna.
+   Alla set lika → "4 × 30", olika → "8 · 8 · 6 · 6 · 4", drops "6+12" → "6→12", intervall "8-10" → "8–10". */
+function repsLabel(e){const R=Array.isArray(e&&e[9])?e[9].map(r=>String(r??'').trim()):[];
+  if(!R.length)return String(e&&e[2]||'').split(';')[0].trim();
+  const n=+e[8]||R.length,L=R.slice(0,n).map(r=>r.replace(/\s*\+\s*/g,'→').replace(/(\d)\s*-\s*(\d)/g,'$1–$2'));
+  return L.every(r=>r===L[0])?`${n} × ${L[0]}`:L.join(' · ')}
+/* Det som står i e[2] efter ';' (t.ex. "Rest-pause on last set") är inte set/reps och visas som en egen rad. */
+function repsExtra(e){const t=String(e&&e[2]||'');const i=t.indexOf(';');return i<0?'':t.slice(i+1).split(';').map(x=>x.trim()).filter(Boolean).join(' · ')}
+function exSub(e){const t=exTempo(e);return [repsLabel(e),t?'tempo '+t:''].filter(Boolean).join(' · ')}
 function tempoText(t){
   if(!t) return '';
   const p=String(t).split('/')[0].trim().split(':');
@@ -1710,10 +1718,11 @@ function genWorkout(focus){
   return {i:'gen-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),p:'GEN',t:focus,g:groups,x:best.x,theme,focus};
 }
 function lighten(w){if(!w)return w;const id=w.i+'-latt';if(WBYID[id])return WBYID[id];
-  /* Lätt dag: ett set mindre. Dropset med reps som "10+20+30" behålls som dropset; pyramider och övriga blir raka set. */
-  const x=w.x.map(e=>{const n=[...e];const sets=Math.max(2,(e[8]||3)-1),keepDrop=e[3]==='drop'&&(e[9]||[]).slice(0,sets).some(r=>String(r).includes('+'));n[8]=sets;n[9]=(e[9]||[]).slice(0,sets).map(r=>keepDrop?String(r):String(r).split('+')[0]);
-    if(keepDrop)n[2]=/^\d+ ×/.test(String(e[2]))?String(e[2]).replace(/^\d+ ×/,sets+' ×'):`${sets} × ${n[9].every(r=>r===n[9][0])?n[9][0]:n[9].join(', ')}`;
-    else if(e[3]==='drop'||e[3]==='pyramid'){n[3]='straight';n[2]=`${sets} × ${n[9][n[9].length-1]||n[9][0]||''}`}else n[2]=String(e[2]).replace(/^\d+ ×/,sets+' ×');n[6]=((e[6]?e[6]+' ':'')+'Lättare dag: ca 10 % lägre vikt.').trim();return n});
+  /* Sista setet tas bort (i en pyramid det tyngsta). Pyramider behåller reps per set. Dropset där varje set är drops (10+20+30)
+     behålls; övriga dropset behåller första delen i varje set. Rubriken byggs av repsLabel, e[2] skrivs inte om. */
+  const x=w.x.map(e=>{const n=[...e];const R=(e[9]||[]).map(String),sets=Math.max(2,(e[8]||R.length||3)-1),cut=R.slice(0,sets);
+    const allDrop=e[3]==='drop'&&cut.length>0&&cut.every(r=>r.includes('+'));n[8]=sets;n[9]=cut.map(r=>allDrop?r:r.split('+')[0]);
+    if(e[3]==='drop'&&!allDrop)n[3]='straight';n[6]=((e[6]?e[6]+' ':'')+'Lättare dag: ca 10 % lägre vikt.').trim();return n});
   const l={...w,i:id,t:(w.t||'Pass')+' (lättare)',x};WBYID[id]=l;return l}
 function regW(w){if(w&&w.i)WBYID[w.i]=w}
 /* Kommande genererade pass byggs i förväg när man tittar framåt och sparas, så att samma pass väntar när dagen kommer. */
@@ -3356,7 +3365,7 @@ function exerciseHTML(e,i,mode,noTempo){
   return `<div class="ex"><div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:12px">${ak.length?`<div class="animcol">${ak.map(k=>animSVG(k,mode==='run'?76:92)).join('')}</div>`:''}<div class="grow"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div><div class="name">${i+1}. ${esc(name)}</div>${variation?`<div class="small muted">${esc(variation)}</div>`:''}</div>
      ${scheme&&scheme!=='straight'?`<span class="pill line">${esc(SCHEME_SV[scheme]||scheme)}</span>`:''}</div>
    ${isSup&&mode==='run'?`<div class="small muted">${PN.map((pn,k)=>`${LET[k]}: ${esc(pn)}`).join(' · ')}</div>`:''}
-   <div class="num" style="margin-top:4px"><strong>${esc(repsText)}</strong>${rest&&mode!=='run'?` · vila ${esc(rest)}`:''}</div>
+   <div class="num" style="margin-top:4px"><strong>${esc(repsLabel(e))}</strong>${rest&&mode!=='run'?` · vila ${esc(rest)}`:''}</div>${repsExtra(e)?`<div class="small muted">${esc(repsExtra(e))}</div>`:''}
    ${mode==='run'?restEditHTML(e,i):''}
    ${tempo&&!noTempo?`<div class="tempobox"><span class="tempotag num">Tempo ${esc(tempo)}</span>${tt?`<span class="tempotxt">${esc(tt)}</span>`:''}</div>`:''}
    ${(()=>{const dl=dropLabels(e);return dl?`<div class="small" style="margin-top:6px"><strong>Dropset i varje set:</strong> ${dl.reps.map((r,k)=>`${r} reps${dl.lab[k]?' ('+esc(dl.lab[k])+')':''}`).join(' → ')}. Byt vikt och grepp mellan dropsen utan vila.</div>`:''})()}
