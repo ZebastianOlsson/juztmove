@@ -28,7 +28,7 @@
   --good:#2F7A55; --warn:#B45309;
   --display:"Manrope","Helvetica Neue",Arial,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --r:14px; color-scheme:light;
+  --r:20px; color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -49,29 +49,35 @@ html,body{height:100%;margin:0;width:100%;max-width:100%;overflow-x:hidden;-webk
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
 h1,h2,h3{font-family:var(--display);font-weight:800;letter-spacing:-.02em;text-wrap:balance;margin:0}
-h1{font-size:28px;line-height:1.05}
+h1{font-size:34px;line-height:1.05;letter-spacing:-.03em}
 h2{font-size:20px}
 h3{font-size:18px}
 .app{width:100%;max-width:640px;margin:0 auto;overflow-x:hidden;padding:calc(16px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))}
-.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:16px}
-.top .date{color:var(--muted);font-size:13px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:16px;padding-top:8px}
+.top .date{color:var(--muted);font-size:14px}
 .top>div{min-width:0}.top>.btn{flex:none}
 .top h1{overflow-wrap:anywhere}
 .cap::first-letter{text-transform:uppercase}
-.stack{display:flex;flex-direction:column;gap:12px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
-.card.hero{border-left:5px solid var(--spot)}
-.card.hero.run{border-left-color:var(--run)}
-.card.hero.mob{border-left-color:var(--mob)}
-.card.hero.move{border-left-color:var(--spot)}
+.stack{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+/* Dagens pass: ett mörkt kort med mörka lägets färger, så att allt inuti (knappar, noter, tabeller) följer med. */
+.card.pass{--bg:#26241E;--surface:#1D1B16;--ink:#F7F6F1;--muted:#CFCABD;--line:#3A372F;--accent:#F2C14E;--accent-ink:#241A00;--accent-soft:#3A3016;--spot:#F2C14E;
+  --run:#EE8F64;--run-soft:#3A2419;--mob:#A3A6EE;--mob-soft:#26284A;--good:#6FCB9B;--c-s:#7DBFA4;--c-r:#EE8F64;--c-m:#A3A6EE;
+  background:var(--surface);color:var(--ink);border-color:#1D1B16;color-scheme:dark}
+.card.pass .btn.run,.card.pass .btn.mob{background:var(--accent);color:var(--accent-ink)}
+.card.pass .btn.big{min-height:52px;font-size:16px;flex:1}
+.card.pass .pill{background:var(--accent-soft);color:var(--ink)}
+.kind{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.kind::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--c-o)}
+.kind.s::before{background:var(--c-s)}.kind.r::before{background:var(--run)}.kind.m::before,.kind.v::before{background:var(--mob)}
 .mdots{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:60%}
-.mdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line)}
-.mdot.on{background:var(--accent);border-color:var(--accent)}
-.mdot.on.bonus{background:var(--run);border-color:var(--run)}
-.movebox{background:var(--bg);border-radius:12px;padding:12px}
+.mdot{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
+.mdot.on{background:var(--spot);border-color:var(--spot)}
+.mdot.on.bonus{background:var(--h4);border-color:var(--h4)}
+.movebox{background:var(--bg);border-radius:14px;padding:12px}
 .nudge{background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-weight:500}
 .chips.wrap{flex-wrap:wrap}
-.setsec{padding:0;border-left:4px solid var(--line)}.setsec.sec-s{border-left-color:var(--c-s)}.setsec.sec-r{border-left-color:var(--c-r)}.setsec.sec-m{border-left-color:var(--c-m)}.setsec.sec-v{border-left-color:var(--ink)}
+.setsec{padding:0;--sc:var(--c-o)}.setsec.sec-s{--sc:var(--c-s)}.setsec.sec-r{--sc:var(--c-r)}.setsec.sec-m{--sc:var(--c-m)}.setsec.sec-v{--sc:var(--spot)}
+.setsec>summary::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:var(--sc)}
 .setsec>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;color:var(--ink)}.setsec>summary .grow{flex:1;min-width:0}.setsec .sectitle{color:var(--ink)}.setsec>summary::-webkit-details-marker{display:none}
 .setsec>summary::after{content:'▾';color:var(--muted);font-size:18px}.setsec[open]>summary::after{content:'▴'}
 .sectitle{font-family:var(--display);font-size:18px;letter-spacing:.02em}
@@ -85,9 +91,9 @@ h3{font-size:18px}
 .week.mini{gap:4px}.week.mini .day{min-height:0;padding:6px 2px;cursor:default}.week.mini .dn{font-size:12px}.week.mini .tag{font-size:10px}
 .peek .li{padding:8px 0}.noanim.sm{width:44px;height:41px}
 .exacts{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 12px}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
-.seg-b{font:inherit;font-size:14px;font-weight:600;border:0;border-radius:9px;padding:9px 4px;background:none;color:var(--muted);cursor:pointer}
-.seg-b[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--line);border-radius:14px;padding:4px}
+.seg-b{font:inherit;font-size:14px;font-weight:600;border:0;border-radius:10px;padding:9px 4px;min-height:40px;background:none;color:var(--muted);cursor:pointer}
+.seg-b[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(29,27,22,.08)}
 details.wk{border-top:1px solid var(--line);padding-top:6px}details.wk>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;padding:6px 0}
 details.wk>summary::-webkit-details-marker{display:none}details.wk>summary::after{content:'▾';color:var(--muted);margin-left:8px}details.wk[open]>summary::after{content:'▴'}
 details.wk>summary strong{flex:1}details.wk .list .li:first-child{border-top:0}
@@ -100,7 +106,7 @@ details.wk>summary strong{flex:1}details.wk .list .li:first-child{border-top:0}
 .flab{margin-bottom:4px}.selsm{width:auto;max-width:60%;font-size:16px;padding:6px 8px}
 h1.h1sm{font-size:24px;line-height:1.1}
 .exrow{align-items:center}.noanim{flex:none;width:56px;height:52px;border-radius:10px;background:var(--line);opacity:.4}
-.checkin{border-left:4px solid var(--mob)}.linkbtn{background:none;border:0;padding:0;text-align:left;text-decoration:underline;cursor:pointer;font:inherit}
+.checkin{}.linkbtn{background:none;border:0;padding:0;text-align:left;text-decoration:underline;cursor:pointer;font:inherit}
 .ci-opt{justify-content:flex-start;text-align:left;width:100%}.ci-opt[aria-pressed="true"]{border-color:var(--ink);background:var(--accent-soft)}
 .ci-part{flex-wrap:wrap;gap:6px}
 :root{--c-s:#3B6E5A;--c-r:#C2552D;--c-m:#5E62B0;--c-o:#8C887D;--h0:#EEECE4;--h1:#F7E3A6;--h2:#EFC75E;--h3:#D9A21E;--h4:#9A6C08}
@@ -109,10 +115,10 @@ h1.h1sm{font-size:24px;line-height:1.1}
 h4{margin:6px 0 0;font-size:14px;font-weight:700}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:10px}
 .tiles .k{font-family:var(--display);font-size:24px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05}
-.prog-hero{background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%)}
+.prog-hero{}
 .ins{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cmp .k2{font-family:var(--display);font-size:20px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums}
-.dl{font-size:12px;color:var(--muted);font-weight:600}.dl.up{color:var(--accent)}.dl.down{color:var(--run)}
+.dl{font-size:12px;color:var(--muted);font-weight:600}.dl.up{color:var(--accent)}.dl.down{color:var(--muted)}
 .legend{display:flex;gap:12px;flex-wrap:wrap}.legend i,.hmleg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .hmleg{white-space:nowrap}.hmleg i{margin:0 1px}
 .hbars{display:flex;flex-direction:column;gap:6px}.hb{display:grid;grid-template-columns:56px 1fr 52px;align-items:center;gap:8px;font-size:13px}
@@ -147,7 +153,7 @@ details.card>summary{cursor:pointer;list-style:none}
 .prealert{background:var(--run);color:#fff;border-radius:10px;padding:10px;font-weight:600;font-size:18px}
 .nextbox{font-size:15px;color:var(--muted)}.nextbox strong{color:var(--ink)}
 input[type=email],input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;font-size:16px}
-.backupcard{border-left:5px solid var(--warn)}
+.backupcard{background:var(--accent-soft);border-color:var(--accent-soft)}
 .sticky .confirm{flex:1;display:flex;flex-direction:column;gap:8px}.sticky .confirm .cmsg{font-weight:600}.sticky .confirm .row{flex-wrap:nowrap}.sticky .confirm .btn{flex:1}
 #syncStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .restore{align-self:flex-start;border-color:var(--accent);color:var(--accent);font-weight:600}
@@ -180,13 +186,13 @@ button.day{font:inherit;color:inherit;cursor:pointer}
 .muted{color:var(--muted)}
 .small{font-size:13px}
 .num{font-variant-numeric:tabular-nums}
-.eyebrow{font-family:var(--display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.eyebrow{font-size:13px;color:var(--muted);font-weight:500}
 .pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--ink);white-space:nowrap}
 .pill.run{background:var(--run-soft)} .pill.mob{background:var(--mob-soft)} .pill.line{background:transparent;border:1px solid var(--line)}
-.btn{border:0;border-radius:10px;padding:11px 16px;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer;min-height:44px}
+.btn{border:0;border-radius:14px;padding:11px 18px;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer;min-height:44px}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
 .btn.run{background:var(--run);color:#fff} .btn.mob{background:var(--mob);color:#fff}
-.btn.sm{padding:6px 12px;min-height:34px;font-size:14px}
+.btn.sm{padding:6px 14px;min-height:36px;font-size:14px;border-radius:12px}
 .btn:focus-visible,.chip:focus-visible,.tab:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:14px;white-space:nowrap;cursor:pointer}
@@ -202,7 +208,7 @@ input[type=number],input[type=text],input[type=search],input[type=date],select,t
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .day{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:var(--surface);min-height:84px;display:flex;flex-direction:column;gap:4px;align-items:center}
 .day.today{outline:2px solid var(--ink)}
-.day .dn{font-family:var(--display);font-size:13px;font-weight:700;text-transform:uppercase}
+.day .dn{font-family:var(--display);font-size:13px;font-weight:700}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--line)}
 .dot.s{background:var(--c-s)} .dot.r{background:var(--run)} .dot.m{background:var(--mob)} .dot.o{background:var(--c-o)}
 .day .tag{font-size:11px;line-height:1.1}
@@ -224,12 +230,13 @@ input[type=number],input[type=text],input[type=search],input[type=date],select,t
 .sets .dar{text-align:center;color:var(--muted);font-size:16px}
 .sets .ok{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:transparent;cursor:pointer}
 .sets .ok[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
-.tabs .in{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:640px}
-.tab{background:none;border:0;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--muted);cursor:pointer}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:640px;padding:0 6px}
+.tab{background:none;border:0;padding:6px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;min-height:56px}
+.tab::before{content:'';width:5px;height:5px;border-radius:50%;background:transparent}
 .tab svg{width:24px;height:24px}
 .tab[aria-current="page"]{color:var(--ink);font-weight:600}
-.tab[aria-current="page"] svg{color:var(--accent)}
+.tab[aria-current="page"]::before{background:var(--spot)}
 .sheet{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;max-width:100vw;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;z-index:10;display:none}
 .sheet.open{display:block}
 .sheet .app{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
@@ -264,6 +271,56 @@ input[type=number],input[type=text],input[type=search],input[type=date],select,t
 details summary{cursor:pointer;color:var(--muted);font-size:13px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Ny layout: veckoremsa, dagens golv, veckolista, Jag */
+:root[data-theme="dark"] .card.pass{--surface:#2A2822;--line:#45413A;border-color:#3A372F}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .card.pass{--surface:#2A2822;--line:#45413A;border-color:#3A372F}}
+.strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.sd{font:inherit;min-height:64px;border-radius:14px;border:1px solid transparent;background:transparent;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:6px 0;cursor:pointer}
+.sd .w{font-size:11px;font-weight:600;color:var(--muted)}
+.sd .n{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.sd .p{width:6px;height:6px;border-radius:50%;margin-top:2px;background:transparent}
+.sd .p.ok{background:var(--spot)}.sd .p.s{background:var(--c-s)}.sd .p.r{background:var(--run)}.sd .p.m{background:var(--mob)}
+.sd.past .n{color:var(--muted)}
+.sd.today{border-color:var(--ink)}
+.sd[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}.sd[aria-pressed="true"] .w,.sd[aria-pressed="true"] .n{color:var(--bg)}
+.sd:disabled{opacity:.35;cursor:default}
+.wkpill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;white-space:nowrap}
+.wkpill::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--spot)}
+.wkpill strong{font-family:var(--display);font-weight:800}
+.floorhead{display:flex;align-items:center;gap:16px;padding-bottom:12px}
+.floorhead .ring{width:84px;height:84px;flex:none}
+.floorhead h2{font-size:22px}
+.fl{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.fl .grow{flex:1;min-width:0}
+.fl .box{width:30px;height:30px;border-radius:9px;border:2px solid var(--line);display:grid;place-items:center;flex:none;cursor:pointer;background:transparent;color:var(--accent-ink);font-weight:700;padding:0}
+.fl .box[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
+.fl .box:disabled{cursor:default}
+.fl.done strong{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.sbar{display:flex;align-items:center;gap:8px;margin-top:6px}.sbar .t{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.sbar .t span{display:block;height:100%;background:var(--spot);border-radius:3px}
+.fl .btn.sm{min-height:44px}
+.stepsmore{padding-top:4px}.stepsmore>summary{min-height:36px;display:flex;align-items:center}
+.addother{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border:1.5px dashed var(--line);border-radius:16px;background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;width:100%}
+.mvhead{display:flex;justify-content:space-between;align-items:center;gap:8px 10px;flex-wrap:wrap}.mvcount>span{white-space:nowrap}
+.mvhead h2{font-size:18px}
+.mvcount{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;justify-content:flex-end;min-width:0}.mvcount .mdots{max-width:none;flex-wrap:nowrap;gap:4px}
+.circ{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center;padding:0;cursor:pointer;font:inherit;font-size:20px;line-height:1}
+.circ:disabled{opacity:.35;cursor:default}
+.goal{display:flex;align-items:baseline;gap:8px}.goal .big{font-family:var(--display);font-weight:800;font-size:48px;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.wbars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wbars>div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.wbars .b{width:100%;max-width:30px;height:56px;border-radius:8px;background:var(--line);position:relative;overflow:hidden}
+.wbars .b span{position:absolute;left:0;right:0;bottom:0;background:var(--h1)}.wbars .b.ok span{background:var(--spot)}
+.wbars .cur{color:var(--ink);font-weight:700}
+.wrow{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:10px 12px;border-radius:16px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.wrow.today{border:2px solid var(--ink)}
+.wrow .dd{width:44px;flex:none;text-align:center}.wrow .dd .w{font-size:12px;color:var(--muted)}.wrow .dd .n{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.02em;line-height:1.1}
+.wrow .grow{flex:1;min-width:0}
+.tagok{flex:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink)}
+.tagnow{flex:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--ink);color:var(--bg)}
+.wlist{display:flex;flex-direction:column;gap:6px}
+.avatar{width:56px;height:56px;flex:none;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:22px;position:relative}
+.avatar::after{content:'';position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--spot);border:2px solid var(--bg)}
+.top.me{justify-content:flex-start;align-items:center;gap:14px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -273,10 +330,11 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="app" id="sheetBody"></div></div>
 <div class="timer" id="restTimer" role="timer" aria-live="off"><span>Vila</span><strong id="restLeft">0:45</strong><button id="restSub" type="button" aria-label="15 sekunder kortare">−15 s</button><button id="restAdd" type="button" aria-label="15 sekunder längre">+15 s</button><button id="restStop" type="button">Klar</button></div>
 <nav class="tabs" aria-label="Huvudmeny"><div class="in">
-  <button class="tab" data-tab="idag" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Idag</button>
-  <button class="tab" data-tab="vecka" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Vecka</button>
-  <button class="tab" data-tab="bibliotek" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>Pass</button>
-  <button class="tab" data-tab="framsteg" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Framsteg</button>
+  <button class="tab" data-tab="idag" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Idag</button>
+  <button class="tab" data-tab="vecka" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v15H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg>Vecka</button>
+  <button class="tab" data-tab="bibliotek" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg>Pass</button>
+  <button class="tab" data-tab="framsteg" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5"/></svg>Framsteg</button>
+  <button class="tab" data-tab="jag" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c1.2-3.6 4.2-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/></svg>Jag</button>
 </div></nav>
 
 <script src="config.js"></script>
@@ -284,7 +342,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='ab26cb43df';
+const BUILD='public', VERSION='faefa56b1e';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -1823,7 +1881,7 @@ function renderOB(){
   if(step==='strength'&&a.strength===0){OB.i+=OB._dir||1;return renderOB()}
   if(!S.settings.onb){try{localStorage.setItem(OBK,JSON.stringify({i:OB.i,a:OB.a,at:Date.now()}))}catch(e){}}
   let body='';
-  if(step==='me') body=`<h1>Vem tränar?</h1><p class="muted">Gör att appen kan anpassa passen efter dig. Du kan ändra det när som helst under Inställningar.</p><div class="opts">
+  if(step==='me') body=`<h1>Vem tränar?</h1><p class="muted">Gör att appen kan anpassa passen efter dig. Du kan ändra det när som helst under Jag.</p><div class="opts">
     ${obOpt('sex','k','Tjej / kvinna','Mer fokus på rumpa och ben i styrkepassen, överkroppen tränas också. Val för mens, graviditet och bäckenbotten.')}${obOpt('sex','m','Kille / man')}${obOpt('sex','','Vill inte ange','Passen blir jämnt fördelade över hela kroppen')}</div>`;
   if(step==='goal') body=`<h1>Vad vill du främst?</h1><p class="muted">Appen bygger alltid på vardagsrörelse. Det här styr resten.</p><div class="opts">
     ${a.sex==='k'?obOpt('goal','rumpa','Rumpa och ben','Mest fokus på säte och ben – hela kroppen tränas'):''}${obOpt('goal','rorelse','Röra mig mer i vardagen','Steg, pauser och lite rörlighet')}${obOpt('goal','styrka','Bli starkare','Helkroppspass med tunga baslyft')}
@@ -1929,7 +1987,7 @@ function render(){
   const v=$('#view');
   try{
     autoAdvance();
-    v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress})[tab]();
+    v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress,jag:viewJag})[tab]();
     bind(v);
   }catch(e){
     v.innerHTML=`<section class="card stack"><h2>Sidan kunde inte visas</h2><p class="muted">Något gick fel när sidan ritades. Dina loggar är kvar. Skicka gärna texten nedan till Claude.</p><div class="note">${esc(tab+': '+(e&&e.message||e))}</div><button class="btn" type="button" data-gohome>Till Idag</button></section>`;
@@ -1954,6 +2012,32 @@ function workoutSummary(w0){
    <div class="small muted num">${pl(w.x.length,'övning','övningar')} · ca ${estMinutes(w)} min · ${esc(w.p==='GEN'?'Eget pass':PROG[w.p]?.n||w.p)}${w.s?' · Split '+w.s:''}${w.wk!=null?' · v'+w.wk+' d'+w.d:''}</div>`;
 }
 let dayOff=0;
+/* Dagens golv: promenad (eller stegmålet) och lite rörlighet ger en godkänd dag. Ett pass räknas också. */
+function dayFloor(k){const d=S.days[k]||{},L=logsOn(k),goal=S.settings.stepGoal;
+  const walk=!!d.walk,mob=!!d.mob||L.some(l=>l.type==='rörlighet'),steps=(+d.steps||0)>=goal;
+  return {walk,mob,steps,n:(walk?1:0)+(mob?1:0)+(steps?1:0),ok:(mob&&(walk||steps))||L.some(isPass)}}
+function weekOkCount(){const mon=monday(new Date()),tk=today();let n=0;for(let i=0;i<7;i++){const k=dkey(addDays(mon,i));if(k<=tk&&dayFloor(k).ok)n++}return n}
+function weekPill(){const n=weekOkCount();return `<span class="wkpill">Veckan <strong class="num">${n}</strong> ${n===1?'godkänd':'godkända'}</span>`}
+/* Veckoremsan överst på Idag: tryck på en dag för att se den eller logga i efterhand. */
+function weekStrip(){const tk=today(),sel=addDays(new Date(),dayOff),mon=monday(sel);
+  return `<nav class="strip" aria-label="Välj dag">${[...Array(7)].map((_,i)=>{const dt=addDays(mon,i),k=dkey(dt),off=daysBetween(tk,k);
+    const can=off>=-14&&off<=13,typ=off>0?plannedFor(dt):'',ok=off<=0&&dayFloor(k).ok;
+    const dot=ok?'ok':(off>0&&['s','r','m'].includes(typ)?typ:'');
+    const lab=dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'})+(off===0?', idag':'')+(ok?', godkänd':'');
+    return `<button type="button" class="sd ${off<0?'past':''} ${off===0?'today':''}" data-dayjump="${off}" aria-pressed="${off===dayOff}" aria-label="${esc(lab)}" ${can?'':'disabled'}><span class="w">${DAYS_SV[i].toLowerCase()}</span><span class="n">${dt.getDate()}</span><span class="p ${dot}"></span></button>`}).join('')}</nav>`}
+function floorRing(n){const r=34,c=2*Math.PI*r;
+  return `<svg class="ring" viewBox="0 0 84 84" role="img" aria-label="${n} av 3 klara"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--h0)" stroke-width="10"/>${n?`<circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--spot)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c*n/3).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>`:''}<text x="42" y="49" text-anchor="middle" font-family="Manrope,Helvetica Neue,Arial,sans-serif" font-weight="800" font-size="22" fill="var(--ink)">${n}/3</text></svg>`}
+function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(100,Math.round(st/goal*100));
+  const box=(on,attr,lab)=>`<button class="box" type="button" role="checkbox" aria-checked="${on}" ${attr} aria-label="${lab}">${on?'✓':''}</button>`;
+  return `<section class="card" aria-labelledby="h-golv">
+   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">${f.ok?'Dagen är godkänd. Allt annat är bonus.':'Promenad och lite rörlighet – då är dagen godkänd.'}</p></div></div>
+   <div class="fl ${d.walk?'done':''}">${box(!!d.walk,'data-toggle="walk"','Promenad klar')}<div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
+   <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighet</strong><div class="small muted">${esc(m.t)}, ${m.min} min</div></div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
+   <div class="fl ${f.steps?'done':''}">${box(f.steps,'disabled','Stegmål nått')}<div class="grow"><strong class="num">${goal.toLocaleString('sv-SE')} steg</strong><div class="sbar"><div class="t"><span style="width:${pct}%"></span></div><span class="small muted num">${st.toLocaleString('sv-SE')}</span></div></div><button class="btn ghost sm" type="button" data-addsteps="1000" aria-label="Lägg till 1 000 steg">+1 000</button></div>
+   <details class="stepsmore"><summary>Skriv in steg</summary>
+    <div class="row" style="gap:6px;margin-top:8px"><button class="btn ghost sm" type="button" data-addsteps="2500">+2 500</button><button class="btn ghost sm" type="button" data-addsteps="-1000">−1 000</button></div>
+    <div class="row" style="gap:6px;flex-wrap:nowrap;margin-top:8px"><input id="stepsIn" type="number" inputmode="numeric" min="0" max="100000" step="100" placeholder="Antal steg" aria-label="Antal steg idag"><button class="btn sm" type="button" data-setsteps>Spara</button></div></details>
+  </section>`}
 function dayNav(){const dt=addDays(new Date(),dayOff);const lab=dayOff===0?'Idag':dayOff===1?'Imorgon':dayOff===-1?'Igår':dt.toLocaleDateString('sv-SE',{weekday:'long'});
   return `<div class="daynav" role="group" aria-label="Byt dag"><button class="btn ghost sm" type="button" data-dayoff="-1" ${dayOff<=-14?'disabled':''} aria-label="Föregående dag">‹</button>
    <div class="dn2"><strong class="cap">${esc(lab)}</strong><span class="small muted">${esc(dt.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</span></div>
@@ -1977,8 +2061,8 @@ function aheadInfo(off){
 function viewPast(){
   const dt=addDays(new Date(),dayOff),k=dkey(dt),d=S.days[k]||{steps:0,walk:false,mob:false,moves:[]},L=logsOn(k),goal=S.settings.stepGoal;
   const st=S.settings,gen=st.mode==='gen'||!WORKOUTS.length,sw=gen?genCurrent():(st.mode==='program'&&DP_SEQ.length?programNext():suggestion());
-  return `<header class="top"><div><div class="date cap">${esc(fmtDate(dt))}</div><h1>Tillbaka</h1></div><button class="btn ghost sm" type="button" data-settings>Inställningar</button></header>
-  <div class="stack">${dayNav()}
+  return `<header class="top"><div><div class="date cap">${esc(fmtDate(dt))}</div><h1>Tillbaka</h1></div>${weekPill()}</header>
+  <div class="stack">${weekStrip()}
    <p class="small muted" style="margin:0">Här fyller du i det du glömde logga. Det sparas på ${esc(dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'}))}.</p>
    <section class="card stack"><div class="row between"><h3>Steg</h3><span class="small muted num">mål ${goal.toLocaleString('sv-SE')}</span></div>
     <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pastSteps" type="number" inputmode="numeric" min="0" max="100000" step="100" value="${+d.steps||''}" placeholder="Antal steg" aria-label="Antal steg"><button class="btn" type="button" data-paststeps="${k}">Spara</button></div>
@@ -2177,9 +2261,9 @@ function viewAhead(){
   else if(a.typ!==tType&&a.typ!=='v') act=`<button class="btn" type="button" data-takeahead="${dayOff}">Kör det här idag i stället</button><p class="small muted" style="margin:0">Dagarna byter plats: idag blir ${esc(lab.toLowerCase())}, och ${esc(({s:'styrkepasset',r:'löppasset',m:'rörlighetsdagen',v:'vilan'})[tType]||'dagens plan')} flyttas till ${esc(dayOff===1?'imorgon':a.date.toLocaleDateString('sv-SE',{weekday:'long'}))}.</p>`;
   else if(a.typ===tType&&a.typ==='s'&&a.w) act=`<button class="btn" type="button" data-start="${a.w.i}">Kör det här passet idag</button><p class="small muted" style="margin:0">Dagens tänkta pass ligger kvar och kommer nästa gång.</p>`;
   else if(a.typ===tType&&a.typ==='r'&&a.r) act=`<button class="btn run" type="button" data-runstart="${a.r.id}">Kör det här passet idag</button>`;
-  return `<header class="top"><div><div class="date cap">${esc(fmtDate(a.date))}</div><h1>Framåt</h1></div><button class="btn ghost sm" type="button" data-settings>Inställningar</button></header>
-   <div class="stack">${dayNav()}
-    <section class="card hero ${a.typ==='r'?'run':a.typ==='s'?'':'mob'} stack"><span class="eyebrow">${esc(lab)}</span>${body}${act}</section>
+  return `<header class="top"><div><div class="date cap">${esc(fmtDate(a.date))}</div><h1>Framåt</h1></div>${weekPill()}</header>
+   <div class="stack">${weekStrip()}
+    <section class="card hero ${a.typ==='r'?'run':a.typ==='s'?'':'mob'} stack"><span class="kind ${esc(a.typ)}">${esc(lab)}</span>${body}${act}</section>
     <button class="btn ghost" type="button" data-dayoff="0">Tillbaka till idag</button></div>`;
 }
 function viewToday(){
@@ -2196,31 +2280,31 @@ function viewToday(){
     const doneW=done.find(l=>l.type==='styrka');if(doneW)inHero.add(doneW);
     const w0=doneW&&wById(doneW.wid)?wById(doneW.wid):gen?genCurrent():suggestion();
     const w=!doneW&&d.low?lighten(w0):w0, aw=w?AW(w):w;
-    hero=`<section class="card hero stack" aria-labelledby="h-pass">${lowToggle()}
-      <div class="row between"><span class="eyebrow">Dagens styrkepass</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
+    hero=`<section class="card hero pass stack" aria-labelledby="h-pass">${lowToggle()}
+      <div class="row between"><span class="kind s">Dagens pass · styrka</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
       ${!w&&swapped(gen)?swapBackHTML(gen):''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${workoutSummary(w)}
       <div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
-      :`<div class="row">${active?resumeBtn():`<button class="btn" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost sm" type="button" data-open="${w.i}">Visa</button></div>`}`
+      :`<div class="row">${active?resumeBtn():`<button class="btn big" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt</button></div><div class="row between"><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa övningar</button></div>`}`
       :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
       ${did('styrka')?'':skipBox()}
     </section>`;
   } else if(plan==='r'){
     const list0=rankRuns(), list=d.low?['r-fartlek','r-lat','r-5d','r-lugn'].map(id=>RUNS.find(x=>x.id===id)).filter(r=>r&&list0.includes(r)).concat(list0.filter(r=>!['r-fartlek','r-lat','r-5d','r-lugn'].includes(r.id))):list0, doneRun=(()=>{const x=done.find(l=>l.type==='löpning');if(x)inHero.add(x);return x})(), r=(doneRun&&RUNS.find(x=>x.id===doneRun.rid))||list[runIdx%list.length], sp=speedHint(), prev=lastRun(r.id);
     const catTxt=r.track==='nyb'?`Steg ${RUNS_NYB.indexOf(r)+1} av ${RUNS_NYB.length}`:{1:'Intervaller',2:r.track==='5k'?'Lugnt/längre':'Kortare tempo',3:'Lättare vecka'}[r.cat];
-    hero=`<section class="card hero run stack" aria-labelledby="h-run">${lowToggle()}
-      <div class="row between"><span class="eyebrow">Dagens löppass</span>${did('löpning')?'<span class="pill run">Klart ✓</span>':''}</div>
+    hero=`<section class="card hero run pass stack" aria-labelledby="h-run">${lowToggle()}
+      <div class="row between"><span class="kind r">Dagens pass · löpning</span>${did('löpning')?'<span class="pill run">Klart ✓</span>':''}</div>
       <h2 id="h-run">${esc(r.t)}</h2>
       <div class="row"><span class="pill run">${r.where==='band'?'Löpband':r.where==='ute'?'Utomhus':'Ute eller band'}</span><span class="pill line">${catTxt}</span><span class="small muted num">ca ${r.min} min</span></div>
       <p style="margin:0">${esc(r.desc)}</p>
       ${(()=>{const ne=needEasy();return (ne.loadHigh?`<div class="note waitnote">Belastningen senaste veckan är ${Math.round(ne.ratio*100)} % av ditt snitt – över 130 %. Ta ett lättare pass idag.</div>`:'')+(ne.twoHard?'<div class="note waitnote">Två tunga pass i rad – dags för ett lätt pass.</div>':'')})()}
-      <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Inställningar.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
+      <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Jag.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
       ${doneRun?`<div class="donebox">✓ Klart för idag · ${[doneRun.min?String(doneRun.min).replace('.',',')+' min':'',doneRun.km?String(doneRun.km).replace('.',',')+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · ')}</div>`:''}
-      <details class="plan" ${doneRun?'':'open'}><summary>Så här kör du – minut för minut</summary>${runTable(r)}<p class="small muted" style="margin:8px 0 0">Byt fart på bandet direkt när en ny del börjar – timern säger till. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p></details>
+      <details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(r)}<p class="small muted" style="margin:8px 0 0">Byt fart på bandet direkt när en ny del börjar – timern säger till. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p></details>
       ${''&&r.where==='band'&&(S.settings.runLevel||'10k')==='10k'?`<div class="note num">Jogg ca <strong>${sp.jog.toFixed(1).replace('.',',')} km/h</strong> · hårda bitar ca <strong>${sp.hard.toFixed(1).replace('.',',')} km/h</strong>${sp.from?' (från ditt senaste pass)':' (justera efter känsla)'}${prev?` · förra gången detta pass: ${prev.rpe?prev.rpe+'/10':esc(prev.feel||'')}`:''}</div>`:''}
       ${doneRun?`<div class="row"><button class="btn ghost sm" type="button" data-editrun="${doneRun.ts}">${CLAUDE_SAMPLE?'📷 ':''}Komplettera passet</button></div>`
-      :`<div class="row"><button class="btn run" type="button" data-runstart="${r.id}">Starta passet</button><button class="btn ghost" type="button" data-nextrun>Annat förslag</button>
+      :`<div class="row"><button class="btn run big" type="button" data-runstart="${r.id}">Starta passet</button><button class="btn ghost" type="button" data-nextrun>Annat förslag</button>
       <button class="btn ghost sm" type="button" data-runlog="${r.id}">Bara logga</button></div>`}
       ${!doneRun&&runIdx%list.length!==0?RESTORE_BTN:''}
       <details><summary>Fler alternativ</summary><div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-runwhere>${r.where==='band'?'Mild dag – kör ute':'Kör på band'}</button><button class="btn ghost sm" type="button" data-dayplan="s">Styrka i stället</button></div>
@@ -2229,16 +2313,16 @@ function viewToday(){
     </section>`;
   } else if(plan==='v'){
     const m=mobFor(new Date());
-    hero=`<section class="card hero mob stack" aria-labelledby="h-rest">
-      <span class="eyebrow">Vilodag</span><h2 id="h-rest">${d.did==='skip'?'Du hoppade över idag':'Vila idag – helt okej'}</h2>
+    hero=`<section class="card hero mob pass stack" aria-labelledby="h-rest">
+      <span class="kind v">Vilodag</span><h2 id="h-rest">${d.did==='skip'?'Du hoppade över idag':'Vila idag – helt okej'}</h2>
       <p style="margin:0">${d.did==='skip'?`Helt okej. Imorgon: ${esc(passLabel(1))}.`:`Passet (${({s:'styrka',r:'löpning',m:'rörlighet'})[seqType(0)]}) väntar till imorgon – ingenting hoppas över.`}</p>
       <p class="small muted" style="margin:0">Rörelsepauser och steg räknas fortfarande – lite rörelse hjälper återhämtningen.</p>
       <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">${esc(m.t)} (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
     </section>`;
   } else {
     const m=mobFor(new Date());
-    hero=`<section class="card hero mob stack" aria-labelledby="h-mob">
-      <span class="eyebrow">Återhämtning</span>
+    hero=`<section class="card hero mob pass stack" aria-labelledby="h-mob">
+      <span class="kind m">Återhämtning</span>
       <h2 id="h-mob">Rörlighet och en lång promenad</h2>
       <p style="margin:0" class="muted">Vilodag från tung träning. Rör dig ändå: promenad, lite yoga eller stretch.</p>
       <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta ${esc(m.t)} (${m.min} min)</button>
@@ -2251,32 +2335,20 @@ function viewToday(){
   }
   const mobToday=mobFor(new Date());
   return `<header class="top"><div><div class="date cap">${esc(fmtDate(new Date()))}</div><h1>Idag</h1></div>
-     <button class="btn ghost sm" type="button" data-settings>Inställningar</button></header>
+     ${weekPill()}</header>
    <div class="stack">
-   ${dayNav()}
+   ${weekStrip()}
    ${wait&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
    ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
    ${backupDue()?backupCard():''}
-   ${movesCard()}
-   <section class="card" aria-labelledby="h-steg">
-     <div class="steps">${ring(d.steps,goal)}
-       <div class="stack" style="gap:8px">
-         <h3 id="h-steg">Steg idag</h3>
-         <div class="row" style="gap:6px"><button class="btn ghost sm" type="button" data-addsteps="1000">+1 000</button><button class="btn ghost sm" type="button" data-addsteps="2500">+2 500</button><button class="btn ghost sm" type="button" data-addsteps="-1000">−1 000</button></div>
-         <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="stepsIn" type="number" inputmode="numeric" min="0" max="100000" step="100" placeholder="Antal steg" aria-label="Antal steg idag"><button class="btn sm" type="button" data-setsteps>Spara</button></div>
-       </div></div>
-   </section>
+   ${floorCard(k,d,goal,mobToday)}
    ${!done.some(isPass)?ciCard():''}
    ${active&&!(plan==='s'&&!did('styrka'))?`<section class="card stack"><span class="eyebrow">Pågående pass</span><strong>${esc(wTitle(active.w||WBYID[active.wid]))}</strong><div class="row">${resumeBtn()}</div></section>`:''}
    ${hero}
    ${done.some(isPass)?ciCard():''}
-   <section class="card" aria-labelledby="h-vardag"><h3 id="h-vardag" style="margin-bottom:4px">Vardagsrörelse</h3>
-     <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.walk}" data-toggle="walk" aria-label="Promenad klar">${d.walk?'✓':''}</button><div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
-     <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.mob}" data-toggle="mob" aria-label="Rörlighet klar">${d.mob?'✓':''}</button><div class="grow"><strong>Rörlighet</strong><div class="small muted">${esc(mobToday.t)}, ${mobToday.min} min</div></div><button class="btn ghost sm" type="button" data-mob="${mobToday.id}">Starta</button></div>
-     <div class="check"><button class="box" type="button" role="checkbox" aria-checked="${d.steps>=goal}" disabled aria-label="Stegmål nått">${d.steps>=goal?'✓':''}</button><div class="grow"><strong>${goal.toLocaleString('sv-SE')} steg</strong><div class="small muted num">${Math.max(0,goal-d.steps).toLocaleString('sv-SE')} kvar</div></div></div>
-     <div style="padding-top:8px"><button class="btn ghost sm" type="button" data-otherlog="${k}">+ Annan träning</button></div>
-   </section>
+   ${movesCard()}
    ${done.filter(l=>!inHero.has(l)).length?`<section class="card"><h3>${inHero.size?'Mer loggat idag':'Loggat idag'}</h3><div class="list">${done.filter(l=>!inHero.has(l)).map(logRow).join('')}</div></section>`:''}
+   <button class="addother" type="button" data-otherlog="${k}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Logga annan träning</button>
    <p class="small muted" id="syncStatus" role="status">${syncHTML()}</p>
    </div>`;
 }
@@ -2290,13 +2362,12 @@ function movesCard(){
   }
   const dots=[...Array(Math.max(g,m.length))].map((_,i)=>`<span class="mdot ${i<m.length?'on':''} ${i>=g?'bonus':''}"></span>`).join('');
   const st=streak();
-  return `<section class="card hero move stack" aria-labelledby="h-move">
-    <div class="row between"><span class="eyebrow">Rörelsepauser · <button class="linkbtn" type="button" data-whyall>varför?</button></span><span class="small num">${st>1?`Svit: <strong>${st} dagar</strong>`:''}</span></div>
+  return `<section class="card stack" aria-labelledby="h-move">
+    <div class="mvhead"><h2 id="h-move">Rörelsepauser</h2><div class="mvcount"><div class="mdots" aria-hidden="true">${dots}</div><span class="small muted num">${m.length} av ${g}</span></div></div>
     ${nudge?`<div class="nudge" role="status">${esc(nudge)}</div>`:''}
-    <div class="row between" style="flex-wrap:nowrap"><h2 id="h-move" class="num">${m.length} av ${g}</h2><div class="mdots" aria-hidden="true">${dots}</div></div>
     <div class="movebox"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">${animSVG(exAnimKey(nm.t),88)}<div class="grow"><div class="small muted">Förslag just nu</div><strong>${esc(nm.t)}</strong><div class="small muted">${esc(nm.h)}</div></div></div>
       <details class="why"><summary>Varför?</summary><p>${esc(nm.w||'')}</p><button class="linkbtn" type="button" data-whyall>Läs mer om varför vardagsrörelse lönar sig</button></details>
-      <div class="row" style="margin-top:8px"><button class="btn" type="button" data-movedo="${nm.id}">Gör nu</button><button class="btn ghost" type="button" data-move="${nm.id}">Redan gjort ✓</button><button class="btn ghost sm" type="button" data-movenext>Visa ett annat</button></div></div>
+      <div class="row" style="margin-top:8px;flex-wrap:nowrap"><button class="btn" style="flex:1" type="button" data-movedo="${nm.id}">Gör nu</button><button class="btn ghost" style="flex:1" type="button" data-move="${nm.id}">Redan gjort</button></div><button class="linkbtn small tall" type="button" data-movenext>Visa ett annat förslag</button></div>
     <details ${movesOpen?'open':''} data-movesdet><summary>Alla rörelsepauser – tryck för att se hur</summary>
       <div class="chips wrap" style="margin-top:8px">${MOVES.map(x=>`<button class="chip" type="button" data-moveopen="${x.id}" aria-pressed="${doneIds.has(x.id)}">${esc(x.t)}</button>`).join('')}</div></details>
   </section>`;
@@ -2520,19 +2591,36 @@ function viewWeek(){
   const wk=S.log.filter(l=>new Date(l.date)>=mon);
   const cnt=t=>wk.filter(l=>l.type===t).length;
   const avg=stepAvg(weekKeys(mon));
-  return `<header class="top"><div><div class="date">Vecka ${isoWeek(new Date())}</div><h1>Veckan</h1></div><button class="btn ghost sm" type="button" data-settings>Ändra upplägg</button></header>
+  const full={s:'Styrka',r:'Löpning',m:'Rörlighet',v:'Vila',skip:'Hoppad',none:'Ingen träning'};
+  const keys=[...Array(7)].map((_,i)=>dkey(addDays(mon,i)));
+  const okN=keys.filter(k=>k<=tk&&dayFloor(k).ok).length;
+  const bars=keys.map((k,i)=>{const f=k<=tk?dayFloor(k):null,h=f?(f.ok?100:Math.round(f.n/3*100)):0;
+    return `<div><span class="b ${f&&f.ok?'ok':''}"><span style="height:${h}%"></span></span><span class="${k===tk?'cur':''}">${DAYS_SV[i][0]}</span></div>`}).join('');
+  const rows=keys.map((k,i)=>{const dt=addDays(mon,i),L=logsOn(k),dd=S.days[k],chg=!!(dd&&dd.plan),off=daysBetween(tk,k);let x=plannedFor(dt);
+    const lt=L.some(l=>l.type==='styrka')?'s':L.some(l=>l.type==='löpning')?'r':null;
+    if(off<0&&!x)x=lt||(dd&&dd.mob?'m':'none');
+    if(dd&&dd.did==='skip')x='skip';
+    let what='';
+    if(off<0){const p=L.find(isPass);what=p?(p.type==='styrka'?(wById(p.wid)?wTitle(wById(p.wid)):'Styrkepass'):(RUNS.find(r=>r.id===p.rid)||{}).t||'Löppass'):(L.length?(({rörlighet:'Rörlighet',annat:OTHER_TITLE[L[0].activity]||'Annan träning'})[L[0].type]||'Träning'):dayFloor(k).ok?'Golvet klart':'Inget loggat')}
+    else if(off<=13){const a=aheadInfo(off);what=a.typ==='s'?(a.w?(a.w.t?wTitle(a.w):a.focus||'Styrkepass'):(a.focus||'Styrkepass')):a.typ==='r'?(a.r?a.r.t:'Löppass'):a.typ==='m'?(a.m?a.m.t+' + promenad':'Rörlighet'):'Vila – promenad räcker'}
+    const ok=off<=0&&dayFloor(k).ok;
+    const tag=off===0?'<span class="tagnow">Idag</span>':ok?'<span class="tagok">Klar</span>':'';
+    return `<button type="button" class="wrow ${off===0?'today':''}" ${off<0?`data-peek="${off}"`:`data-weekday="${k}"`} aria-label="${DAYS_SV[i]} ${dt.getDate()}: ${full[x]||''}.${off<0?' Tryck för att se dagen eller logga i efterhand.':' Tryck för att ändra.'}">
+     <span class="dd"><span class="w" style="display:block">${DAYS_SV[i].toLowerCase()}</span><span class="n" style="display:block">${dt.getDate()}</span></span>
+     <span class="grow"><span class="kind ${x}" style="display:flex">${full[x]||''}${chg?' · ändrad':''}</span><strong style="display:block">${esc(what)}</strong></span>${tag}</button>`}).join('');
+  return `<header class="top"><div><div class="date">Vecka ${isoWeek(new Date())} · ${esc(mon.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}–${esc(addDays(mon,6).toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</div><h1>Veckan</h1></div>${weekArrows()}</header>
   <div class="stack">
-   ${weekNav()}
-   <div class="week">${cells}</div>
-   <p class="small muted" style="margin:0">Kommande dagar visar schemat framåt från där du är. Det flyttar sig bara när du bockar av eller hoppar över en dag – missar du en dag väntar samma pass kvar. Tryck på en kommande dag för att välja vad den ska innehålla (* = ändrad), eller på en tidigare dag för att se den och logga i efterhand.</p>
-   <section class="card"><div class="stat">
-     <div><div class="k num">${cnt('styrka')}/${S.settings.strength}</div><div class="small muted">Styrkepass</div></div>
-     <div><div class="k num">${cnt('löpning')}/${S.settings.cardio}</div><div class="small muted">Löppass</div></div>
-     <div><div class="k num">${avg.toLocaleString('sv-SE')}</div><div class="small muted">Snittsteg/dag</div></div></div></section>
-   <section class="card stack"><h3>Så är veckan uppbyggd</h3>
-    <p class="small muted" style="margin:0">Varje dag: promenad, ${S.settings.stepGoal.toLocaleString('sv-SE')} steg och lite rörlighet. Ovanpå det ${S.settings.strength} styrkepass och ${S.settings.cardio} löppass. ${S.settings.mode==='program'?'Styrkan följer ditt program där du är.':S.settings.mode==='gen'||!WORKOUTS.length?'Styrkepassen byggs efter schemat '+esc(splitPlan().join(' → '))+', med nya övningar och ett annat upplägg (tempo, pyramid, superset, dropset) än förra gången.':'Styrkepassen väljs från biblioteket så att de skiljer sig från det du nyss gjort.'}</p>
-    <p class="small muted" style="margin:0">Missar du en dag följer förslaget med till nästa gång du öppnar appen.</p></section>
-   ${upcomingList(dkey(addDays(new Date(),1)),dkey(addDays(mon,6)),'Resten av veckan')}
+   <section class="card stack" aria-labelledby="h-wmal">
+    <div class="row between"><h2 id="h-wmal" style="font-size:18px">Veckomål</h2><span class="small muted">godkända dagar</span></div>
+    <div class="goal"><span class="big">${okN}</span><span class="muted">${okN===1?'dag':'dagar'} hittills den här veckan</span></div>
+    <div class="wbars" aria-hidden="true">${bars}</div>
+    <div class="stat" style="padding-top:14px;border-top:1px solid var(--line)">
+     <div><div class="k num">${cnt('styrka')}/${S.settings.strength}</div><div class="small muted"><span class="kind s">Styrka</span></div></div>
+     <div><div class="k num">${cnt('löpning')}/${S.settings.cardio}</div><div class="small muted"><span class="kind r">Löpning</span></div></div>
+     <div><div class="k num">${avg.toLocaleString('sv-SE')}</div><div class="small muted">steg/dag</div></div></div></section>
+   <section class="stack" style="gap:6px" aria-labelledby="h-dagar"><div class="row between"><h2 id="h-dagar" style="font-size:18px">Dag för dag</h2><span class="small muted">Tryck för att ändra</span></div>
+    <div class="wlist">${rows}</div></section>
+   <p class="small muted" style="margin:0">Missar du en dag väntar samma pass till nästa gång – inget hoppas över av sig självt. Grundschemat ändrar du under Jag.</p>
    <section class="card"><h3>Senaste passen</h3><div class="list">${logsDesc().slice(0,6).map(logRow).join('')||'<p class="muted small">Inget loggat än.</p>'}</div></section>
   </div>`;
 }
@@ -2544,6 +2632,7 @@ function showDayPlan(k){const dt=new Date(k+'T12:00:00'),cur=plannedFor(dt),base
     <button class="opt" type="button" data-dayset="${k}|reset" ${chg?'':'disabled'}><strong>Återställ</strong><span class="small muted">${chg?'Tillbaka till schemat'+(({s:' (styrka)',r:' (löpning)',m:' (rörlighet)'})[base]||''):'Dagen följer redan schemat'}</span></button></div>
     <p class="small muted" style="margin:0">Ändringen gäller bara den här dagen.</p></div>`)}
 function weekTitle(){return weekOff===0?'Den här veckan':weekOff===1?'Nästa vecka':weekOff===-1?'Förra veckan':weekOff<0?'För '+(-weekOff)+' veckor sedan':'Om '+weekOff+' veckor'}
+function weekArrows(){return `<div class="row" style="gap:6px;flex-wrap:nowrap" role="group" aria-label="Byt vecka"><button class="circ" type="button" data-weekoff="-1" ${weekOff<=-8?'disabled':''} aria-label="Föregående vecka">‹</button><button class="circ" type="button" data-weekoff="1" ${weekOff>=3?'disabled':''} aria-label="Nästa vecka">›</button></div>`}
 function weekNav(){const mon=addDays(monday(new Date()),7*weekOff);
   return `<div class="daynav" role="group" aria-label="Byt vecka"><button class="btn ghost sm" type="button" data-weekoff="-1" ${weekOff<=-8?'disabled':''} aria-label="Föregående vecka">‹</button>
    <div class="dn2"><strong>${weekTitle()}</strong><span class="small muted">v${isoWeek(mon)} · ${esc(mon.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}–${esc(addDays(mon,6).toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</span></div>
@@ -2563,8 +2652,8 @@ function viewWeekAhead(){
   const cells=types.map((x,i)=>{const k=dkey(addDays(mon,i)),dd=S.days[k],chg=!!(dd&&dd.plan);
     return `<button type="button" class="day ${chg?'chg':''}" data-weekday="${k}" aria-label="${DAYS_SV[i]}: ${full[x]}. Tryck för att ändra."><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag">${label[x]||'–'}${chg?'*':''}</span><span class="tag muted num">${addDays(mon,i).getDate()}</span></button>`}).join('');
   const c=t=>types.filter(x=>x===t).length;
-  return `<header class="top"><div><div class="date">Vecka ${isoWeek(mon)}</div><h1>Framåt</h1></div><button class="btn ghost sm" type="button" data-settings>Ändra upplägg</button></header>
-  <div class="stack">${weekNav()}
+  return `<header class="top"><div><div class="date">Vecka ${isoWeek(mon)}</div><h1>${esc(weekTitle())}</h1></div>${weekArrows()}</header>
+  <div class="stack">
    <div class="week">${cells}</div>
    <p class="small muted" style="margin:0">Så ser veckan ut om du följer schemat härifrån. Missar eller flyttar du ett pass förskjuts resten, så planen kan ändras på vägen. Tryck på en dag för att välja vad den ska innehålla (* = ändrad).</p>
    <section class="card"><div class="stat">
@@ -2590,8 +2679,8 @@ function viewWeekPast(){
   const cnt=t=>wk.filter(l=>l.type===t).length;
   const steps=keys.reduce((a,k)=>a+(+S.days[k]?.steps||0),0);
   const mins=wk.reduce((a,l)=>a+(parseFloat(String(l.min||0).replace(',','.'))||0),0);
-  return `<header class="top"><div><div class="date">Vecka ${isoWeek(mon)}</div><h1>${esc(weekTitle())}</h1></div><button class="btn ghost sm" type="button" data-settings>Ändra upplägg</button></header>
-  <div class="stack">${weekNav()}
+  return `<header class="top"><div><div class="date">Vecka ${isoWeek(mon)}</div><h1>${esc(weekTitle())}</h1></div>${weekArrows()}</header>
+  <div class="stack">
    <div class="week">${cells}</div>
    <p class="small muted" style="margin:0">Så blev veckan, efter det du loggade. Tryck på en dag de senaste två veckorna för att se eller komplettera den.</p>
    <section class="card"><div class="stat" style="grid-template-columns:repeat(2,1fr);row-gap:14px">
@@ -2687,12 +2776,12 @@ let sheetCtx=null;
 /* Ritar om samma ark och behåller scrollläget (openSheet nollställer det, vilket bara är rätt för nya ark). */
 function rerenderSheet(){if(!sheetCtx)return;const sh=$('#sheet'),y=sh.scrollTop,ctx=JSON.stringify(sheetCtx);renderSheetCtx();
   if(sheetCtx&&JSON.stringify(sheetCtx)===ctx&&sh.classList.contains('open'))sh.scrollTop=y}
-function renderSheetCtx(){if(!sheetCtx)return;if(sheetCtx.t==='slog')return SE&&SE.ts===sheetCtx.ts?renderSE():showStrengthLog(sheetCtx.ts);if(sheetCtx.t==='set')return showSettings();if(sheetCtx.t==='active'&&active)renderActive();else if(sheetCtx.t==='w')showWorkout(sheetCtx.id);else if(sheetCtx.t==='ex')showExercise(sheetCtx.name)}
+function renderSheetCtx(){if(!sheetCtx)return;if(sheetCtx.t==='slog')return SE&&SE.ts===sheetCtx.ts?renderSE():showStrengthLog(sheetCtx.ts);if(sheetCtx.t==='active'&&active)renderActive();else if(sheetCtx.t==='w')showWorkout(sheetCtx.id);else if(sheetCtx.t==='ex')showExercise(sheetCtx.name)}
 function toggleAvoid(name,on,btn){
   /* Kom ihåg vilken övningsrad som klickades och var den låg på skärmen, så att man står kvar vid den efter omritningen. */
   const sh=$('#sheet'),open=sh.classList.contains('open'),exEl=open&&btn&&btn.closest?btn.closest('#sheetBody .ex'):null;
   const exs=[...document.querySelectorAll('#sheetBody .ex')],idx=exEl?exs.indexOf(exEl):-1,y=sh.scrollTop,off=exEl?exEl.getBoundingClientRect().top-sh.getBoundingClientRect().top:0;const st=S.settings;const a=avoidList().filter(x=>x.toLowerCase()!==String(name).toLowerCase());if(on)a.push(name);st.avoid=a;st.genCur=null;markDirty('settings');if(!on&&open&&sheetCtx&&sheetCtx.t==='active')restoreInActive(name);
-  if(on){const sub=subFor(name,new Set());toast(`${name} undviks${sub?' – byts mot t.ex. '+sub:''}. Ångra under Inställningar.`)}else toast(`${name} är med igen`);
+  if(on){const sub=subFor(name,new Set());toast(`${name} undviks${sub?' – byts mot t.ex. '+sub:''}. Ångra under Jag.`)}else toast(`${name} är med igen`);
   if(!document.querySelector('#sheet.open'))return render();
   rerenderSheet();
   const nx=idx>=0?document.querySelectorAll('#sheetBody .ex')[idx]:null;
@@ -2748,7 +2837,7 @@ function viewPlan(){
   const DD=doneDates();
   let hero='';
   if(st.mode==='program'&&DP_SEQ.length){const nx=programNext();hero=heroPass(nx,'Nästa pass i programmet',`Split ${nx.s} · vecka ${nx.wk} · dag ${nx.d}`)}
-  else {const w=suggestion();hero=heroPass(w,'Förslag just nu',w&&PROG[w.p]?PROG[w.p].n:'','Du blandar pass fritt från biblioteket. Vill du följa programmet i ordning? Ändra under Inställningar.')}
+  else {const w=suggestion();hero=heroPass(w,'Förslag just nu',w&&PROG[w.p]?PROG[w.p].n:'','Du blandar pass fritt från biblioteket. Vill du följa programmet i ordning? Ändra under Jag.')}
   return hero+progressCard()+programBrowser(DD)+recentStrength();
 }
 function progressCard(){const st=S.settings;if(st.mode!=='program'||!DP_SEQ.length)return '';
@@ -2787,7 +2876,7 @@ function planGen(){
   return heroPass(w,'Nästa styrkepass','Byggt åt dig – nya övningar och nytt upplägg varje gång',`${awx.slice(0,4).map(e=>esc(e[0])).join(' · ')}${awx.length>4?' …':''}`)+
    `<section class="card stack"><h3>Ditt schema</h3><p class="small muted" style="margin:0">Styrkepassen roterar i den här ordningen. Varje gång byggs ett nytt pass med andra övningar och ett annat upplägg (${Object.values(THEMES).slice(1,5).join(', ').toLowerCase()}).</p>
     <ol class="rot">${p.map((f,i)=>`<li class="${i===idx?'on':''}"><span>${esc(f)}</span>${i===idx?'<span class="pill">Nästa</span>':''}</li>`).join('')}</ol>
-    <p class="small muted" style="margin:0">Antal pass, mål och utrustning ändrar du under Inställningar.</p></section>`+recentStrength();
+    <p class="small muted" style="margin:0">Antal pass, mål och utrustning ändrar du under Jag.</p></section>`+recentStrength();
 }
 
 /* ---- Hitta pass ---- */
@@ -3168,14 +3257,14 @@ function ciFinish(apply){
 function ciQuick(kind){const c=ciConf(),st=S.settings;
   if(kind==='ok'){st.checkins=(st.checkins||[]).concat([{date:today(),quick:'ok',applied:[]}]).slice(-40);c.last=today();ciState='ok'}
   if(kind==='later'){c.snooze=dkey(addDays(new Date(),1))}
-  if(kind==='off'){c.every=0;toast('Avstämningar avstängda – slå på dem i Inställningar')}
+  if(kind==='off'){c.every=0;toast('Avstämningar avstängda – slå på dem under Jag')}
   markDirty('settings');render()}
 function bindCheckin(root){
   root.querySelectorAll('[data-ciok]').forEach(b=>b.onclick=()=>ciQuick('ok'));
   root.querySelectorAll('[data-cilater]').forEach(b=>b.onclick=()=>ciQuick('later'));
   root.querySelectorAll('[data-cioff]').forEach(b=>b.onclick=()=>ciQuick('off'));
   root.querySelectorAll('[data-ciopen]').forEach(b=>b.onclick=showCheckin);
-  root.querySelectorAll('[data-ciev]').forEach(b=>b.onclick=()=>{const v=+b.dataset.ciev;ciConf().every=v;ciState=null;markDirty('settings');toast(v?`Avstämning ${v===7?'en gång i veckan':'var 3:e dag'}`:'Avstämningar avstängda – slå på dem i Inställningar');render()});
+  root.querySelectorAll('[data-ciev]').forEach(b=>b.onclick=()=>{const v=+b.dataset.ciev;ciConf().every=v;ciState=null;markDirty('settings');toast(v?`Avstämning ${v===7?'en gång i veckan':'var 3:e dag'}`:'Avstämningar avstängda – slå på dem under Jag');render()});
   root.querySelectorAll('[data-cians]').forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.cians.split(':');ciQ.a[k]=v;if(k==='body'&&v==='ont'){renderCheckin();return}ciQ.i++;renderCheckin()});
   root.querySelectorAll('[data-cimore]').forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.cimore.split(':');ciQ.a.more[k]=+v;renderCheckin()});
   root.querySelectorAll('[data-ciarea]').forEach(b=>b.onclick=()=>{ciQ.a.area=b.dataset.ciarea;renderCheckin()});
@@ -3711,9 +3800,14 @@ const sStep=(key,label,val,min,max,fmt,sub)=>`<div class="setrow"><span>${label}
 const sTog=(key,label,on,desc)=>`<label class="setrow tog"><span>${label}${desc?`<span class="small muted d">${desc}</span>`:''}</span><input type="checkbox" class="sw" data-settog="${key}" ${on?'checked':''}></label>`;
 function setSec(k,title,sum,body){return `<details class="card setsec sec-${k}" data-sec="${k}" ${setOpen.has(k)?'open':''}><summary><div class="grow"><strong class="sectitle">${title}</strong><div class="small muted">${sum}</div></div></summary><div class="stack secbody">${body}</div></details>`}
 
+/* Inställningarna är fliken Jag. showSettings() ritar om den (och står kvar på samma ställe) eller byter till den. */
 function showSettings(){
-  const keep=document.querySelector('#sheet.open')&&sheetCtx&&sheetCtx.t==='set'?$('#sheet').scrollTop:0;
-  sheetCtx={t:'set'};
+  const same=tab==='jag'&&!document.querySelector('#sheet.open'),y=same?window.scrollY:0;
+  if(document.querySelector('#sheet.open'))closeSheet();
+  if(tab!=='jag'){ciState=null;tab='jag'}
+  render();try{window.scrollTo(0,y)}catch(e){}
+}
+function viewJag(){
   const st=S.settings,lib=WORKOUTS.length>0,gen=st.mode==='gen'||!lib,tpl=weekTemplate();
   const lab={s:'Styrka',r:'Löpning',m:'Rörlighet'};
   /* Styrka */
@@ -3779,7 +3873,8 @@ function showSettings(){
    <div class="setfield"><div class="lab">Lägg appen på hemskärmen</div><p class="small muted" style="margin:0">iPhone: öppna länken i Safari, tryck på Dela och välj Lägg till på hemskärmen. Android: menyn i Chrome och Lägg till på startskärmen.</p></div>
    <div class="setfield"><div class="lab">Börja om</div><p class="small muted" style="margin:0 0 6px">Svara på frågorna igen och få ett nytt veckoschema. Dina loggar sparas.</p><button class="btn ghost sm" type="button" data-onb>Gör om frågorna</button></div>`;
   const aSum=`Avstämning ${({3:'var 3:e dag',7:'en gång i veckan',0:'av'})[ci]||''} · säkerhetskopia${BUILD==='public'?' · konto':''}`;
-  openSheet(`<header class="top"><div><div class="date" id="setStatus">${Date.now()-setSavedAt<2500?'Sparat ✓':'Ändringar sparas direkt'}</div><h1>Inställningar</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+  const ini=(SBUSER&&SBUSER.email?SBUSER.email.trim()[0]:'J').toLocaleUpperCase('sv-SE');
+  return `<header class="top me"><div class="avatar" aria-hidden="true">${esc(ini)}</div><div><h1>Jag</h1><div class="date" id="setStatus">${Date.now()-setSavedAt<2500?'Sparat ✓':'Ändringar sparas direkt'}</div></div></header>
   <div class="stack">
    <section class="card stack"><h3>Din vecka</h3>
     <div class="week mini">${tpl.map((x,i)=>`<div class="day"><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag">${lab[x]==='Rörlighet'?'Rörl.':lab[x]==='Löpning'?'Löp':'Styrka'}</span></div>`).join('')}</div>
@@ -3791,9 +3886,7 @@ function showSettings(){
    ${setSec('k','Om dig & kroppen',kSum,body)}
    ${setSec('a','Appen',aSum,app)}
    <p class="small muted num" style="text-align:center;margin:8px 0 0">Version 1.2${VERSION.indexOf('VERSION')<0?' · '+esc(VERSION):''}</p>
-  </div>`);
-  stickyBar(`<button class="btn" type="button" data-close>Klar</button>`);
-  if(keep)$('#sheet').scrollTop=keep;
+  </div>`;
 }
 function applySetting(k,v,silent){
   const st=S.settings;
@@ -3885,6 +3978,7 @@ function bind(root){
   root.querySelectorAll('[data-login]').forEach(b=>b.onclick=()=>{loginState={mode:'login',email:(SBUSER&&SBUSER.email)||loginState.email||''};showLogin()});
   root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';cloudReady=false;const hadLib=WORKOUTS.length>0&&BUILD==='public';try{localStorage.removeItem(LIBK)}catch(e){}closeSheet();toast('Utloggad – data finns kvar på telefonen');if(hadLib)setTimeout(()=>location.reload(),800)});
   root.querySelectorAll('[data-painok]').forEach(b=>b.onclick=()=>{S.settings.painAlert=null;markDirty('settings');render()});
+  root.querySelectorAll('[data-dayjump]').forEach(b=>b.onclick=()=>{dayOff=Math.max(-14,Math.min(13,+b.dataset.dayjump));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-dayoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.dayoff;dayOff=v===0?0:Math.max(-14,Math.min(13,dayOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-takeahead]').forEach(b=>b.onclick=()=>{const off=+b.dataset.takeahead,dt=addDays(new Date(),off),k=dkey(dt);const t0=plannedFor(new Date()),t1=plannedFor(dt);
     swap=null;S.days[k]=S.days[k]||{steps:0,walk:false,mob:false};setDay(k,{plan:t0});setDay(today(),{plan:t1});dayOff=0;render();try{window.scrollTo(0,0)}catch(e){}toast('Klart – dagarna har bytt plats')});
