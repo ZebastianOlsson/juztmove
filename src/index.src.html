@@ -780,7 +780,7 @@ function rankWorkouts(focus){
   const now=Date.now();
   const recentGroups={};
   S.log.filter(l=>l.type==='styrka'&&now-l.ts<3*864e5).forEach(l=>{const age=(now-l.ts)/864e5;(l.g||[]).forEach(g=>recentGroups[g]=Math.max(recentGroups[g]||0,age<1.5?3:1))});
-  const last=recentStrength(1)[0], lastW=last&&WBYID[last.wid];
+  const last=recentStrength(1)[0], lastW=last&&wById(last.wid);
   const lastSchemes=new Set(lastW?lastW.x.map(e=>e[3]):[]);
   const maxMin=+S.settings.maxMin||0;
   return WORKOUTS.filter(w=>enabled.has(w.p)&&!done.has(w.i)&&(!focus||w.g.includes(focus))&&(!maxMin||estMinutes(w)<=maxMin+10)&&w.x.length>=4)
@@ -901,10 +901,26 @@ function seedRun(){const st=S.settings;
   if(BUILD==='owner'&&!st.runSeeded){if(!+st.v10)st.v10=11.5;if(st.coolKmh==null)st.coolKmh=5;if(st.coolInc==null)st.coolInc=15;if(!st.injuries)st.injuries=['fot'];st.runSeeded=1;markDirty('settings')}
   if(!+st.v10&&st.runSpeeds&&+st.runSpeeds.hard&&BUILD!=='owner'){st.v10=+st.runSpeeds.hard;markDirty('settings')}}
 let sugIdx=0, sugFocus='', runIdx=0, sugCache=null;
-function programNext(){
-  const i=DP_SEQ.findIndex(w=>w.i===S.settings.lastProg);
-  return DP_SEQ[(i+1)%DP_SEQ.length];
-}
+/* Programpass i lätt version har id med suffixet -latt. I programmet räknas de som originalpasset. */
+const progBase=id=>String(id||'').replace(/-latt$/,'');
+const wById=id=>id?WBYID[id]||WBYID[progBase(id)]:undefined;
+/* Platsen i programmet (index i DP_SEQ för senast gjorda pass). Finns inte lastProg i programmet hoppar vi inte
+   till början: vi fortsätter från senaste styrkeloggen som hör till programmet. Annars -1 (= första passet). */
+let progWarned='';
+function progPos(){
+  const id=progBase(S.settings.lastProg);let i=DP_SEQ.findIndex(w=>w.i===id);if(i>=0||!DP_SEQ.length)return i;
+  const L=S.log.filter(l=>l.type==='styrka'&&l.wid&&DP_SEQ.some(w=>w.i===progBase(l.wid))).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.ts||0)-(b.ts||0));
+  const last=L[L.length-1];if(last)i=DP_SEQ.findIndex(w=>w.i===progBase(last.wid));
+  if(id&&progWarned!==id){progWarned=id;console.warn('lastProg "'+S.settings.lastProg+'" finns inte i programmet – '+(last?'fortsätter från senaste programloggen ('+progBase(last.wid)+')':'börjar från första passet'))}
+  return i}
+function programNext(){return DP_SEQ[(progPos()+1)%DP_SEQ.length]}
+/* Rättar lastProg som sparats med -latt (äldre versioner). Giltiga värden lämnas orörda. */
+function fixLastProg(){const st=S.settings;if(st&&typeof st.lastProg==='string'&&/-latt$/.test(st.lastProg)){st.lastProg=progBase(st.lastProg);return true}return false}
+/* Vilket programpass en sparad styrkelogg var: "Split 9 · vecka 2 · dag 4 · lätt version", "Från biblioteket" eller "Byggt av appen". */
+function logSource(l){if(!l||l.type!=='styrka'||!l.wid)return '';const lt=/-latt$/.test(l.wid),w=wById(l.wid);
+  if(w&&w.p==='DP'&&w.s!=null)return progLabel(w)+(lt?' · lätt version':'');
+  if(l.wobj||(w&&w.p==='GEN')||/^gen-/.test(l.wid))return 'Byggt av appen';
+  if(w)return 'Från biblioteket';return ''}
 function suggestion(){
   if(!sugCache){
     const mix=rankWorkouts(sugFocus);
@@ -1919,7 +1935,7 @@ function aheadInfo(off){
   const typ=types[off]; const before=types.slice(0,off).filter(t=>t===typ).length;
   const info={typ,date:dates[off]};
   if(typ==='s'){const st=S.settings;
-    if((st.mode==='program')&&DP_SEQ.length){const i=DP_SEQ.findIndex(w=>w.i===st.lastProg);info.w=DP_SEQ[(i+1+before)%DP_SEQ.length]}
+    if((st.mode==='program')&&DP_SEQ.length){const i=progPos();info.w=DP_SEQ[(i+1+before)%DP_SEQ.length]}
     else if(st.mode==='gen'||!WORKOUTS.length){const p=kneeSwap(splitPlan());info.focus=p[((st.splitIdx||0)+before)%p.length];info.w=before===0?genCurrent():genPeek((st.splitIdx||0)+before,info.focus)}
     else if(before===0)info.w=suggestion();
   } else if(typ==='r'){const runToday=logsOn(today()).some(l=>l.type==='löpning');const list=rankRuns(runToday||before>0);info.r=before===0?list[0]:null}
@@ -2148,7 +2164,7 @@ function viewToday(){
   if(plan==='s'){
     const gen=S.settings.mode==='gen'||!WORKOUTS.length;
     const doneW=done.find(l=>l.type==='styrka');if(doneW)inHero.add(doneW);
-    const w0=doneW&&WBYID[doneW.wid]?WBYID[doneW.wid]:gen?genCurrent():suggestion();
+    const w0=doneW&&wById(doneW.wid)?wById(doneW.wid):gen?genCurrent():suggestion();
     const w=!doneW&&d.low?lighten(w0):w0, aw=w?AW(w):w;
     hero=`<section class="card hero stack" aria-labelledby="h-pass">${lowToggle()}
       <div class="row between"><span class="eyebrow">Dagens styrkepass</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
@@ -2334,7 +2350,7 @@ function prevExBefore(l,name){let best=null;S.log.forEach(o=>{if(o===l||!isStrLo
   const e=flatEx(o).find(x=>x.n===name);if(e&&exTop(e)>0&&(!best||o.date>best.o.date||(o.date===best.o.date&&(o.ts||0)>(best.o.ts||0))))best={o,e}});return best}
 function showStrengthLog(ts){
   const l=S.log.find(x=>x.ts===+ts);if(!l)return;SE=null;sheetCtx={t:'slog',ts:l.ts};
-  const nSets=(l.ex||[]).reduce((a,e)=>a+(e.sets||[]).length,0),vol=+l.vol||logVol(l),tpl=l.wobj||WBYID[l.wid];
+  const nSets=(l.ex||[]).reduce((a,e)=>a+(e.sets||[]).length,0),vol=+l.vol||logVol(l),tpl=l.wobj||wById(l.wid);
   const cmp=(name,top)=>{const pv=prevExBefore(l,name),pt=pv?exTop(pv.e):0;const mk=pt&&top?(top>pt?'▲':top<pt?'▼':'='):'';
     return {pv,pt,mk,lab:mk==='▲'?'Tyngre än förra gången':mk==='▼'?'Lättare än förra gången':'Samma vikt som förra gången'}};
   const mkSpan=c=>` <span class="small" title="${c.lab}" aria-label="${c.lab}">${c.mk}</span>`;
@@ -2348,7 +2364,7 @@ function showStrengthLog(ts){
     const mk=pt&&top?(top>pt?'▲':top<pt?'▼':'='):'',lab=mk==='▲'?'Tyngre än förra gången':mk==='▼'?'Lättare än förra gången':'Samma vikt som förra gången';
     return `<div class="slex"><div class="nm">${esc(e.n)}</div><div class="slsets">${(e.sets||[]).map((s,j)=>esc(fmtLogSet(s))+(j===hi&&mk?` <span class="small" title="${lab}" aria-label="${lab}">${mk}</span>`:'')).join(' · ')||'<span class="muted">Inga set</span>'}</div>
      ${pv?`<div class="small muted">Förra gången (${esc(shortDate(pv.o.date))}): tyngst ${esc(kgTxt(pt))} kg</div>`:''}</div>`}).join('');
-  openSheet(`<header class="top"><div><div class="date cap">${esc(fmtDate(new Date(l.date+'T12:00:00')))}${l.min?' · '+esc(kgTxt(l.min))+' min':''}</div><h1 class="h1sm">${esc(isExtraStr(l)?l.title||OTHER_TITLE.styrka:svTitle(l.title)||'Styrkepass')}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+  openSheet(`<header class="top"><div><div class="date cap">${esc(fmtDate(new Date(l.date+'T12:00:00')))}${l.min?' · '+esc(kgTxt(l.min))+' min':''}${logSource(l)?' · '+esc(logSource(l)):''}</div><h1 class="h1sm">${esc(isExtraStr(l)?l.title||OTHER_TITLE.styrka:svTitle(l.title)||'Styrkepass')}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack"><div class="card stack"><div class="small muted num">${isExtraStr(l)?'Annan träning · '+exCountTxt((l.ex||[]).length)+' · ':''}${vol?Math.round(vol).toLocaleString('sv-SE')+' kg totalt · ':''}${nSets} set${l.edited?' · redigerat':''}</div>${tpl?`<button class="linkbtn small tall" type="button" data-again="${l.ts}">Visa passmallen</button>`:''}</div>
    <div class="card">${exs||'<p class="muted" style="margin:0">Inga övningar loggade.</p>'}</div></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Stäng</button><button class="btn" type="button" data-sledit="${l.ts}">Redigera</button>`);
@@ -2458,7 +2474,7 @@ function logsDesc(){return S.log.slice().sort((a,b)=>a.date<b.date?1:a.date>b.da
 function logRow(l){
   const icon=l.type==='styrka'?'s':l.type==='löpning'?'r':l.type==='annat'?'o':'m';
   const extra=l.type==='annat'?otherExtra(l):l.type==='löpning'?[l.km?String(l.km).replace('.',',')+' km':'',l.min?String(l.min).replace('.',',')+' min':'',l.avg?fmtK(+l.avg)+' km/h snitt':l.hard?fmtK(+l.hard)+' km/h':'',l.rpe?l.rpe+'/10':''].filter(Boolean).join(' · '):l.type==='styrka'?`${l.vol?Math.round(l.vol).toLocaleString('sv-SE')+' kg totalt · ':''}${l.min||'?'} min`:`${l.min||''} min`;
-  return `<div class="li" style="cursor:default"><span class="dot ${icon}" style="margin-top:6px"></span><div class="grow"><strong>${esc(l.type==='styrka'?svTitle(l.title):isExtraStr(l)?(l.title||OTHER_TITLE.styrka)+' · '+exCountTxt(l.ex.length):l.title)}</strong><div class="small muted num">${esc(shortDate(l.date))}${extra?' · '+esc(extra):''}</div></div>${isStrLog(l)&&l.ts?`<button class="btn ghost sm" type="button" data-slog="${l.ts}" aria-label="Visa passet">Visa</button>`:''}${l.type==='löpning'&&l.ts?`<button class="btn ghost sm" type="button" data-editrun="${l.ts}" aria-label="Komplettera passet">${CLAUDE_SAMPLE?'📷 ':''}Komplettera</button>`:''}</div>`;
+  return `<div class="li" style="cursor:default"><span class="dot ${icon}" style="margin-top:6px"></span><div class="grow"><strong>${esc(l.type==='styrka'?svTitle(l.title):isExtraStr(l)?(l.title||OTHER_TITLE.styrka)+' · '+exCountTxt(l.ex.length):l.title)}</strong>${logSource(l)?`<div class="small muted num">${esc(logSource(l))}</div>`:''}<div class="small muted num">${esc(shortDate(l.date))}${extra?' · '+esc(extra):''}</div></div>${isStrLog(l)&&l.ts?`<button class="btn ghost sm" type="button" data-slog="${l.ts}" aria-label="Visa passet">Visa</button>`:''}${l.type==='löpning'&&l.ts?`<button class="btn ghost sm" type="button" data-editrun="${l.ts}" aria-label="Komplettera passet">${CLAUDE_SAMPLE?'📷 ':''}Komplettera</button>`:''}</div>`;
 }
 let weekOff=0;
 function viewWeek(){
@@ -2703,7 +2719,7 @@ function viewPlan(){
   return hero+progressCard()+programBrowser(DD)+recentStrength();
 }
 function progressCard(){const st=S.settings;if(st.mode!=='program'||!DP_SEQ.length)return '';
-  const pi=DP_SEQ.findIndex(w=>w.i===st.lastProg),cur=DP_SEQ[Math.max(0,pi)],tot=DP_SEQ.length;
+  const pi=progPos(),cur=DP_SEQ[Math.max(0,pi)],tot=DP_SEQ.length;
   const splits=[...new Set(DP_SEQ.map(w=>w.s))].length,inSplit=DP_SEQ.filter(w=>w.s===cur.s),pos=inSplit.findIndex(w=>w.i===cur.i)+1;
   return `<section class="card stack"><div class="row between"><h3>${esc(PROG.DP?.n||'Programmet')}</h3><span class="small muted num">pass ${pi+1} av ${tot}</span></div>
    <div class="pbar"><span style="width:${(pi+1)/tot*100}%"></span></div>
@@ -2712,7 +2728,7 @@ function programBrowser(DD){
   const st=S.settings,progs=LIB.programs.filter(p=>WORKOUTS.some(w=>w.p===p.k));if(!progs.length)return '';
   if(!progView||!PROG[progView])progView=progs[0].k;
   const all=progView==='DP'?DP_SEQ:WORKOUTS.filter(w=>w.p===progView).slice().sort((a,b)=>(a.wk||0)-(b.wk||0)||(a.d||0)-(b.d||0));
-  const pi=DP_SEQ.findIndex(w=>w.i===st.lastProg),nx=st.mode==='program'?programNext():null;
+  const pi=progPos(),nx=st.mode==='program'?programNext():null;
   const splits=[...new Set(all.map(w=>w.s).filter(s=>s!=null))];
   if(splits.length&&!splits.includes(progSplit))progSplit=(nx&&progView==='DP'?nx.s:splits[0]);
   const list=splits.length?all.filter(w=>w.s===progSplit):all;
@@ -2730,7 +2746,7 @@ function programBrowser(DD){
       <div class="list">${ws.map(w=>passRow(w,{state:stateOf(w),date:DD.get(w.i),label:'Dag '+w.d})).join('')}</div></details>`}).join('')}
   </section>`}
 function recentStrength(){const L=S.log.filter(l=>l.type==='styrka').slice(-5).reverse();if(!L.length)return '';
-  return `<section class="card stack"><h3>Senaste styrkepassen</h3><div class="list">${L.map(l=>{const w=l.wobj||WBYID[l.wid];
+  return `<section class="card stack"><h3>Senaste styrkepassen</h3><div class="list">${L.map(l=>{const w=l.wobj||wById(l.wid);
     return `<div class="li" style="cursor:default;align-items:center"><div class="grow"><strong>${esc(svTitle(l.title))}</strong><div class="small muted num">${esc(shortDate(l.date))}${l.min?' · '+l.min+' min':''}${l.vol?' · '+Math.round(l.vol).toLocaleString('sv-SE')+' kg':''}</div></div><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost sm" type="button" data-slog="${l.ts}">Visa</button>${w?`<button class="btn ghost sm" type="button" data-again="${l.ts}">Kör igen</button>`:''}</div></div>`}).join('')}</div></section>`}
 function planGen(){
   const st=S.settings,p=kneeSwap(splitPlan()),idx=(st.splitIdx||0)%p.length,w=genCurrent();
@@ -2925,7 +2941,7 @@ function viewProgress(){
   S.log.filter(l=>isStrLog(l)&&l.date>=f28).forEach(l=>flatEx(l).forEach(e=>{const g=muscleOf(e.n);if(g&&g in mg)mg[g]+=(e.sets||[]).filter(setDone).length||0}));
   const mgRows=Object.entries(mg).sort((a,b)=>b[1]-a[1]);const least=mgRows.filter(r=>r[0]!=='Vader').slice(-1)[0];
   /* Programmet */
-  const pi=DP_SEQ.findIndex(w=>w.i===S.settings.lastProg),pw=DP_SEQ[pi];
+  const pi=progPos(),pw=DP_SEQ[pi];
   const legend=`<div class="legend small">${[['s','Styrka'],['r','Löpning'],['m','Rörlighet'],['o','Övrigt']].map(([k,t])=>`<span><i style="background:var(--c-${k})"></i>${t}</span>`).join('')}</div>`;
   const empty=!S.log.length;
   return `<header class="top"><div><div class="date">Din träning i siffror</div><h1>Framsteg</h1></div></header>
@@ -3453,7 +3469,7 @@ function finishWorkout(){
   const min=Math.min(240,Math.max(1,Math.round((Date.now()-active.start)/60000)));
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w.x.some(isAdded)?{...w,x:w.x.filter(e=>!isAdded(e))}:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
-  if(w.p==='DP'&&S.settings.mode==='program'&&w.i.replace(/-latt$/,'')===programNext().i){S.settings.lastProg=w.i;markDirty('settings')}
+  if(w.p==='DP'&&S.settings.mode==='program'&&progBase(w.i)===programNext().i){S.settings.lastProg=progBase(w.i);markDirty('settings')}
   const fdate=active.date||today(), sum=passSummary(S.log[S.log.length-1]);
   active=null; clearActive(); sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate,sum);
 }
@@ -3659,12 +3675,12 @@ function showSettings(){
   const st=S.settings,lib=WORKOUTS.length>0,gen=st.mode==='gen'||!lib,tpl=weekTemplate();
   const lab={s:'Styrka',r:'Löpning',m:'Rörlighet'};
   /* Styrka */
-  const pSplit=setSplit??(WBYID[st.lastProg]?.s||1),nx=lib&&st.mode==='program'&&DP_SEQ.length?programNext():null;
+  const pSplit=setSplit??(wById(st.lastProg)?.s||1),nx=lib&&st.mode==='program'&&DP_SEQ.length?programNext():null;
   const passLen=gen?(st.minutes||45):(st.maxMin||0);
   const strength=`${sStep('strength','Styrkepass per vecka',+st.strength||0,0,6)}
    ${lib&&DP_SEQ.length?sCards('mode','Hur väljs passen?',[['program','Följ programmet i ordning','Splitprogrammet, pass för pass där du är'],['mix','Blanda från biblioteket','Olika pass från de program du väljer'],['gen','Låt appen bygga passen','Nya övningar och nya upplägg varje gång']],st.mode):''}
    ${lib&&st.mode==='program'&&DP_SEQ.length?`<div class="setfield"><div class="lab">Senaste passet du gjorde</div><div class="grid2"><select data-setin="setSplit" aria-label="Split">${[...new Set(DP_SEQ.map(w=>w.s))].map(n=>`<option value="${n}" ${n===pSplit?'selected':''}>Split ${n}</option>`).join('')}</select>
-      <select data-setin="lastProg" aria-label="Pass">${progOptions(pSplit,st.lastProg)}</select></div><p class="small muted" style="margin:4px 0 0">Nästa pass blir <strong>${esc(nx?wTitle(nx):'')}</strong>${nx?` (split ${nx.s}, vecka ${nx.wk}, dag ${nx.d})`:''}.</p></div>`:''}
+      <select data-setin="lastProg" aria-label="Pass">${progOptions(pSplit,progBase(st.lastProg))}</select></div><p class="small muted" style="margin:4px 0 0">Nästa pass blir <strong>${esc(nx?wTitle(nx):'')}</strong>${nx?` (split ${nx.s}, vecka ${nx.wk}, dag ${nx.d})`:''}.</p></div>`:''}
    ${lib&&st.mode==='mix'?`<div class="setfield"><div class="lab">Program att blanda från</div><div class="chips wrap">${LIB.programs.map(p=>`<button class="chip" type="button" data-set="prog" data-val="${p.k}" aria-pressed="${(st.programs||[]).includes(p.k)}">${esc(p.n)}</button>`).join('')}</div></div>`:''}
    ${gen?sOpt('goal','Mål',Object.entries(GOAL_SV),st.goal||'balans'):''}
    ${st.mode!=='program'||!lib?sOpt('passLen','Passlängd',gen?[[20,'20 min'],[30,'30 min'],[45,'45 min'],[60,'60 min']]:[[30,'Max 30 min'],[45,'Max 45 min'],[60,'Max 60 min'],[0,'Ingen gräns']],passLen):''}
@@ -3745,7 +3761,7 @@ function applySetting(k,v,silent){
       if(n+other>7){toast('Högst 7 pass i veckan');return}st[k]=n;st.weekPlan=null;st.genCur=null;break}
     case 'mode':st.mode=v;st.genCur=null;if(v==='program'&&!st.lastProg&&DP_SEQ.length)st.lastProg=DP_SEQ[0].i;break;
     case 'setSplit':setSplit=+v;return showSettings();
-    case 'lastProg':st.lastProg=v;setSplit=null;break;
+    case 'lastProg':st.lastProg=progBase(v);setSplit=null;break;
     case 'prog':{const a=new Set(st.programs||[]);a.has(v)?a.delete(v):a.add(v);if(!a.size){toast('Välj minst ett program');return}st.programs=[...a];break}
     case 'goal':st.goal=v;st.genCur=null;st.splitIdx=0;break;
     case 'passLen':{const n=+v;if(st.mode==='gen'||!WORKOUTS.length){st.minutes=n;st.maxMin=n}else{st.maxMin=n;st.minutes=n||60}st.genCur=null;break}
@@ -3871,7 +3887,7 @@ function bind(root){
   root.querySelectorAll('[data-avgrp]').forEach(b=>b.onclick=()=>toggleGroup(b.dataset.avgrp));
   root.querySelectorAll('[data-mobpeek]').forEach(b=>b.onclick=()=>{showMobility(b.dataset.mobpeek)});
   root.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>showExercise(b.dataset.ex));
-  root.querySelectorAll('[data-again]').forEach(b=>b.onclick=()=>{const l=S.log.find(x=>String(x.ts)===b.dataset.again);if(!l)return;const w=l.wobj?JSON.parse(JSON.stringify(l.wobj)):WBYID[l.wid];if(!w)return;regW(w);showWorkout(w.i)});
+  root.querySelectorAll('[data-again]').forEach(b=>b.onclick=()=>{const l=S.log.find(x=>String(x.ts)===b.dataset.again);if(!l)return;const w=l.wobj?JSON.parse(JSON.stringify(l.wobj)):wById(l.wid);if(!w)return;regW(w);showWorkout(w.i)});
   {const eq=root.querySelector('#exQ');if(eq){eq.oninput=()=>{exQ=eq.value;const pos=eq.selectionStart;render();const n=$('#exQ');if(n){n.focus();n.setSelectionRange(pos,pos)}}}}
   root.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>startWorkout(b.dataset.start));
   root.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{if(mobState){clearInterval(mobState.t);mobState=null}closeSheet()});
@@ -3950,7 +3966,7 @@ function bind(root){
   const ss=root.querySelector('#sSplit'); if(ss) ss.onchange=()=>{$('#sLast').innerHTML=progOptions(+ss.value,'')};
   root.querySelectorAll('[data-savesettings]').forEach(b=>b.onclick=()=>{const st=S.settings;if(+$('#sStr').value!==st.strength||+$('#sCar').value!==st.cardio){st.weekPlan=null;st.genCur=null}st.strength=+$('#sStr').value;st.cardio=+$('#sCar').value;if($('#sCi'))ciConf().every=+$('#sCi').value;st.stepGoal=Math.max(1000,+$('#sSteps').value||10000);st.maxMin=+$('#sMax').value;st.runPref=$('#sRun').value;{const raw=$('#sTenK').value.trim();const tk=parseTenK(raw);if(tk&&raw!==String(st.tenK||'')){st.tenK=raw;st.v10=Math.round(600/tk*100)/100}
       const ck=parseFloat(String($('#sCoolK').value).replace(',','.'));if(ck>0)st.coolKmh=ck;const ci=parseFloat(String($('#sCoolI').value).replace(',','.'));if(ci>=0)st.coolInc=ci;
-      const cb=$('#sComeback').checked;if(cb&&!comebackOn())st.comebackUntil=dkey(addDays(new Date(),21));if(!cb)st.comebackUntil=null;}if($('#sMode')){st.mode=$('#sMode').value;st.lastProg=$('#sLast').value||st.lastProg};st.moveGoal=+$('#sMoves').value||8;
+      const cb=$('#sComeback').checked;if(cb&&!comebackOn())st.comebackUntil=dkey(addDays(new Date(),21));if(!cb)st.comebackUntil=null;}if($('#sMode')){st.mode=$('#sMode').value;st.lastProg=progBase($('#sLast').value||st.lastProg)};st.moveGoal=+$('#sMoves').value||8;
     if(DP_SEQ.length){st.programs=[...document.querySelectorAll('[data-prog]')].filter(c=>c.checked).map(c=>c.dataset.prog);if(!st.programs.length)st.programs=Object.keys(PROG);}
     markDirty('settings');sugCache=null;sugIdx=0;closeSheet();toast('Inställningar sparade')});
   root.querySelectorAll('[data-libfile]').forEach(inp=>inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;
@@ -3959,7 +3975,7 @@ function bind(root){
     toast('Läser in programmet …');
     try{await sbFetch('/rest/v1/user_docs',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{user_id:SBUSER.id,doc:'library',body:{lib},updated_at:new Date().toISOString()}])})}catch(e){toast('Kunde inte spara: '+e.message);return}
     setLibrary(lib);try{localStorage.setItem(LIBK,JSON.stringify({uid:SBUSER.id,lib}))}catch(e){}
-    const st=S.settings;st.programs=lib.programs.map(p=>p.k);if(DP_SEQ.length){st.mode='program';if(j.lastProg&&WBYID[j.lastProg])st.lastProg=j.lastProg;else if(!WBYID[st.lastProg])st.lastProg=DP_SEQ[0].i;st.progKey='DP'}else st.mode='mix';
+    const st=S.settings;st.programs=lib.programs.map(p=>p.k);if(DP_SEQ.length){st.mode='program';if(j.lastProg&&WBYID[progBase(j.lastProg)])st.lastProg=progBase(j.lastProg);else if(wById(st.lastProg))st.lastProg=progBase(st.lastProg);else st.lastProg=(programNext()&&DP_SEQ[progPos()]||DP_SEQ[0]).i;st.progKey='DP'}else st.mode='mix';
     st.genCur=null;markDirty('settings');showSettings();toast(`Klart – ${WORKOUTS.length} pass inlästa. Nästa pass: ${DP_SEQ.length?wTitle(programNext()):''}`)});
   root.querySelectorAll('[data-libremove]').forEach(b=>b.onclick=()=>confirmBar('Ta bort programmet? Passen försvinner ur appen. Dina loggar finns kvar.','Ta bort programmet',async()=>{
     try{await sbFetch('/rest/v1/user_docs?doc=eq.library',{method:'DELETE'})}catch(e){toast('Kunde inte ta bort: '+e.message);return}
@@ -3979,7 +3995,7 @@ function bind(root){
   root.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>{libShow+=40;render()});
 }
 if(BUILD==='public'&&'serviceWorker' in navigator&&location.protocol==='https:'){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})})}
-function regLogs(){S.log.forEach(l=>{if(l.wobj)regW(l.wobj)});if(S.settings.genCur)regW(S.settings.genCur)}
+function regLogs(){if(fixLastProg())markDirty('settings');S.log.forEach(l=>{if(l.wobj)regW(l.wobj)});if(S.settings.genCur)regW(S.settings.genCur)}
 regLogs();
 render();
 startAnims();
