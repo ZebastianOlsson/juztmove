@@ -284,7 +284,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='9ad7bbfb1e';
+const BUILD='public', VERSION='9ae8a79ad1';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -394,9 +394,16 @@ const MOVE_INFO={
 const DP_SEQ = WORKOUTS.filter(w=>w.p==='DP').slice().sort((a,b)=>(a.s-b.s)||((a.wk||99)-(b.wk||99))||(a.d-b.d));
 /* Eget passbibliotek som laddas från kontot (bara för den som läst in en programfil – syns aldrig för andra). */
 const LIBK='rs-lib';
+/* Supersets/giant sets i biblioteket kan ha snedstreck utan mellanslag ("A/B"). Koden delar på ' / ',
+   så namnen normaliseras – bara i minnet, det sparade biblioteket ändras aldrig. */
+const splitSup=n=>String(n).split(/\s*\/\s*/);
+function normLibW(w){if(!w||!Array.isArray(w.x))return w;let ch=false;
+  const x=w.x.map(e=>{if(!Array.isArray(e)||(e[3]!=='superset'&&e[3]!=='giant')||!String(e[0]).includes('/'))return e;
+    const nn=splitSup(e[0]).filter(Boolean).join(' / ');if(nn===e[0])return e;ch=true;const n=[...e];n[0]=nn;return n});
+  return ch?{...w,x}:w}
 function setLibrary(lib){if(!lib||!Array.isArray(lib.workouts)||!Array.isArray(lib.programs))return false;
   LIB.programs.length=0;LIB.programs.push(...lib.programs);Object.keys(PROG).forEach(k=>delete PROG[k]);lib.programs.forEach(p=>PROG[p.k]=p);
-  WORKOUTS.length=0;WORKOUTS.push(...lib.workouts);WORKOUTS.forEach(w=>WBYID[w.i]=w);
+  WORKOUTS.length=0;WORKOUTS.push(...lib.workouts.map(normLibW));WORKOUTS.forEach(w=>WBYID[w.i]=w);
   DP_SEQ.length=0;DP_SEQ.push(...WORKOUTS.filter(w=>w.p==='DP').sort((a,b)=>(a.s-b.s)||((a.wk||99)-(b.wk||99))||(a.d-b.d)));
   try{sugCache=null;sugIdx=0}catch(e){}return true}
 const SCHEME_SV = {straight:'Raka set',pyramid:'Pyramid',drop:'Dropset',failure:'Till failure',superset:'Superset',giant:'Giant set',fst7:'FST-7',varied:'Varierat',total:'Totalt antal',other:'Special'};
@@ -2596,10 +2603,10 @@ function subGroupOf(n){
   const e=EXDB.find(x=>x.n===n);
   if(e){if(e.m==='traps')return 'Trapezius';if(e.m==='forearms')return 'Underarmar'}
   const f=String(n);
-  if(/neck|nacke/i.test(f))return 'Nacke';
+  if(/neck|nacke|wrestling bridge/i.test(f))return 'Nacke';
   if(e)return null;
-  if(/shrug|upright row|trap bar shrug/i.test(f)&&!/trap bar deadlift/i.test(f))return 'Trapezius';
-  if(/wrist curl|forearm|handledscurl|reverse curl|omvänd curl|grip|farmer/i.test(f))return 'Underarmar';
+  if(/shrug/i.test(f)&&!/trap bar deadlift/i.test(f))return 'Trapezius';
+  if(/wrist curl|forearm|handledscurl|reverse curl|omvänd curl|farmer|plate pinch|gripper|wrist roller/i.test(f))return 'Underarmar';
   return null;
 }
 const groupAvoided=n=>{const g=avoidGroups();if(!g.length)return false;const m=muscleOf(n);if(m&&g.includes(m))return true;const sg=subGroupOf(n);return !!sg&&g.includes(sg)};
@@ -2647,7 +2654,10 @@ function AW(w,opt){
   if(!w||(!avoidList().length&&!(drop&&avoidGroups().length)&&!om))return w;
   const used=new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));let changed=false;
   let x=w.x;
-  if(drop&&avoidGroups().length){x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const keep=parts.filter(p=>!groupAvoided(p));if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');if(e[3]==='superset')n[3]='straight';return n}).filter(Boolean)}
+  if(drop&&avoidGroups().length){x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const ki=parts.map((p,k)=>groupAvoided(p)?-1:k).filter(k=>k>=0),keep=ki.map(k=>parts[k]);if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');
+      /* Reps "12/10" följer med de delar som blir kvar. Blir bara en kvar är det en vanlig övning. */
+      if(parts.length>1&&Array.isArray(e[9])){n[9]=e[9].map(r=>{const a=String(r).split('/');return a.length===parts.length?ki.map(k=>a[k]).join('/'):r});const R0=n[9];n[2]=R0.every(r=>r===R0[0])?`${n[8]||R0.length} × ${R0[0]}`:R0.join(', ')}
+      if(keep.length===1&&(e[3]==='superset'||e[3]==='giant'))n[3]='straight';return n}).filter(Boolean)}
   x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const orig=[],once=[],sw=[];
     const np=parts.map(p=>{if(om&&om[p]){orig.push(p);once.push(p);sw.push([p,om[p]]);used.add(om[p]);return om[p]}
       if(!isAvoided(p))return p;const s2=subFor(p,used);if(!s2)return p;used.add(s2);orig.push(p);sw.push([p,s2]);return s2});
@@ -2840,14 +2850,22 @@ const ANIM_GROUP={};
  ['Vader','calf tibialis'],['Bröst','bench dbbench pushup pushupknee dips fly'],['Rygg','pullup pulldown straightpull row barrow cablerow invrow shrug'],
  ['Axlar','ohp dbohp lateral frontraise facepull revfly pike'],['Armar','curl cablecurl pressdown skull overhead kickback'],
  ['Bål','plank sideplank crunch legraise deadbug twist climber quadruped carry']].forEach(([g,ks])=>ks.split(' ').forEach(k=>ANIM_GROUP[k]=g));
-function muscleOf(n){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];if(/neck|nack/i.test(f))return 'Nacke';if(/forearm|wrist|underarm|handled/i.test(f))return 'Armar';return ANIM_GROUP[animKeyRaw(f)]||null}
+function muscleOf(n){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];if(/neck|nack|wrestling bridge/i.test(f))return 'Nacke';if(/forearm|wrist|underarm|handled|plate pinch|gripper/i.test(f))return 'Armar';
+  if(/upright row/i.test(f))return 'Axlar';if(/cable crunch|hip raise|leg pull[- ]?in|toe touch|floor touch/i.test(f))return 'Bål';if(/hamstring curl/i.test(f))return 'Ben';
+  return ANIM_GROUP[animKeyRaw(f)]||null}
 const setDone=s=>!!(s&&(kgNum(s[0])>0||(String(s[1]??'').trim()!==''&&String(s[1]).trim()!=='0')||(Array.isArray(s[2])&&s[2].length)));
 /* Volym för ett loggat set: dropset (s[2] = [[kg,reps],...]) summeras över alla drops. */
 const setVol=s=>Array.isArray(s[2])&&s[2].length?s[2].reduce((a,d)=>a+(kgNum(d[0])||0)*(parseInt(d[1])||0),0):(+s[0]||0)*(parseInt(s[1])||0);
 const setTxt=(s,dash)=>{const one=(kg,r)=>r?`${String(kg||'–')}×${r}`:kg?`${kg} kg`:'–';return Array.isArray(s[2])&&s[2].length?s[2].map(d=>one(d[0],d[1])).join(' → '):one(s[0],s[1])};
 /* Supersets loggas med parts:[{n,sets}] per delövning. flatEx gör om en loggpost till enskilda övningar:
    poster utan parts som förut, poster med parts → varje delövning för sig. */
-function flatEx(l){const out=[];(l&&l.ex||[]).forEach(e=>{if(Array.isArray(e.parts)&&e.parts.length)e.parts.forEach(p=>out.push({...p,sets:p.sets||[],of:e.n}));else out.push(e)});return out}
+function flatEx(l){const out=[];(l&&l.ex||[]).forEach(e=>{if(Array.isArray(e.parts)&&e.parts.length)e.parts.forEach(p=>out.push({...p,sets:p.sets||[],of:e.n}));else{const sp=oldSupParts(e);if(sp)sp.forEach(p=>out.push(p));else out.push(e)}});return out}
+/* Äldre superset-loggar utan parts ("A/B" eller "A / B" med reps "12/12"): dela upp i delövningar.
+   Varje del får setets vikt och sin del av reps. Bara när reps eller mål är delade på samma sätt. */
+function oldSupParts(e){const P=splitSup(e&&e.n||'').filter(Boolean);if(P.length<2)return null;
+  const rp=v=>String(v??'').split('/'),fits=v=>rp(v).length===P.length,sets=e.sets||[],t=Array.isArray(e.t)?e.t:[];
+  if(!sets.some(s=>fits(s[1]))&&!t.some(fits))return null;
+  return P.map((n,k)=>({n,sets:sets.map(s=>[s[0],fits(s[1])?rp(s[1])[k]:s[1]]),t:t.map(x=>fits(x)?rp(x)[k]:x),of:e.n}))}
 const exVol=e=>Array.isArray(e.parts)&&e.parts.length?e.parts.reduce((a,p)=>a+(p.sets||[]).reduce((b,s)=>b+setVol(s),0),0):(e.sets||[]).reduce((a,s)=>a+setVol(s),0);
 function logVol(l){if(+l.vol)return +l.vol;let v=0;(l.ex||[]).forEach(e=>{v+=exVol(e)});return v}
 function activeDay(k){const d=S.days[k];return S.log.some(l=>l.date===k)||(d&&((+d.steps||0)>=S.settings.stepGoal||d.mob||d.walk||(d.moves||[]).length>=3))}
