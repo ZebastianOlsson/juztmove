@@ -130,6 +130,7 @@ details.card>summary{cursor:pointer;list-style:none}
 .addpanel{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
 .addpanel .chips{gap:8px}.addpanel .chip{min-height:44px;padding:0 14px}
 .addhits{display:flex;flex-direction:column;gap:6px}
+.addpanel .btn.sm{min-height:44px}
 .addhit{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
 .addhit .grow{min-width:0}.addhit .small{display:block}
 .addacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.addacts .btn{min-height:44px}
@@ -2701,47 +2702,104 @@ const avoidGroups=()=>S.settings.avoidGroups||[];
 /* Finare undergrupper som kan väljas bort utan att tappa hela huvudgruppen.
    Att välja bort huvudgruppen (Rygg/Armar) tar fortfarande bort undergruppen också. */
 const AVOID_CHIPS=['Ben','Bröst','Rygg','Trapezius','Axlar','Armar','Underarmar','Vader','Bål','Nacke'];
-function subGroupOf(n){
-  const e=EXDB.find(x=>x.n===n);
-  if(e){if(e.m==='traps')return 'Trapezius';if(e.m==='forearms')return 'Underarmar'}
-  const f=String(n);
-  if(/neck|nacke|wrestling bridge/i.test(f))return 'Nacke';
-  if(e)return null;
-  if(/shrug/i.test(f)&&!/trap bar deadlift/i.test(f))return 'Trapezius';
-  if(/wrist curl|forearm|handledscurl|reverse curl|omvänd curl|farmer|plate pinch|gripper|wrist roller/i.test(f))return 'Underarmar';
+/* ---------- Finmuskel för en övning ----------
+   exMuscle(namn, variation, passMuskler) → chest/triceps/biceps/shoulders/back/quads/hamstrings/glutes/calves/abs/forearms/traps/neck.
+   Övningsdatabasen först, sedan regler på namn + variation. Passar flera muskler väljs den som finns i passets muskellista (w.m). */
+const FINE_OF_M={chest:'chest',triceps:'triceps',biceps:'biceps',forearms:'forearms',shoulders:'shoulders',rear:'shoulders',back:'back',lower:'back',traps:'traps',
+  quads:'quads',add:'quads',hams:'hamstrings',glutes:'glutes',calves:'calves',tib:'calves',core:'abs'};
+const FINE_GROUP={chest:'Bröst',triceps:'Armar',biceps:'Armar',forearms:'Armar',shoulders:'Axlar',back:'Rygg',traps:'Rygg',quads:'Ben',hamstrings:'Ben',glutes:'Ben',calves:'Vader',abs:'Bål',neck:'Nacke'};
+const FINE_SV={chest:'Bröst',triceps:'Triceps',biceps:'Biceps',forearms:'Underarmar',shoulders:'Axlar',back:'Rygg',traps:'Trapezius',quads:'Framsida lår',hamstrings:'Baksida lår',glutes:'Säte',calves:'Vader',abs:'Bål',neck:'Nacke'};
+const FINE_SYN={chest:'chest',pec:'chest',pecs:'chest',tricep:'triceps',triceps:'triceps',bicep:'biceps',biceps:'biceps',forearm:'forearms',forearms:'forearms',
+  shoulder:'shoulders',shoulders:'shoulders',delt:'shoulders',delts:'shoulders',back:'back',lats:'back',lat:'back',traps:'traps',trap:'traps',
+  quad:'quads',quads:'quads',hamstring:'hamstrings',hamstrings:'hamstrings',hams:'hamstrings',glute:'glutes',glutes:'glutes',calf:'calves',calves:'calves',
+  abs:'abs',ab:'abs',core:'abs',abdominals:'abs',obliques:'abs',neck:'neck',legs:['quads','hamstrings','glutes'],leg:['quads','hamstrings','glutes'],arms:['biceps','triceps']};
+const GROUP_FINE={Bröst:['chest'],Rygg:['back','traps'],Axlar:['shoulders'],Armar:['biceps','triceps','forearms'],Ben:['quads','hamstrings','glutes'],Vader:['calves'],Bål:['abs'],Nacke:['neck']};
+/* Passets muskler: w.m (lista eller text som "SHOULDERS/TRICEPS") och passets grupper (w.g). */
+function passMuscles(w){const out=new Set();if(!w)return out;const add=v=>{(Array.isArray(v)?v:[v]).forEach(x=>{if(x)out.add(x)})};
+  const m=w.m;(Array.isArray(m)?m:m?[m]:[]).forEach(t=>String(t).toLowerCase().split(/[^a-zåäö]+/).forEach(k=>add(FINE_SYN[k]||(FINE_GROUP[k]?k:null))));
+  (w.g||[]).forEach(g=>add(GROUP_FINE[g]));return out}
+const pmOfLog=l=>passMuscles(l&&(l.wobj||wById(l.wid)));
+const NECK_RE=/neck raise|wrestl|neck harness|neck flex|neck ext|neck curl|nacklyft|nackböj/i;
+function exMuscleCands(t){const c=[],add=m=>{if(!c.includes(m))c.push(m)};
+  if(NECK_RE.test(t))add('neck');
+  const pullish=/pull|\brows?\b|chin|\blats?\b/.test(t);
+  if(/tricep|\bdips?\b|diamond|skull|kick.?back|press.?down|push.?down|overhead.*extension|french press/.test(t)||(/close.?grip/.test(t)&&/bench|press|push.?up/.test(t)&&!pullish))add('triceps');
+  if(/wrist|forearm|reverse curl|farmer|plate pinch|gripper/.test(t))add('forearms');
+  if(/curl/.test(t)&&!/leg|hamstring|wrist|nordic/.test(t))add('biceps');
+  if(/upright row|arnold|military|shoulder press|lateral|delt|hex.*press|standing.*dumbbell press|overhead press|front raise|face pull/.test(t))add('shoulders');
+  if(/romanian|stiff.?leg|\brdl\b|good morning|leg curl|hamstring/.test(t))add('hamstrings');
+  if(/deadlift|hyper.?ext/.test(t)){add('hamstrings');add('back')}
+  if(/pull.?down|\brows?\b|pull.?up|chin|pull.?over|pendlay|\blat\b/.test(t)&&!/upright row/.test(t))add('back');
+  if(/shrug/.test(t))add('traps');
+  if(/bench|chest|\bfly|flye|\bpec|push.?up|\bdip/.test(t))add('chest');
+  if(/crunch|sit.?up|plank|hip raise|leg raise|leg pull|knee raise|toe touch|floor touch|russian twist|\bab\b|v.?up|woodchop/.test(t))add('abs');
+  if(/hip thrust|glute|kickback.*cable|bridge/.test(t)&&!NECK_RE.test(t))add('glutes');
+  if(/calf|calves/.test(t))add('calves');
+  if(/squat|lunge|leg press|leg extension|step.?up|split squat/.test(t))add('quads');
+  return c}
+function exMuscle(name,variation,pm){const e=EXDB.find(x=>x.n===name);if(e)return FINE_OF_M[e.m]||null;
+  const c=exMuscleCands((String(name||'')+' '+String(variation||'')).toLowerCase());if(!c.length)return null;
+  if(pm&&pm.size){const hit=c.find(m=>pm.has(m));if(hit)return hit}return c[0]}
+function subGroupOf(n,variation,pm){
+  const f=exMuscle(n,variation,pm);if(f==='traps')return 'Trapezius';if(f==='forearms')return 'Underarmar';if(f==='neck')return 'Nacke';
+  if(EXDB.some(x=>x.n===n))return null;
+  const t=String(n);if(/shrug/i.test(t)&&!/trap bar deadlift/i.test(t))return 'Trapezius';
+  if(/wrist curl|forearm|handledscurl|reverse curl|omvänd curl|farmer|plate pinch|gripper|wrist roller/i.test(t))return 'Underarmar';
   return null;
 }
-const groupAvoided=n=>{const g=avoidGroups();if(!g.length)return false;const m=muscleOf(n);if(m&&g.includes(m))return true;const sg=subGroupOf(n);return !!sg&&g.includes(sg)};
+const groupAvoided=(n,variation,pm)=>{const g=avoidGroups();if(!g.length)return false;const m=muscleOf(n,variation,pm);if(m&&g.includes(m))return true;const sg=subGroupOf(n,variation,pm);return !!sg&&g.includes(sg)};
 const avoidChips=(attr,cur)=>`<div class="chips wrap">${AVOID_CHIPS.map(g=>`<button class="chip" type="button" ${attr(g)} aria-pressed="${cur.includes(g)}">${g}</button>`).join('')}</div>`;
 const strHash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
-function subFor(name,used,skip){
-  const key=animKeyRaw(name),grp=muscleOf(name);
+/* Ersättare: samma finmuskel (triceps mot triceps), utrustning du har, inte bortvalda och inte redan i passet.
+   Rörelsemönstret (animKey) sorterar fram de mest lika. Utan finmuskel: samma grupp som förut. */
+function subList(name,used,ctx){ctx=ctx||{};const fine=exMuscle(name,ctx.variation,ctx.pm),key=animKeyRaw(name),grp=muscleOf(name,ctx.variation,ctx.pm);
   const base=EXDB.filter(e=>e.n!==name&&!isAvoided(e.n)&&!groupAvoided(e.n)&&!used.has(e.n)&&equipOk(e));
-  let c=base.filter(e=>key&&animKeyRaw(e.n)===key&&(!grp||MUSCLE_GROUP[e.m]===grp));
-  if(!c.length&&grp)c=base.filter(e=>MUSCLE_GROUP[e.m]===grp&&(key?ANIM_GROUP[animKeyRaw(e.n)]===ANIM_GROUP[key]:true));
+  let c=fine?base.filter(e=>FINE_OF_M[e.m]===fine):[];
   if(!c.length&&grp)c=base.filter(e=>MUSCLE_GROUP[e.m]===grp);
   c=gymFirst(c);
-  return c.length?c[(strHash(name)+(skip||0))%c.length].n:null;
-}
+  const same=key?c.filter(e=>animKeyRaw(e.n)===key):[],near=key?c.filter(e=>!same.includes(e)&&ANIM_GROUP[animKeyRaw(e.n)]===ANIM_GROUP[key]):[];
+  return [...same,...near,...c.filter(e=>!same.includes(e)&&!near.includes(e))].map(e=>e.n)}
+function subFor(name,used,skip,ctx){const L=subList(name,used,ctx);if(!L.length)return null;
+  const key=animKeyRaw(name),top=key?L.filter(n=>animKeyRaw(n)===key):[],pool=top.length?top:L;return pool[(strHash(name)+(skip||0))%pool.length]}
 /* Byt bara idag: i ett pågående pass skrivs bytet in i passet (active.w); annars hålls det i minnet tills passet startas. */
 const onceMap={};
 const exUsed=w=>new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));
 const swapNote=(v,orig)=>[v,orig.length?'ersätter '+orig.join(' och '):''].filter(Boolean).join(' · ');
 function keepExPos(btn){const sh=$('#sheet'),exEl=btn&&btn.closest?btn.closest('#sheetBody .ex'):null,exs=[...document.querySelectorAll('#sheetBody .ex')],idx=exEl?exs.indexOf(exEl):-1,y=sh.scrollTop,off=exEl?exEl.getBoundingClientRect().top-sh.getBoundingClientRect().top:0;
   rerenderSheet();const nx=idx>=0?document.querySelectorAll('#sheetBody .ex')[idx]:null;if(nx)sh.scrollTop+=nx.getBoundingClientRect().top-sh.getBoundingClientRect().top-off;else sh.scrollTop=y}
-function swapOnce(shown,btn){
+function swapOnce(shown,btn,forced){
   const run=!!(active&&sheetCtx&&sheetCtx.t==='active'),wid=run?active.wid:(sheetCtx&&sheetCtx.t==='w'?sheetCtx.id:null);if(!wid)return;
   let orig=shown,sub=null;const none=()=>toast('Hittar ingen liknande övning att byta till');
   if(run){const x=[...active.w.x],i=x.findIndex(e=>String(e[0]).split(' / ').includes(shown));if(i<0)return;
     const row=[...x[i]],m={...(row[10]||{})},sw=(m.sw||[]).map(p=>[...p]),pair=sw.find(p=>p[1]===shown);if(pair)orig=pair[0];
-    const k=(m.k||0)+(pair?1:0);sub=subFor(orig,exUsed(activeW()),k);if(!sub)return none();
+    const k=(m.k||0)+(pair?1:0);sub=forced||subFor(orig,exUsed(activeW()),k,swapCtx(row,orig));if(!sub)return none();
     const v=typeof m.v==='string'?m.v:(row[1]||'');
     row[0]=String(row[0]).split(' / ').map(p=>p===shown?sub:p).join(' / ');if(pair)pair[1]=sub;else sw.push([orig,sub]);
     const og=[...new Set([...(m.orig||[]),orig])];row[10]={...m,orig:og,once:[...new Set([...(m.once||[]),orig])],sw,k,v};row[1]=swapNote(v,og);
     x[i]=row;active.w={...active.w,x};saveActive()}
   else{const o=onceMap[wid]||(onceMap[wid]={map:{},n:{}});orig=Object.keys(o.map).find(k=>o.map[k]===shown)||shown;
-    const k=(o.n[orig]||0)+(o.map[orig]?1:0);sub=subFor(orig,exUsed(AW(WBYID[wid])),k);if(!sub)return none();o.n[orig]=k;o.map[orig]=sub}
+    const k=(o.n[orig]||0)+(o.map[orig]?1:0);sub=forced||subFor(orig,exUsed(AW(WBYID[wid])),k,{pm:passMuscles(WBYID[wid]),variation:((WBYID[wid].x.find(e=>String(e[0]).split(' / ').includes(orig))||[])[1])||''});if(!sub)return none();o.n[orig]=k;o.map[orig]=sub}
+  swapPick=null;if(addPanel&&addPanel.ctx==='swap')addPanel=null;
   toast(`${orig} byts mot ${sub} – bara i det här passet`);keepExPos(btn)}
+/* ---------- Byt bara idag: välj bland 3–4 alternativ med samma finmuskel, eller sök ---------- */
+let swapPick=null;
+const curKey=()=>active&&sheetCtx&&sheetCtx.t==='active'?'a:'+active.wid:'w:'+(sheetCtx&&sheetCtx.id);
+function curW(){return active&&sheetCtx&&sheetCtx.t==='active'?activeW():(sheetCtx&&sheetCtx.t==='w'&&WBYID[sheetCtx.id]?AW(WBYID[sheetCtx.id]):null)}
+function swapCtx(row,orig){const v=row&&row[10]&&typeof row[10].v==='string'?row[10].v:(row?row[1]:'');const one=row&&String(row[0]).split(' / ').length===1;
+  return {variation:one?v:'',pm:passMuscles(curW()||(active&&active.w))}}
+/* Originalnamn och muskel för en visad (ev. redan utbytt) övning. */
+function swapInfo(shown){const w=curW();if(!w)return null;const row=w.x.find(e=>String(e[0]).split(' / ').includes(shown));if(!row)return null;
+  let orig=shown;const pair=row[10]&&(row[10].sw||[]).find(p=>p[1]===shown);if(pair)orig=pair[0];
+  const om=!active||curKey()[0]!=='a'?onceMap[sheetCtx&&sheetCtx.id]:null;if(om){const k=Object.keys(om.map).find(k=>om.map[k]===shown);if(k)orig=k}
+  const wr=(WBYID[active&&curKey()[0]==='a'?active.wid:sheetCtx.id]||w).x.find(e=>String(e[0]).split(' / ').includes(orig))||row;
+  const ctx=swapCtx(wr,orig),fine=exMuscle(orig,ctx.variation,ctx.pm);return {w,orig,ctx,fine,grp:fine?FINE_GROUP[fine]:muscleOf(orig,ctx.variation,ctx.pm)}}
+function swapPickHTML(shown){const I=swapInfo(shown);if(!I)return '';
+  if(addPanel&&addPanel.ctx==='swap'&&addPanel.shown===shown)return '<div class="addpanel" id="addPanel"></div>';
+  const used=exUsed(I.w);used.add(shown);const alts=subList(I.orig,used,I.ctx).slice(0,4);
+  return `<div class="addpanel swappick"><div class="row between" style="flex-wrap:nowrap"><strong>Byt ${esc(shown)} bara idag</strong><button class="btn ghost sm" type="button" data-onceclose>Stäng</button></div>
+   ${I.fine?`<div class="small muted">Samma muskel: ${esc(FINE_SV[I.fine])}</div>`:''}
+   <div class="addhits">${alts.map(n=>`<button class="addhit" type="button" data-oncepick="${esc(shown)}" data-sub="${esc(n)}"><span class="grow">${esc(n)}</span><span class="pill">${esc(FINE_SV[exMuscle(n)]||muscleOf(n)||'')}</span></button>`).join('')||'<p class="small muted" style="margin:0">Hittar inga liknande övningar med din utrustning.</p>'}</div>
+   <button class="btn ghost" type="button" data-oncesearch="${esc(shown)}">Sök annan övning</button></div>`}
 /* Sätter tillbaka en utbytt övning i det pågående passet. */
 function restoreInActive(orig){if(!active)return false;const x=[...active.w.x],i=x.findIndex(e=>e[10]&&(e[10].sw||[]).some(p=>p[0]===orig));if(i<0)return false;
   const row=[...x[i]],m={...row[10]},pair=m.sw.find(p=>p[0]===orig);
@@ -2754,15 +2812,15 @@ function unswapOnce(orig,btn){
 function AW(w,opt){
   const drop=!opt||opt.drop!==false, om=w&&onceMap[w.i]&&Object.keys(onceMap[w.i].map).length?onceMap[w.i].map:null;
   if(!w||(!avoidList().length&&!(drop&&avoidGroups().length)&&!om))return w;
-  const used=new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));let changed=false;
+  const used=new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));let changed=false;const PM=passMuscles(w);
   let x=w.x;
-  if(drop&&avoidGroups().length){x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const ki=parts.map((p,k)=>groupAvoided(p)?-1:k).filter(k=>k>=0),keep=ki.map(k=>parts[k]);if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');
+  if(drop&&avoidGroups().length){x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const ki=parts.map((p,k)=>groupAvoided(p,parts.length===1?e[1]:'',PM)?-1:k).filter(k=>k>=0),keep=ki.map(k=>parts[k]);if(keep.length===parts.length)return e;changed=true;if(!keep.length)return null;const n=[...e];n[0]=keep.join(' / ');
       /* Reps "12/10" följer med de delar som blir kvar. Blir bara en kvar är det en vanlig övning. */
       if(parts.length>1&&Array.isArray(e[9])){n[9]=e[9].map(r=>{const a=String(r).split('/');return a.length===parts.length?ki.map(k=>a[k]).join('/'):r});const R0=n[9];n[2]=R0.every(r=>r===R0[0])?`${n[8]||R0.length} × ${R0[0]}`:R0.join(', ')}
       if(keep.length===1&&(e[3]==='superset'||e[3]==='giant'))n[3]='straight';return n}).filter(Boolean)}
   x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const orig=[],once=[],sw=[];
     const np=parts.map(p=>{if(om&&om[p]){orig.push(p);once.push(p);sw.push([p,om[p]]);used.add(om[p]);return om[p]}
-      if(!isAvoided(p))return p;const s2=subFor(p,used);if(!s2)return p;used.add(s2);orig.push(p);sw.push([p,s2]);return s2});
+      if(!isAvoided(p))return p;const s2=subFor(p,used,0,{variation:parts.length===1?e[1]:'',pm:PM});if(!s2)return p;used.add(s2);orig.push(p);sw.push([p,s2]);return s2});
     if(!orig.length)return e;changed=true;const n=[...e];n[0]=np.join(' / ');n[1]=swapNote(e[1],orig);n[10]={orig,once,sw,v:e[1]||''};return n});
   return changed?{...w,x,g:(w.g||[]).filter(g=>!avoidGroups().includes(g))}:w;
 }
@@ -2952,7 +3010,8 @@ const ANIM_GROUP={};
  ['Vader','calf tibialis'],['Bröst','bench dbbench pushup pushupknee dips fly'],['Rygg','pullup pulldown straightpull row barrow cablerow invrow shrug'],
  ['Axlar','ohp dbohp lateral frontraise facepull revfly pike'],['Armar','curl cablecurl pressdown skull overhead kickback'],
  ['Bål','plank sideplank crunch legraise deadbug twist climber quadruped carry']].forEach(([g,ks])=>ks.split(' ').forEach(k=>ANIM_GROUP[k]=g));
-function muscleOf(n){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];if(/neck|nack|wrestling bridge/i.test(f))return 'Nacke';if(/forearm|wrist|underarm|handled|plate pinch|gripper/i.test(f))return 'Armar';
+function muscleOf(n,variation,pm){const e=EXDB.find(x=>x.n===n);if(e)return MUSCLE_GROUP[e.m]||'Helkropp';const f=String(n).split(' / ')[0];
+  const fm=exMuscle(f,variation,pm);if(fm)return FINE_GROUP[fm];if(/forearm|wrist|underarm|handled|plate pinch|gripper/i.test(f))return 'Armar';
   if(/upright row/i.test(f))return 'Axlar';if(/cable crunch|hip raise|leg pull[- ]?in|toe touch|floor touch/i.test(f))return 'Bål';if(/hamstring curl/i.test(f))return 'Ben';
   return ANIM_GROUP[animKeyRaw(f)]||null}
 const setDone=s=>!!(s&&(kgNum(s[0])>0||(String(s[1]??'').trim()!==''&&String(s[1]).trim()!=='0')||(Array.isArray(s[2])&&s[2].length)));
@@ -3063,7 +3122,7 @@ function viewProgress(){
   const longest=R.reduce((a,l)=>(+l.km||0)>(+a?.km||0)?l:a,null),fastest=R.filter(l=>+l.avg&&(+l.km||0)>=3).reduce((a,l)=>+l.avg>(+a?.avg||0)?l:a,null);
   /* Muskelgrupper senaste 4 veckorna */
   const f28=dkey(addDays(new Date(),-27)),mg={};['Ben','Rygg','Bröst','Axlar','Armar','Bål','Vader'].forEach(g=>mg[g]=0);
-  S.log.filter(l=>isStrLog(l)&&l.date>=f28).forEach(l=>flatEx(l).forEach(e=>{const g=muscleOf(e.n);if(g&&g in mg)mg[g]+=(e.sets||[]).filter(setDone).length||0}));
+  S.log.filter(l=>isStrLog(l)&&l.date>=f28).forEach(l=>{const pm=pmOfLog(l);flatEx(l).forEach(e=>{const g=muscleOf(e.n,'',pm);if(g&&g in mg)mg[g]+=(e.sets||[]).filter(setDone).length||0})});
   const mgRows=Object.entries(mg).sort((a,b)=>b[1]-a[1]);const least=mgRows.filter(r=>r[0]!=='Vader').slice(-1)[0];
   /* Programmet */
   const pi=progPos(),pw=DP_SEQ[pi];
@@ -3460,8 +3519,8 @@ function exerciseHTML(e,i,mode,noTempo){
    ${supSug.map(({pn,w})=>`<div class="sugg ${w.inc>0?'up':w.inc<0?'down':''}">${w.inc>0?'▲':w.inc<0?'▼':'='} ${esc(pn)}: ${esc(w.note)}</div>`).join('')}
    ${(()=>{const parts=String(name).split(' / '),orig=(e[10]&&e[10].orig)||[];
      if(isAdded(e)&&mode==='run')return `<div class="exacts addacts"><button class="btn ghost sm" type="button" data-addset="${i}">+ Set</button><button class="btn ghost sm" type="button" data-addrm="${i}">Ta bort</button><span class="pill">Tillagd</span></div>`;
-     const once=(e[10]&&e[10].once)||[];
-     return `<div class="exacts">${orig.map(o=>`<button class="linkbtn small muted" type="button" ${once.includes(o)?'data-unonce':'data-unavoid'}="${esc(o)}">Ångra byte (${esc(o)})</button>`).join(' ')}${parts.filter(p=>!orig.includes(p)).map(p=>`<button class="linkbtn small muted" type="button" data-once="${esc(p)}">${parts.length>1?'Byt '+esc(p)+' bara idag':'Byt bara idag'}</button> <button class="linkbtn small muted" type="button" data-avoid="${esc(p)}">${parts.length>1?'Undvik '+esc(p)+' framöver':'Undvik framöver'}</button>`).join(' ')}</div>`})()}
+     const once=(e[10]&&e[10].once)||[],pick=swapPick&&swapPick.key===curKey()&&parts.includes(swapPick.shown)?swapPickHTML(swapPick.shown):'';
+     return pick+`<div class="exacts">${orig.map(o=>`<button class="linkbtn small muted" type="button" ${once.includes(o)?'data-unonce':'data-unavoid'}="${esc(o)}">Ångra byte (${esc(o)})</button>`).join(' ')}${parts.filter(p=>!orig.includes(p)).map(p=>`<button class="linkbtn small muted" type="button" data-once="${esc(p)}">${parts.length>1?'Byt '+esc(p)+' bara idag':'Byt bara idag'}</button> <button class="linkbtn small muted" type="button" data-avoid="${esc(p)}">${parts.length>1?'Undvik '+esc(p)+' framöver':'Undvik framöver'}</button>`).join(' ')}</div>`})()}
    </div></div>${rows}</div>`;
 }
 function showWorkout(id){
@@ -3475,6 +3534,7 @@ function showWorkout(id){
     ${(()=>{const pl=prefillPlan(w);return pl.ok&&pl.fill?`<button class="btn ghost" type="button" data-startpre="${esc(w.i)}">Förifyll vikter (${pl.fill} av ${pl.all} set)</button>`:''})()}
     ${tempoTop(sharedTempo(w))}<div class="card">${w.x.map((e,i)=>exerciseHTML(e,i,'view',!!sharedTempo(w))).join('')}</div></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Tillbaka</button><button class="btn" type="button" data-start="${w.i}">Starta passet</button>`);
+  if(addPanel&&addPanel.ctx==='swap')renderAddPanel();
 }
 function stickyBar(inner){document.querySelector('.sticky')?.remove();const d=document.createElement('div');d.className='sticky';d.innerHTML=`<div class="in">${inner}</div>`;document.body.appendChild(d);bind(d)}
 function startWorkout(id,date,pre){
@@ -3518,7 +3578,7 @@ function renderActive(){
     ${addPanel&&!addPanel.ctx?'<div class="addpanel" id="addPanel"></div>':'<div class="addacts"><button class="btn ghost" type="button" data-addopen>+ Lägg till övning</button></div>'}</div>
    <p class="small muted">Tryck ✓ efter varje set så startar vilotimern. Tomma vikter loggas inte.</p>`);
   stickyBar(`<button class="btn ghost" type="button" data-cancel>Avbryt pass</button><button class="btn" type="button" data-finish>Avsluta och spara</button>`);
-  if(addPanel&&!addPanel.ctx)renderAddPanel();
+  if(addPanel&&(!addPanel.ctx||addPanel.ctx==='swap'))renderAddPanel();
 }
 /* ---------- Lägg till övning under pågående pass ----------
    Tillagda rader markeras med e[11] = {add:true} (e[10] används för utbytta övningar). */
@@ -3528,13 +3588,15 @@ const isAdded=e=>!!(e&&e[11]&&e[11].add);
 function passGroups(){const w=active.w||WBYID[active.wid]||{};let g=(w.g||[]).filter(x=>MG.includes(x));
   if(!g.length)g=[...new Set((w.x||[]).flatMap(e=>String(e[0]).split(' / ')).map(muscleOf).filter(x=>MG.includes(x)))];return g}
 function openAddPanel(){addPanel={q:'',groups:passGroups(),all:false,show:12,focus:true};if(!addPanel.groups.length)addPanel.all=true;rerenderActiveKeep()}
-const addOwnGroups=()=>addPanel&&addPanel.ctx==='oth'?[]:passGroups();
+const addOwnGroups=()=>addPanel&&addPanel.ctx==='oth'?[]:addPanel&&addPanel.ctx==='swap'?(addPanel.grp?[addPanel.grp]:[]):passGroups();
 function addCandidates(){
-  const inPass=new Set((addPanel.ctx==='oth'?(oth?oth.ex.map(e=>e.n):[]):activeW().x.flatMap(e=>String(e[0]).split(' / '))).map(n=>n.toLowerCase()));
+  const inPass=new Set((addPanel.ctx==='oth'?(oth?oth.ex.map(e=>e.n):[]):(curW()||activeW()).x.flatMap(e=>String(e[0]).split(' / '))).map(n=>n.toLowerCase()));
+  const pm=addPanel.ctx==='oth'?null:passMuscles(curW()),fineOn=addPanel.ctx==='swap'&&addPanel.fine&&addPanel.fineOn;
   const cnt={},seen=new Set(),out=[];
   S.log.filter(isStrLog).forEach(l=>flatEx(l).forEach(e=>String(e.n).split(' / ').forEach(n=>{if(n)cnt[n]=(cnt[n]||0)+1})));
-  const ok=n=>{const k=n.toLowerCase();if(seen.has(k)||inPass.has(k)||isAvoided(n)||groupAvoided(n))return false;
-    if(!addPanel.all){const g=muscleOf(n);if(!g||!addPanel.groups.includes(g))return false}return true};
+  const ok=n=>{const k=n.toLowerCase();if(seen.has(k)||inPass.has(k)||isAvoided(n)||groupAvoided(n,'',pm))return false;
+    if(fineOn)return exMuscle(n,'',pm)===addPanel.fine;
+    if(!addPanel.all){const g=muscleOf(n,'',pm);if(!g||!addPanel.groups.includes(g))return false}return true};
   const q=addPanel.q.trim().toLowerCase(),hit=n=>!q||n.toLowerCase().includes(q);
   Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a.localeCompare(b,'sv')).forEach(n=>{if(hit(n)&&ok(n)){seen.add(n.toLowerCase());out.push({n,c:cnt[n]})}});
   EXDB.forEach(e=>{if(hit(e.n)&&ok(e.n)){seen.add(e.n.toLowerCase());out.push({n:e.n,c:0})}});
@@ -3543,14 +3605,16 @@ function addHitsHTML(){
   const {out,inPass}=addCandidates(),q=addPanel.q.trim(),ql=q.toLowerCase();
   const exact=ql&&(out.some(x=>x.n.toLowerCase()===ql)||inPass.has(ql)||EXDB.some(e=>e.n.toLowerCase()===ql));
   const list=out.slice(0,addPanel.show);
-  return `${list.map(x=>{const g=muscleOf(x.n);return `<button class="addhit" type="button" data-addex="${esc(x.n)}"><span class="grow">${esc(x.n)}${x.c?`<span class="small muted">Loggad ${x.c} ${x.c===1?'gång':'gånger'}</span>`:''}</span>${g?`<span class="pill">${esc(g)}</span>`:''}</button>`}).join('')}
+  const pm=addPanel.ctx==='oth'?null:passMuscles(curW());
+  return `${list.map(x=>{const fm=exMuscle(x.n,'',pm),g=addPanel.ctx==='swap'&&fm?FINE_SV[fm]:muscleOf(x.n,'',pm);return `<button class="addhit" type="button" data-addex="${esc(x.n)}"><span class="grow">${esc(x.n)}${x.c?`<span class="small muted">Loggad ${x.c} ${x.c===1?'gång':'gånger'}</span>`:''}</span>${g?`<span class="pill">${esc(g)}</span>`:''}</button>`}).join('')}
    ${!list.length&&!q?'<p class="small muted" style="margin:0">Inga övningar i valda grupper. Välj fler grupper eller ”Alla övningar”.</p>':''}
    ${out.length>addPanel.show?`<button class="btn ghost sm" type="button" data-addmore>Visa fler (${out.length-addPanel.show} till)</button>`:''}
-   ${q&&!exact?`<button class="addhit" type="button" data-addex="${esc(q)}"><span class="grow">Lägg till ”${esc(q)}” som egen övning</span></button>`:''}`}
+   ${q&&!exact?`<button class="addhit" type="button" data-addex="${esc(q)}"><span class="grow">${addPanel.ctx==='swap'?'Byt till':'Lägg till'} ”${esc(q)}” som egen övning</span></button>`:''}`}
 function renderAddPanel(){const el=$('#addPanel');if(!el||!addPanel)return;const own=addOwnGroups(),rest=MG.filter(g=>!own.includes(g));
-  el.innerHTML=`<div class="row between" style="flex-wrap:nowrap"><strong>Lägg till övning</strong><button class="btn ghost sm" type="button" data-addclose>Stäng</button></div>
+  el.innerHTML=`<div class="row between" style="flex-wrap:nowrap"><strong>${addPanel.ctx==='swap'?'Byt '+esc(addPanel.shown)+' mot …':'Lägg till övning'}</strong><button class="btn ghost sm" type="button" data-addclose>Stäng</button></div>
    <input id="addQ" type="search" autocomplete="off" placeholder="Sök övning, t.ex. hammer curl" aria-label="Sök övning" value="${esc(addPanel.q)}">
    <div class="chips wrap">${[...own,...rest].map(g=>`<button class="chip" type="button" data-addgrp="${g}" aria-pressed="${!addPanel.all&&addPanel.groups.includes(g)}">${g}</button>`).join('')}<button class="chip" type="button" data-addall aria-pressed="${addPanel.all}">Alla övningar</button></div>
+   ${addPanel.ctx==='swap'&&addPanel.fine&&addPanel.fineOn?`<div class="small muted">Visar ${esc(FINE_SV[addPanel.fine].toLowerCase())}övningar. Välj en grupp eller ”Alla övningar” för fler.</div>`:''}
    <div class="addhits" id="addHits">${addHitsHTML()}</div>`;
   bind(el);const q=$('#addQ');q.oninput=()=>{addPanel.q=q.value;addPanel.show=12;const h=$('#addHits');h.innerHTML=addHitsHTML();bind(h)};
   if(addPanel.focus){addPanel.focus=false;try{q.focus({preventScroll:true})}catch(e){q.focus()}el.scrollIntoView({block:'nearest'})}}
@@ -4012,7 +4076,11 @@ function bind(root){
   root.querySelectorAll('[data-freset]').forEach(b=>b.onclick=()=>{findGroup='';findLen=0;findProg='';libQ='';libShow=20;render()});
   root.querySelectorAll('[data-genbuild]').forEach(b=>b.onclick=()=>{const w=genWorkout(b.dataset.genbuild);regW(w);showWorkout(w.i)});
   root.querySelectorAll('[data-avoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.avoid,true,b));
-  root.querySelectorAll('[data-once]').forEach(b=>b.onclick=()=>swapOnce(b.dataset.once,b));
+  root.querySelectorAll('[data-once]').forEach(b=>b.onclick=()=>{swapPick={shown:b.dataset.once,key:curKey()};if(addPanel&&addPanel.ctx==='swap')addPanel=null;keepExPos(b)});
+  root.querySelectorAll('[data-oncepick]').forEach(b=>b.onclick=()=>swapOnce(b.dataset.oncepick,b,b.dataset.sub));
+  root.querySelectorAll('[data-onceclose]').forEach(b=>b.onclick=()=>{swapPick=null;keepExPos(b)});
+  root.querySelectorAll('[data-oncesearch]').forEach(b=>b.onclick=()=>{const sh=b.dataset.oncesearch,I=swapInfo(sh);if(!I)return;
+    addPanel={ctx:'swap',shown:sh,fine:I.fine,fineOn:!!I.fine,grp:I.grp,q:'',groups:I.grp?[I.grp]:[],all:!I.grp,show:12,focus:true};keepExPos(b)});
   root.querySelectorAll('[data-unonce]').forEach(b=>b.onclick=()=>unswapOnce(b.dataset.unonce,b));
   root.querySelectorAll('[data-unavoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.unavoid,false,b));
   root.querySelectorAll('[data-avgrp]').forEach(b=>b.onclick=()=>toggleGroup(b.dataset.avgrp));
@@ -4060,13 +4128,13 @@ function bind(root){
     if(s[2]){audioInit();startRest(restFor(activeRow(i)))}});
   root.querySelectorAll('[data-addopen]').forEach(b=>b.onclick=openAddPanel);
   root.querySelectorAll('[data-kgon]').forEach(b=>b.onclick=()=>{active.kgOn={...(active.kgOn||{}),[+b.dataset.kgon]:true};rerenderActiveKeep()});
-  root.querySelectorAll('[data-addclose]').forEach(b=>b.onclick=()=>{const o=addPanel&&addPanel.ctx==='oth';addPanel=null;if(o){othRead();othKeep()}else rerenderActiveKeep()});
-  root.querySelectorAll('[data-addgrp]').forEach(b=>b.onclick=()=>{const g=b.dataset.addgrp,G=addPanel.all?[]:addPanel.groups;addPanel.all=false;addPanel.groups=G.includes(g)?G.filter(x=>x!==g):G.concat([g]);addPanel.show=12;
+  root.querySelectorAll('[data-addclose]').forEach(b=>b.onclick=()=>{const o=addPanel&&addPanel.ctx==='oth',sw=addPanel&&addPanel.ctx==='swap';addPanel=null;if(o){othRead();othKeep()}else if(sw){swapPick=null;keepExPos(b)}else rerenderActiveKeep()});
+  root.querySelectorAll('[data-addgrp]').forEach(b=>b.onclick=()=>{if(addPanel.fineOn){addPanel.fineOn=false;addPanel.all=false;addPanel.groups=[b.dataset.addgrp];addPanel.show=12;return renderAddPanel()}const g=b.dataset.addgrp,G=addPanel.all?[]:addPanel.groups;addPanel.all=false;addPanel.groups=G.includes(g)?G.filter(x=>x!==g):G.concat([g]);addPanel.show=12;
     $('#addPanel').querySelectorAll('[data-addgrp]').forEach(c=>c.setAttribute('aria-pressed',addPanel.groups.includes(c.dataset.addgrp)));$('#addPanel [data-addall]').setAttribute('aria-pressed','false');addUpdHits()});
-  root.querySelectorAll('[data-addall]').forEach(b=>b.onclick=()=>{addPanel.all=!addPanel.all;if(!addPanel.all&&!addPanel.groups.length)addPanel.groups=addOwnGroups();addPanel.show=12;
+  root.querySelectorAll('[data-addall]').forEach(b=>b.onclick=()=>{if(addPanel.fineOn){addPanel.fineOn=false;addPanel.all=true;addPanel.show=12;return renderAddPanel()}addPanel.all=!addPanel.all;if(!addPanel.all&&!addPanel.groups.length)addPanel.groups=addOwnGroups();addPanel.show=12;
     $('#addPanel').querySelectorAll('[data-addgrp]').forEach(c=>c.setAttribute('aria-pressed',!addPanel.all&&addPanel.groups.includes(c.dataset.addgrp)));b.setAttribute('aria-pressed',addPanel.all);addUpdHits()});
   root.querySelectorAll('[data-addmore]').forEach(b=>b.onclick=()=>{addPanel.show+=12;addUpdHits()});
-  root.querySelectorAll('[data-addex]').forEach(b=>b.onclick=()=>addPanel&&addPanel.ctx==='oth'?othAddEx(b.dataset.addex):addExercise(b.dataset.addex));
+  root.querySelectorAll('[data-addex]').forEach(b=>b.onclick=()=>addPanel&&addPanel.ctx==='oth'?othAddEx(b.dataset.addex):addPanel&&addPanel.ctx==='swap'?swapOnce(addPanel.shown,b,b.dataset.addex):addExercise(b.dataset.addex));
   root.querySelectorAll('[data-addset]').forEach(b=>b.onclick=()=>addSetTo(+b.dataset.addset));
   root.querySelectorAll('[data-addrm]').forEach(b=>b.onclick=()=>removeAdded(+b.dataset.addrm));
   root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
