@@ -343,7 +343,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='501e58269f';
+const BUILD='public', VERSION='e08c24d397';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -402,8 +402,9 @@ const RUNS = [
   seg:[[8,'w','Uppvärmning, lätt jogg'],...[1,2,3,4,5,6,7,8,9,10].flatMap(i=>[[1,'h',`Snabbt ${i}/10`],[1,'j','Lugnt']]),[4,'c','Nedvarvning']]},
  {id:'r-4x5',t:'4 × 5 min',where:'band',cat:1,desc:'Lite snabbare än bekväm fart, 2 min jogg emellan. För när du vill köra längre bitar.',
   seg:[[10,'w','Uppvärmning, lätt jogg'],...[1,2,3,4].flatMap(i=>[[5,'h',`Snabbare än bekvämt ${i}/4`]].concat(i<4?[[2,'j','Lugn jogg']]:[])),[5,'c','Nedvarvning']]},
- {id:'r-prog',t:'Progressivt pass',where:'band',cat:2,desc:'Öka farten 0,5 km/h var 5:e minut. Det händer hela tiden något.',
-  seg:[[5,'s','Starta i lugn joggfart'],[5,'s','+0,5 km/h'],[5,'s','+0,5 km/h'],[5,'s','+0,5 km/h'],[5,'s','+0,5 km/h'],[3,'c','Nedvarvning']]},
+ {id:'r-prog',t:'Progressivt pass',where:'band',cat:2,progStep:0.5,desc:'Öka farten stegvis. Det händer hela tiden något.',
+  descFn:r=>{const d=progInfo(r);return `Öka farten ${d.step} km/h var ${d.every} minut. Det händer hela tiden något.`},
+  seg:[[5,'s','Starta i lugn joggfart'],[5,'s','+'],[5,'s','+'],[5,'s','+'],[5,'s','+'],[3,'c','Nedvarvning']]},
  {id:'r-backe',t:'Backintervaller',where:'band',cat:2,desc:'Jämn fart, växla lutning mellan 1 % och 5–6 % var 2:a minut.',
   seg:[[8,'w','Uppvärmning, 1 % lutning'],...[1,2,3,4,5].flatMap(i=>[[2,'h',`Backe 5–6 % (${i}/5)`],[2,'j','Plant 1 %']]),[5,'c','Nedvarvning']]},
  {id:'r-lat',t:'Lugn jogg med låtsprints',where:'band',cat:2,desc:'Spring lugnt och öka farten under varje refräng i låten du lyssnar på.',
@@ -945,6 +946,7 @@ function segPlan(r,seg,idx){
   } else {
     const all=r.seg.filter(x=>x[1]==='s').length, n=r.seg.slice(0,idx).filter(x=>x[1]==='s').length;
     if(r.track==='nyb'){kmh=nybJog;feel='Jogga lugnt hela vägen'}
+    else if(RUN_PROG.includes(r.id)&&r.progStep){kmh=progStart(V)+r.progStep*n;feel=n<2?'Bekvämt':n<all-1?'Lite jobbigare':'Jobbigt men kontrollerat'}
     else if(RUN_PROG.includes(r.id)){f=0.75+0.20*(all>1?n/(all-1):0);feel=n<2?'Bekvämt':n<all-1?'Lite jobbigare':'Jobbigt men kontrollerat'}
     else if(r.id==='r-lat'){f=0.75;feel=`Lugnt – öka till ca ${fmtK(V*0.92)} km/h under varje refräng`}
     else {f=0.75;feel='Pratfart hela vägen'}
@@ -953,10 +955,21 @@ function segPlan(r,seg,idx){
   if(S.settings.noSteep)inc=Math.min(inc,8);
   return {kmh:Math.max(3,Math.round(kmh*10)/10),inc,feel};
 }
+/* Progressiva pass med fasta steg: start = V10 × 0,75 avrundat till närmaste 0,5 km/h, sedan +progStep per del. */
+function progStart(V){return Math.round(V*0.75*2)/2}
+const ordSv=n=>{const m=n%100,k=n%10;return n+((k===1||k===2)&&m!==11&&m!==12?':a':':e')};
+/* Etikett och beskrivning byggs från de planerade farterna och segmentens längd, så att de alltid stämmer med tabellen. */
+function progInfo(r){const S_=r.seg.map((sg,i)=>[sg,i]).filter(([sg])=>sg[1]==='s');const v=S_.map(([sg,i])=>segPlan(r,sg,i).kmh);
+  const steps=v.slice(1).map((x,i)=>Math.round((x-v[i])*10)/10),mins=[...new Set(S_.map(([sg])=>sg[0]))];
+  return {kmh:v,steps,step:steps.length&&steps.every(x=>x===steps[0])?fmtK(steps[0]):null,every:mins.length===1?ordSv(mins[0]):null}}
+function segText(r,i){const sg=r.seg[i];if(!r.progStep||sg[1]!=='s')return sg[2];
+  const prev=r.seg.slice(0,i).map((x,j)=>[x,j]).filter(([x])=>x[1]==='s').pop();if(!prev)return sg[2];
+  const d=Math.round((segPlan(r,sg,i).kmh-segPlan(r,prev[0],prev[1]).kmh)*10)/10;return (d>=0?'+':'−')+fmtK(Math.abs(d))+' km/h'}
+function runDesc(r){if(r.descFn){try{const t=r.descFn(r);if(t&&!/null|undefined/.test(t))return t}catch(e){}}return r.desc}
 function runTable(r){
   let t=0; const band=r.where!=='ute'&&runWhere()!=='ute';
   return `<div class="rtable" role="table"><div class="rh" role="row"><span>Tid</span><span>Vad</span><span>${band?'Bandet':'Tempo'}</span></div>${r.seg.map((sg,i)=>{const p=segPlan(r,sg,i);const a=t;t+=sg[0];
-   return `<div class="rr t-${sg[1]}" role="row"><span class="num">${fmtMin(a)}–${fmtMin(t)}</span><span><strong>${esc(sg[2])}</strong><br><span class="small muted">${esc(p.feel)}</span></span><span class="num"><strong>${band?fmtK(p.kmh)+' km/h':pace(p.kmh)+' /km'}</strong><br><span class="small muted">${band?String(p.inc).replace('.',',')+' % lutning':fmtK(p.kmh)+' km/h'}</span></span></div>`}).join('')}</div>`;
+   return `<div class="rr t-${sg[1]}" role="row"><span class="num">${fmtMin(a)}–${fmtMin(t)}</span><span><strong>${esc(segText(r,i))}</strong><br><span class="small muted">${esc(p.feel)}</span></span><span class="num"><strong>${band?fmtK(p.kmh)+' km/h':pace(p.kmh)+' /km'}</strong><br><span class="small muted">${band?String(p.inc).replace('.',',')+' % lutning':fmtK(p.kmh)+' km/h'}</span></span></div>`}).join('')}</div>`;
 }
 /* Belastning: minuter × ansträngning. Akut (7 d) mot kronisk (snitt per vecka, 28 d). */
 function runLoad(){const now=new Date(today()+'T12:00:00');let a=0,c=0,oldest=0;const wk=new Set();
@@ -1843,7 +1856,7 @@ const RUNS_5K=[
  {id:'r-5b',t:'5 × 3 min',cat:1,desc:'I fart du tror att du klarar 5 km i, 2 min jogg emellan.',seg:[[8,'w','Uppvärmning'],...[1,2,3,4,5].flatMap(i=>[[3,'h',`5 km-fart ${i}/5`],[2,'j','Lugn jogg']]),[5,'c','Nedvarvning']]},
  {id:'r-5c',t:'8 × 1 min backe',cat:1,desc:'Uppför (eller 5 % lutning), gå/jogga ner eller 1 min plant emellan.',seg:[[8,'w','Uppvärmning'],...[1,2,3,4,5,6,7,8].flatMap(i=>[[1,'h',`Backe ${i}/8`],[1,'j','Vila']]),[5,'c','Nedvarvning']]},
  {id:'r-5d',t:'Lugnt 30 min',cat:2,desc:'Pratfart hela vägen. Bygger grunden.',seg:[[30,'s','Lugn jogg']]},
- {id:'r-5e',t:'Progressivt 25 min',cat:2,desc:'Starta lugnt och öka lite var 5:e minut.',seg:[[5,'s','Lugnt'],[5,'s','Lite snabbare'],[5,'s','Lite snabbare'],[5,'s','Lite snabbare'],[5,'c','Nedvarvning']]},
+ {id:'r-5e',t:'Progressivt 25 min',cat:2,desc:'Starta lugnt och öka lite var 5:e minut.',descFn:r=>`Starta lugnt och öka lite var ${progInfo(r).every} minut.`,seg:[[5,'s','Lugnt'],[5,'s','Lite snabbare'],[5,'s','Lite snabbare'],[5,'s','Lite snabbare'],[5,'c','Nedvarvning']]},
  {id:'r-5f',t:'Långpass 45 min',cat:2,desc:'Längre än vanligt, inte fortare. Gå en minut om du behöver.',seg:[[45,'s','Lugn jogg']]}
 ].map(r=>({...r,where:'alla',track:'5k'}));
 
@@ -2253,7 +2266,7 @@ function viewAhead(){
     if(a.w){const pw=AW(a.w);body=`<h2>${esc(a.w.t?wTitle(a.w):a.focus||'Styrkepass')}</h2>${workoutSummary(a.w)}${peekList(pw.x.map(e=>[e[0],exSub(e)]))}<button class="btn ghost" type="button" data-open="${a.w.i}">Visa passet med instruktioner</button>`}
     else body=`<h2>${esc(a.focus||'Styrkepass')}</h2><p class="small muted" style="margin:0">Övningarna väljs när dagen kommer, så att de skiljer sig från passen innan.</p>`;
   } else if(a.typ==='r'){
-    if(a.r) body=`<h2>${esc(a.r.t)}</h2><div class="row"><span class="pill run">${esc(passTypeLabel(a.r))}</span><span class="small muted num">ca ${a.r.min} min</span></div><p style="margin:0">${esc(a.r.desc)}</p><details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(a.r)}</details><p class="small muted" style="margin:0">Farterna kan justeras efter hur passen innan känns.</p>`;
+    if(a.r) body=`<h2>${esc(a.r.t)}</h2><div class="row"><span class="pill run">${esc(passTypeLabel(a.r))}</span><span class="small muted num">ca ${a.r.min} min</span></div><p style="margin:0">${esc(runDesc(a.r))}</p><details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(a.r)}</details><p class="small muted" style="margin:0">Farterna kan justeras efter hur passen innan känns.</p>`;
     else body=`<h2>Löppass</h2><p class="small muted" style="margin:0">Vilket pass det blir bestäms av hur de närmaste passen går.</p>`;
   } else if(a.typ==='m'){body=`<h2>${esc(a.m.t)}</h2><p class="small muted" style="margin:0">Återhämtningsdag: rörlighet, promenad och rörelsepauser. Rörlighetspasset:</p>${peekList(a.m.items.map(it=>[it[0],mmss(it[1])+(it[2]?' · '+it[2]:'')]))}<button class="btn ghost" type="button" data-mobpeek="${a.m.id}">Titta igenom rörelserna</button>`}
   else body=`<h2>Vila</h2>`;
@@ -2298,7 +2311,7 @@ function viewToday(){
       <div class="row between"><span class="kind r">Dagens pass · löpning</span>${did('löpning')?'<span class="pill run">Klart ✓</span>':''}</div>
       <h2 id="h-run">${esc(r.t)}</h2>
       <div class="row"><span class="pill run">${r.where==='band'?'Löpband':r.where==='ute'?'Utomhus':'Ute eller band'}</span><span class="pill line">${catTxt}</span><span class="small muted num">ca ${r.min} min</span></div>
-      <p style="margin:0">${esc(r.desc)}</p>
+      <p style="margin:0">${esc(runDesc(r))}</p>
       ${(()=>{const ne=needEasy();return (ne.loadHigh?`<div class="note waitnote">Belastningen senaste veckan är ${Math.round(ne.ratio*100)} % av ditt snitt – över 130 %. Ta ett lättare pass idag.</div>`:'')+(ne.twoHard?'<div class="note waitnote">Två tunga pass i rad – dags för ett lätt pass.</div>':'')})()}
       <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Jag.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
       ${doneRun?`<div class="donebox">✓ Klart för idag · ${[doneRun.min?String(doneRun.min).replace('.',',')+' min':'',doneRun.km?String(doneRun.km).replace('.',',')+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · ')}</div>`:''}
@@ -3781,15 +3794,15 @@ function renderRun(){
   const sp=x=>band?`${fmtK(x.kmh)} km/h · ${String(x.inc).replace('.',',')} %`:`${pace(x.kmh)} /km`;
   openSheet(`<header class="top"><div><div class="date num">Del ${i+1} av ${r.seg.length}</div><h1>${esc(r.t)}</h1></div><button class="btn ghost sm" type="button" data-runclose>Avsluta</button></header>
    <div class="stack"><div class="card stack" style="text-align:center;border-top:6px solid ${col}">
-    <span class="eyebrow">${typ}</span><h2>${esc(seg[2])}</h2>
+    <span class="eyebrow">${typ}</span><h2>${esc(segText(r,i))}</h2>
     <div class="mobtimer" id="runT">${mmss(left)}</div>
     <div class="setspeed num">${band?`<strong>${fmtK(p.kmh)}</strong> km/h · <strong>${String(p.inc).replace('.',',')}</strong> %`:`<strong>${pace(p.kmh)}</strong> /km`}</div>
     <div class="row" style="justify-content:center"><button class="btn ghost sm" type="button" data-adj="-0.5">−0,5</button><span class="small muted">${s.adj?`justerat ${s.adj>0?'+':''}${fmtK(s.adj)} km/h`:'justera farten'}</span><button class="btn ghost sm" type="button" data-adj="0.5">+0,5</button></div>
     <div class="muted">${esc(p.feel)}</div>
     <div class="prealert" id="preA" ${s.pre&&pn?'':'hidden'}>${pn?`Om några sekunder: ${esc(sp(pn))}`:''}</div>
     ${s.ask?`<div class="note stack" style="text-align:left"><strong>${mmss(left)} kvar av den här delen.</strong><div class="row"><button class="btn sm" type="button" data-skipmode="carry">Lägg resten på nästa del</button><button class="btn ghost sm" type="button" data-skipmode="drop">Hoppa över resten</button></div></div>`:''}
-    ${nxt?`<div class="nextbox">Sedan: <strong>${esc(nxt[2])}</strong> – ${esc(sp(pn))} (${mmss(Math.round(nxt[0]*60))})</div>`:'<div class="small muted">Sista delen!</div>'}</div>
-   <details class="card"><summary>Hela passet</summary><div class="list">${r.seg.map((x,j)=>`<div class="li" style="cursor:default;padding:6px 0;${j===i?'font-weight:600':''}${j<i?';opacity:.5':''}"><span class="dot ${x[1]==='h'?'r':x[1]==='s'||x[1]==='w'?'s':'m'}" style="margin-top:6px"></span><div class="grow">${esc(x[2])}</div><span class="small muted num">${band?fmtK(segPlan(r,x,j).kmh):pace(segPlan(r,x,j).kmh)} · ${mmss(Math.round(x[0]*60))}</span></div>`).join('')}</div></details></div>`);
+    ${nxt?`<div class="nextbox">Sedan: <strong>${esc(segText(r,i+1))}</strong> – ${esc(sp(pn))} (${mmss(Math.round(nxt[0]*60))})</div>`:'<div class="small muted">Sista delen!</div>'}</div>
+   <details class="card"><summary>Hela passet</summary><div class="list">${r.seg.map((x,j)=>`<div class="li" style="cursor:default;padding:6px 0;${j===i?'font-weight:600':''}${j<i?';opacity:.5':''}"><span class="dot ${x[1]==='h'?'r':x[1]==='s'||x[1]==='w'?'s':'m'}" style="margin-top:6px"></span><div class="grow">${esc(segText(r,j))}</div><span class="small muted num">${band?fmtK(segPlan(r,x,j).kmh):pace(segPlan(r,x,j).kmh)} · ${mmss(Math.round(x[0]*60))}</span></div>`).join('')}</div></details></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-runskip>Nästa del</button><button class="btn run" type="button" data-runplay>${run?'Pausa':'Starta'}</button>`);
 }
 function recordSeg(){const s=runState;if(s.run&&s.end)s.left=Math.ceil((s.end-Date.now())/1000);const sec=s.segTotal-Math.max(0,s.left);if(sec<=0)return;const seg=s.r.seg[s.i];const p=curPlan();
