@@ -2782,17 +2782,25 @@ const exUsed=w=>new Set(w.x.flatMap(e=>String(e[0]).split(' / ')));
 const swapNote=(v,orig)=>[v,orig.length?'ersätter '+orig.join(' och '):''].filter(Boolean).join(' · ');
 function keepExPos(btn){const sh=$('#sheet'),exEl=btn&&btn.closest?btn.closest('#sheetBody .ex'):null,exs=[...document.querySelectorAll('#sheetBody .ex')],idx=exEl?exs.indexOf(exEl):-1,y=sh.scrollTop,off=exEl?exEl.getBoundingClientRect().top-sh.getBoundingClientRect().top:0;
   rerenderSheet();const nx=idx>=0?document.querySelectorAll('#sheetBody .ex')[idx]:null;if(nx)sh.scrollTop+=nx.getBoundingClientRect().top-sh.getBoundingClientRect().top-off;else sh.scrollTop=y}
+/* Originalnamnet i rådatan (active.w eller WBYID) för en visad övning. Visningen (AW) kan ha bytt ut den,
+   både via "Undvik framöver" och via "bara idag" – bytet står då i radens row[10].sw = [[original, visad]]. */
+function resolveShown(shown){const w=curW();const row=w&&w.x.find(e=>String(e[0]).split(' / ').includes(shown));
+  const pair=row&&row[10]&&(row[10].sw||[]).find(p=>p[1]===shown);return pair?pair[0]:shown}
 function swapOnce(shown,btn,forced){
-  const run=!!(active&&sheetCtx&&sheetCtx.t==='active'),wid=run?active.wid:(sheetCtx&&sheetCtx.t==='w'?sheetCtx.id:null);if(!wid)return;
+  const run=!!(active&&sheetCtx&&sheetCtx.t==='active'),wid=run?active.wid:(sheetCtx&&sheetCtx.t==='w'?sheetCtx.id:null);if(!wid)return toast('Kunde inte byta övningen');
   let orig=shown,sub=null;const none=()=>toast('Hittar ingen liknande övning att byta till');
-  if(run){const x=[...active.w.x],i=x.findIndex(e=>String(e[0]).split(' / ').includes(shown));if(i<0)return;
-    const row=[...x[i]],m={...(row[10]||{})},sw=(m.sw||[]).map(p=>[...p]),pair=sw.find(p=>p[1]===shown);if(pair)orig=pair[0];
+  if(run){const x=[...active.w.x],hasP=e=>n=>String(e[0]).split(' / ').includes(n);let i=x.findIndex(e=>hasP(e)(shown)),part=shown;
+    /* Ersättare från "Undvik framöver" finns bara i visningen: byt då originalet i rådatan. */
+    if(i<0){const o=resolveShown(shown);i=x.findIndex(e=>hasP(e)(o));part=o;orig=o}
+    if(i<0)return toast('Kunde inte byta övningen');
+    const row=[...x[i]],m={...(row[10]||{})},sw=(m.sw||[]).map(p=>[...p]),pair=sw.find(p=>p[1]===part);if(pair)orig=pair[0];
     const k=(m.k||0)+(pair?1:0);sub=forced||subFor(orig,exUsed(activeW()),k,swapCtx(row,orig));if(!sub)return none();
     const v=typeof m.v==='string'?m.v:(row[1]||'');
-    row[0]=String(row[0]).split(' / ').map(p=>p===shown?sub:p).join(' / ');if(pair)pair[1]=sub;else sw.push([orig,sub]);
+    row[0]=String(row[0]).split(' / ').map(p=>p===part?sub:p).join(' / ');if(pair)pair[1]=sub;else sw.push([orig,sub]);
     const og=[...new Set([...(m.orig||[]),orig])];row[10]={...m,orig:og,once:[...new Set([...(m.once||[]),orig])],sw,k,v};row[1]=swapNote(v,og);
     x[i]=row;active.w={...active.w,x};saveActive()}
-  else{const o=onceMap[wid]||(onceMap[wid]={map:{},n:{}});orig=Object.keys(o.map).find(k=>o.map[k]===shown)||shown;
+  else{const o=onceMap[wid]||(onceMap[wid]={map:{},n:{}});orig=Object.keys(o.map).find(k=>o.map[k]===shown)||resolveShown(shown);
+    if(!WBYID[wid]||!WBYID[wid].x.some(e=>String(e[0]).split(' / ').includes(orig)))return toast('Kunde inte byta övningen');
     const k=(o.n[orig]||0)+(o.map[orig]?1:0);sub=forced||subFor(orig,exUsed(AW(WBYID[wid])),k,{pm:passMuscles(WBYID[wid]),variation:((WBYID[wid].x.find(e=>String(e[0]).split(' / ').includes(orig))||[])[1])||''});if(!sub)return none();o.n[orig]=k;o.map[orig]=sub}
   swapPick=null;if(addPanel&&addPanel.ctx==='swap')addPanel=null;
   toast(`${orig} byts mot ${sub} – bara i det här passet`);keepExPos(btn)}
@@ -2844,7 +2852,8 @@ function AW(w,opt){
       if(parts.length>1&&Array.isArray(e[9])){n[9]=e[9].map(r=>{const a=String(r).split('/');return a.length===parts.length?ki.map(k=>a[k]).join('/'):r});const R0=n[9];n[2]=R0.every(r=>r===R0[0])?`${n[8]||R0.length} × ${R0[0]}`:R0.join(', ')}
       if(keep.length===1&&(e[3]==='superset'||e[3]==='giant'))n[3]='straight';return n}).filter(Boolean)}
   x=x.map(e=>{if(e[11]&&e[11].add)return e;const parts=String(e[0]).split(' / ');const orig=[],once=[],sw=[];
-    const np=parts.map(p=>{if(om&&om[p]){orig.push(p);once.push(p);sw.push([p,om[p]]);used.add(om[p]);return om[p]}
+    /* "Bara idag" går före undvik-ersättningen för samma original. Är det valda alternativet självt undvikt byts det i sin tur. */
+    const np=parts.map(p=>{if(om&&om[p]){let t=om[p];if(isAvoided(t)){const s3=subFor(t,used,0,{variation:parts.length===1?e[1]:'',pm:PM});if(s3)t=s3}orig.push(p);once.push(p);sw.push([p,t]);used.add(t);return t}
       if(!isAvoided(p))return p;const s2=subFor(p,used,0,{variation:parts.length===1?e[1]:'',pm:PM});if(!s2)return p;used.add(s2);orig.push(p);sw.push([p,s2]);return s2});
     if(!orig.length)return e;changed=true;const n=[...e];n[0]=np.join(' / ');n[1]=swapNote(e[1],orig);n[10]={orig,once,sw,v:e[1]||''};return n});
   return changed?{...w,x,g:(w.g||[]).filter(g=>!avoidGroups().includes(g))}:w;
