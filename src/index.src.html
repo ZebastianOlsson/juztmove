@@ -2808,12 +2808,22 @@ function swapInfo(shown){const w=curW();if(!w)return null;const row=w.x.find(e=>
   const om=!active||curKey()[0]!=='a'?onceMap[sheetCtx&&sheetCtx.id]:null;if(om){const k=Object.keys(om.map).find(k=>om.map[k]===shown);if(k)orig=k}
   const wr=(WBYID[active&&curKey()[0]==='a'?active.wid:sheetCtx.id]||w).x.find(e=>String(e[0]).split(' / ').includes(orig))||row;
   const ctx=swapCtx(wr,orig),fine=exMuscle(orig,ctx.variation,ctx.pm);return {w,orig,ctx,fine,grp:fine?FINE_GROUP[fine]:muscleOf(orig,ctx.variation,ctx.pm)}}
+/* Stegen i snabblistan: samma finmuskel → närliggande (samma huvudgrupp, t.ex. säte → baksida lår → framsida lår) → alla. */
+const FINE_ORDER=['glutes','hamstrings','quads','calves','biceps','triceps','forearms','back','traps','chest','shoulders','abs'];
+function swapSteps(I,used){const L1=subList(I.orig,used,I.ctx),seen=new Set([...L1,I.orig]);
+  const base=EXDB.filter(e=>!seen.has(e.n)&&!isAvoided(e.n)&&!groupAvoided(e.n)&&!used.has(e.n)&&equipOk(e));
+  const grp=I.fine?FINE_GROUP[I.fine]:I.grp,near=FINE_ORDER.filter(f=>f!==I.fine&&FINE_GROUP[f]===grp);
+  const L2=gymFirst(base.filter(e=>near.includes(FINE_OF_M[e.m]))).sort((a,b)=>near.indexOf(FINE_OF_M[a.m])-near.indexOf(FINE_OF_M[b.m])).map(e=>e.n);
+  const L3=gymFirst(base.filter(e=>!L2.includes(e.n))).map(e=>e.n);
+  return {L:[...L1,...L2,...L3],n1:L1.length,n2:L1.length+L2.length}}
 function swapPickHTML(shown){const I=swapInfo(shown);if(!I)return '';
   if(addPanel&&addPanel.ctx==='swap'&&addPanel.shown===shown)return '<div class="addpanel" id="addPanel"></div>';
-  const used=exUsed(I.w);used.add(shown);const alts=subList(I.orig,used,I.ctx).slice(0,4);
+  const used=exUsed(I.w);used.add(shown);const lv=swapPick&&swapPick.lv||0,St=swapSteps(I,used),cnt=[Math.min(4,St.L.length),St.n1,St.n2,St.L.length];
+  const shownN=cnt[lv],nx=[1,2,3].find(k=>k>lv&&cnt[k]>shownN),alts=St.L.slice(0,shownN);
   return `<div class="addpanel swappick"><div class="row between" style="flex-wrap:nowrap"><strong>Byt ${esc(shown)} bara idag</strong><button class="btn ghost sm" type="button" data-onceclose>Stäng</button></div>
    ${I.fine?`<div class="small muted">Samma muskel: ${esc(FINE_SV[I.fine])}</div>`:''}
    <div class="addhits">${alts.map(n=>`<button class="addhit" type="button" data-oncepick="${esc(shown)}" data-sub="${esc(n)}"><span class="grow">${esc(n)}</span><span class="pill">${esc(FINE_SV[exMuscle(n)]||muscleOf(n)||'')}</span></button>`).join('')||'<p class="small muted" style="margin:0">Hittar inga liknande övningar med din utrustning.</p>'}</div>
+   ${nx?`<button class="btn ghost sm" type="button" data-oncemore="${nx}">${nx===3?'Visa alla':'Visa fler'} (${cnt[nx]-shownN})</button>`:''}
    <button class="btn ghost" type="button" data-oncesearch="${esc(shown)}">Sök annan övning</button></div>`}
 /* Sätter tillbaka en utbytt övning i det pågående passet. */
 function restoreInActive(orig){if(!active)return false;const x=[...active.w.x],i=x.findIndex(e=>e[10]&&(e[10].sw||[]).some(p=>p[0]===orig));if(i<0)return false;
@@ -3604,34 +3614,49 @@ function passGroups(){const w=active.w||WBYID[active.wid]||{};let g=(w.g||[]).fi
   if(!g.length)g=[...new Set((w.x||[]).flatMap(e=>String(e[0]).split(' / ')).map(muscleOf).filter(x=>MG.includes(x)))];return g}
 function openAddPanel(){addPanel={q:'',groups:passGroups(),all:false,show:12,focus:true};if(!addPanel.groups.length)addPanel.all=true;rerenderActiveKeep()}
 const addOwnGroups=()=>addPanel&&addPanel.ctx==='oth'?[]:addPanel&&addPanel.ctx==='swap'?(addPanel.grp?[addPanel.grp]:[]):passGroups();
+/* ---------- Sökning av övningar ----------
+   Gemener utan diakritik ("lar" hittar "lår"), alla sökord i valfri ordning, och synonymer svenska ↔ engelska. */
+const fold=x=>String(x||'').toLocaleLowerCase('sv-SE').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const EX_SYN=[['larcurl','leg curl'],['knaboj','squat'],['marklyft','deadlift'],['bankpress','bench press'],['axelpress','shoulder press'],['rodd','row'],
+  ['latsdrag','pull down','pulldown'],['vadpress','calf raise'],['utfall','lunge'],['sidolyft','lateral raise'],['flyes','fly'],['hip thrust','hoftlyft']];
+const exHayCache=new Map();
+function exHay(n){let h=exHayCache.get(n);if(h)return h;const f=fold(n),c=f.replace(/ /g,'');h=f;
+  EX_SYN.forEach(g=>{if(g.some(a=>f.includes(a)||c.includes(a.replace(/ /g,''))))h+=' '+g.join(' ')});h+=' '+c;exHayCache.set(n,h);return h}
+function exMatch(n,q){const t=fold(q).split(' ').filter(Boolean);if(!t.length)return true;const h=exHay(n);return t.every(w=>h.includes(w))}
+/* Alla kända övningsnamn: loggade (med antal), övningsdatabasen och biblioteket. */
+function exNamePool(){const cnt={};S.log.filter(isStrLog).forEach(l=>flatEx(l).forEach(e=>splitSup(e.n).forEach(n=>{n=n.trim();if(n)cnt[n]=(cnt[n]||0)+1})));
+  const lib=[];WORKOUTS.forEach(w=>(w.x||[]).forEach(e=>splitSup(e[0]).forEach(n=>{n=n.trim();if(n)lib.push(n)})));
+  return {cnt,names:[...Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a.localeCompare(b,'sv')),...EXDB.map(e=>e.n),...lib]}}
+/* Egen övning vars namn redan finns (efter normalisering) → använd den befintliga. */
+function resolveExName(name){const f=fold(name);if(!f)return name;const P=exNamePool().names;return P.find(n=>fold(n)===f)||name}
 function addCandidates(){
-  const inPass=new Set((addPanel.ctx==='oth'?(oth?oth.ex.map(e=>e.n):[]):(curW()||activeW()).x.flatMap(e=>String(e[0]).split(' / '))).map(n=>n.toLowerCase()));
+  const inPass=new Set((addPanel.ctx==='oth'?(oth?oth.ex.map(e=>e.n):[]):(curW()||activeW()).x.flatMap(e=>String(e[0]).split(' / '))).map(n=>fold(n)));
   const pm=addPanel.ctx==='oth'?null:passMuscles(curW()),fineOn=addPanel.ctx==='swap'&&addPanel.fine&&addPanel.fineOn;
-  const cnt={},seen=new Set(),out=[];
-  S.log.filter(isStrLog).forEach(l=>flatEx(l).forEach(e=>String(e.n).split(' / ').forEach(n=>{if(n)cnt[n]=(cnt[n]||0)+1})));
-  const ok=n=>{const k=n.toLowerCase();if(seen.has(k)||inPass.has(k)||isAvoided(n)||groupAvoided(n,'',pm))return false;
-    if(fineOn)return exMuscle(n,'',pm)===addPanel.fine;
-    if(!addPanel.all){const g=muscleOf(n,'',pm);if(!g||!addPanel.groups.includes(g))return false}return true};
-  const q=addPanel.q.trim().toLowerCase(),hit=n=>!q||n.toLowerCase().includes(q);
-  Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a.localeCompare(b,'sv')).forEach(n=>{if(hit(n)&&ok(n)){seen.add(n.toLowerCase());out.push({n,c:cnt[n]})}});
-  EXDB.forEach(e=>{if(hit(e.n)&&ok(e.n)){seen.add(e.n.toLowerCase());out.push({n:e.n,c:0})}});
+  const {cnt,names}=exNamePool(),seen=new Set(),out=[],q=addPanel.q.trim();
+  const allowed=n=>{const k=fold(n);if(!k||seen.has(k)||inPass.has(k)||isAvoided(n)||groupAvoided(n,'',pm))return false;seen.add(k);return true};
+  if(q){/* Med söktext: inget muskel- eller gruppfilter. Samma finmuskel → samma huvudgrupp → övriga, tidigare loggade först. */
+    const fine=addPanel.ctx==='swap'?addPanel.fine:null,grps=fine?[FINE_GROUP[fine]]:(addPanel.all?[]:addPanel.groups||[]);
+    names.forEach((n,i)=>{if(exMatch(n,q)&&allowed(n)){const fm=exMuscle(n,'',pm),g=muscleOf(n,'',pm);out.push({n,c:cnt[n]||0,i,r:fine&&fm===fine?0:g&&grps.includes(g)?1:2})}});
+    out.sort((a,b)=>a.r-b.r||b.c-a.c||a.i-b.i);return {out,inPass}}
+  const ok=n=>{if(fineOn)return exMuscle(n,'',pm)===addPanel.fine;if(!addPanel.all){const g=muscleOf(n,'',pm);if(!g||!addPanel.groups.includes(g))return false}return true};
+  Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||a.localeCompare(b,'sv')).forEach(n=>{if(ok(n)&&allowed(n))out.push({n,c:cnt[n]})});
+  EXDB.forEach(e=>{if(ok(e.n)&&allowed(e.n))out.push({n:e.n,c:0})});
   return {out,inPass}}
 function addHitsHTML(){
-  const {out,inPass}=addCandidates(),q=addPanel.q.trim(),ql=q.toLowerCase();
-  const exact=ql&&(out.some(x=>x.n.toLowerCase()===ql)||inPass.has(ql)||EXDB.some(e=>e.n.toLowerCase()===ql));
+  const {out,inPass}=addCandidates(),q=addPanel.q.trim();
   const list=out.slice(0,addPanel.show);
   const pm=addPanel.ctx==='oth'?null:passMuscles(curW());
   return `${list.map(x=>{const fm=exMuscle(x.n,'',pm),g=addPanel.ctx==='swap'&&fm?FINE_SV[fm]:muscleOf(x.n,'',pm);return `<button class="addhit" type="button" data-addex="${esc(x.n)}"><span class="grow">${esc(x.n)}${x.c?`<span class="small muted">Loggad ${x.c} ${x.c===1?'gång':'gånger'}</span>`:''}</span>${g?`<span class="pill">${esc(g)}</span>`:''}</button>`}).join('')}
    ${!list.length&&!q?'<p class="small muted" style="margin:0">Inga övningar i valda grupper. Välj fler grupper eller ”Alla övningar”.</p>':''}
    ${out.length>addPanel.show?`<button class="btn ghost sm" type="button" data-addmore>Visa fler (${out.length-addPanel.show} till)</button>`:''}
-   ${q&&!exact?`<button class="addhit" type="button" data-addex="${esc(q)}"><span class="grow">${addPanel.ctx==='swap'?'Byt till':'Lägg till'} ”${esc(q)}” som egen övning</span></button>`:''}`}
+   ${q&&!out.length&&!inPass.has(fold(q))?`<button class="addhit" type="button" data-addex="${esc(q)}"><span class="grow">${addPanel.ctx==='swap'?'Byt till':'Lägg till'} ”${esc(q)}” som egen övning<span class="small muted">Ny övning utan historik</span></span></button>`:''}`}
 function renderAddPanel(){const el=$('#addPanel');if(!el||!addPanel)return;const own=addOwnGroups(),rest=MG.filter(g=>!own.includes(g));
   el.innerHTML=`<div class="row between" style="flex-wrap:nowrap"><strong>${addPanel.ctx==='swap'?'Byt '+esc(addPanel.shown)+' mot …':'Lägg till övning'}</strong><button class="btn ghost sm" type="button" data-addclose>Stäng</button></div>
    <input id="addQ" type="search" autocomplete="off" placeholder="Sök övning, t.ex. hammer curl" aria-label="Sök övning" value="${esc(addPanel.q)}">
    <div class="chips wrap">${[...own,...rest].map(g=>`<button class="chip" type="button" data-addgrp="${g}" aria-pressed="${!addPanel.all&&addPanel.groups.includes(g)}">${g}</button>`).join('')}<button class="chip" type="button" data-addall aria-pressed="${addPanel.all}">Alla övningar</button></div>
-   ${addPanel.ctx==='swap'&&addPanel.fine&&addPanel.fineOn?`<div class="small muted">Visar ${esc(FINE_SV[addPanel.fine].toLowerCase())}övningar. Välj en grupp eller ”Alla övningar” för fler.</div>`:''}
+   ${addPanel.ctx==='swap'&&addPanel.fine&&addPanel.fineOn?`<div class="small muted" id="addHint" ${addPanel.q.trim()?'hidden':''}>Visar ${esc(FINE_SV[addPanel.fine].toLowerCase())}övningar. Välj en grupp eller ”Alla övningar” för fler.</div>`:''}
    <div class="addhits" id="addHits">${addHitsHTML()}</div>`;
-  bind(el);const q=$('#addQ');q.oninput=()=>{addPanel.q=q.value;addPanel.show=12;const h=$('#addHits');h.innerHTML=addHitsHTML();bind(h)};
+  bind(el);const q=$('#addQ');q.oninput=()=>{addPanel.q=q.value;addPanel.show=12;const h=$('#addHits');h.innerHTML=addHitsHTML();bind(h);const hn=$('#addHint');if(hn)hn.hidden=!!q.value.trim()};
   if(addPanel.focus){addPanel.focus=false;try{q.focus({preventScroll:true})}catch(e){q.focus()}el.scrollIntoView({block:'nearest'})}}
 function addUpdHits(){const h=$('#addHits');if(h){h.innerHTML=addHitsHTML();bind(h)}}
 function addExercise(name){
@@ -4106,6 +4131,7 @@ function bind(root){
   root.querySelectorAll('[data-avoid]').forEach(b=>b.onclick=()=>toggleAvoid(b.dataset.avoid,true,b));
   root.querySelectorAll('[data-once]').forEach(b=>b.onclick=()=>{swapPick={shown:b.dataset.once,key:curKey()};if(addPanel&&addPanel.ctx==='swap')addPanel=null;keepExPos(b)});
   root.querySelectorAll('[data-oncepick]').forEach(b=>b.onclick=()=>swapOnce(b.dataset.oncepick,b,b.dataset.sub));
+  root.querySelectorAll('[data-oncemore]').forEach(b=>b.onclick=()=>{if(swapPick)swapPick.lv=+b.dataset.oncemore;keepExPos(b)});
   root.querySelectorAll('[data-onceclose]').forEach(b=>b.onclick=()=>{swapPick=null;keepExPos(b)});
   root.querySelectorAll('[data-oncesearch]').forEach(b=>b.onclick=()=>{const sh=b.dataset.oncesearch,I=swapInfo(sh);if(!I)return;
     addPanel={ctx:'swap',shown:sh,fine:I.fine,fineOn:!!I.fine,grp:I.grp,q:'',groups:I.grp?[I.grp]:[],all:!I.grp,show:12,focus:true};keepExPos(b)});
@@ -4162,7 +4188,7 @@ function bind(root){
   root.querySelectorAll('[data-addall]').forEach(b=>b.onclick=()=>{if(addPanel.fineOn){addPanel.fineOn=false;addPanel.all=true;addPanel.show=12;return renderAddPanel()}addPanel.all=!addPanel.all;if(!addPanel.all&&!addPanel.groups.length)addPanel.groups=addOwnGroups();addPanel.show=12;
     $('#addPanel').querySelectorAll('[data-addgrp]').forEach(c=>c.setAttribute('aria-pressed',!addPanel.all&&addPanel.groups.includes(c.dataset.addgrp)));b.setAttribute('aria-pressed',addPanel.all);addUpdHits()});
   root.querySelectorAll('[data-addmore]').forEach(b=>b.onclick=()=>{addPanel.show+=12;addUpdHits()});
-  root.querySelectorAll('[data-addex]').forEach(b=>b.onclick=()=>addPanel&&addPanel.ctx==='oth'?othAddEx(b.dataset.addex):addPanel&&addPanel.ctx==='swap'?swapOnce(addPanel.shown,b,b.dataset.addex):addExercise(b.dataset.addex));
+  root.querySelectorAll('[data-addex]').forEach(b=>b.onclick=()=>{const n=resolveExName(b.dataset.addex);return addPanel&&addPanel.ctx==='oth'?othAddEx(n):addPanel&&addPanel.ctx==='swap'?swapOnce(addPanel.shown,b,n):addExercise(n)});
   root.querySelectorAll('[data-addset]').forEach(b=>b.onclick=()=>addSetTo(+b.dataset.addset));
   root.querySelectorAll('[data-addrm]').forEach(b=>b.onclick=()=>removeAdded(+b.dataset.addrm));
   root.querySelectorAll('[data-restopen]').forEach(b=>b.onclick=()=>{const i=+b.dataset.restopen;restOpen=restOpen===i?-1:i;rerenderActiveKeep()});
