@@ -922,6 +922,8 @@ function v10(){return v10Base()*(comebackOn()?0.95:1)}
 function runBase(){const V=v10();return {jog:V*0.70,hard:V,v10:V,from:+S.settings.v10?'plan':parseTenK(S.settings.tenK)?'tenk':parseFiveK(S.settings.fiveK)?'fivek':'start'}}
 function speedHint(){return runBase()}
 const fmtK=x=>(Math.round(x*10)/10).toFixed(1).replace('.',',');
+/* Decimaltal med komma eller punkt ("5,2" och "5.2" → 5.2). Tomt eller ogiltigt → null. */
+function parseDecimal(v){const t=String(v??'').trim().replace(/\s+/g,'').replace(',','.');return t&&/^[-+]?(\d+\.?\d*|\.\d+)$/.test(t)?Number(t):null}
 const pace=k=>{const s=Math.round(3600/k);return Math.floor(s/60)+':'+pad(s%60)};
 const fmtMin=m=>{const s=Math.round(m*60);return Math.floor(s/60)+(s%60?':'+pad(s%60):'')};
 function coolPlan(){const st=S.settings;let inc=+st.coolInc;if(!(inc>=0))inc=1;if(st.noSteep)inc=Math.min(inc,8);return {kmh:+st.coolKmh||5,inc}}
@@ -3709,14 +3711,26 @@ window.addEventListener('offline',()=>updSync());
 $('#restStop').addEventListener('click',stopRest);
 
 let runLog={rpe:0,pain:0,area:'',actual:null};
+/* Planerad distans: Σ fart × minuter/60 för alla delar, även uppvärmning och nedvarvning. */
+function planDistance(r){return r.seg.reduce((a,sg,i)=>a+segPlan(r,sg,i).kmh*sg[0]/60,0)}
+/* Tid, distans och snittfart: det fält som ändrades senast (distans eller snittfart) räknar ut det andra. */
+function runCalc(min,km,avg,last){const t=parseDecimal(min);
+  if(last==='avg'){const v=parseDecimal(avg);return {km:t>0&&v>0?String(Math.round(t*v/60*100)/100).replace('.',','):''}}
+  const d=parseDecimal(km);return {avg:t>0&&d>0?fmtK(d/(t/60)):''}}
+function bindRunCalc(){const M=$('#runMin'),K=$('#runKm'),A=$('#runAvg'),H=$('#runKmEst');if(!M||!K||!A)return;let last='km';
+  const hint=()=>{if(H)H.hidden=K.value!==H.dataset.est};
+  const upd=()=>{const o=runCalc(M.value,K.value,A.value,last);if(last==='avg')K.value=o.km;else A.value=o.avg;hint()};
+  M.oninput=upd;K.oninput=()=>{last='km';upd()};A.oninput=()=>{last='avg';upd()};
+  if(K.value&&!A.value)upd();else hint()}
 function photoCtl(){return CLAUDE_SAMPLE?`<div class="stack" style="gap:4px;margin-top:8px"><label class="btn ghost sm" for="tmPhoto" style="display:inline-flex;align-items:center;align-self:flex-start">📷 Läs av löpbandets skärm</label><input id="tmPhoto" type="file" accept="image/*" multiple hidden><span class="small muted" id="tmStatus">Ta en bild eller välj en eller flera från bildbiblioteket.</span></div>`:''}
 const PAIN_AREAS=['Fot','Vad','Knä','Höft','Rygg','Annat'];
 function showRunLog(rid,doneMin,actual){
   const r=RUNS.find(x=>x.id===rid)||RUNS[0], st=S.settings; runLog={rpe:0,pain:0,area:'',actual:actual||null,rid};
   const inj=(st.injuries||[]).map(a=>a[0].toUpperCase()+a.slice(1));
   const areas=[...new Set([...inj,...PAIN_AREAS])];
-  let km='',avg='';
+  let km='',avg='',est='';
   if(actual&&actual.length){const sec=actual.reduce((s,x)=>s+x.sec,0);const d=actual.reduce((s,x)=>s+x.kmh*x.sec/3600,0);km=d.toFixed(2).replace('.',',');avg=sec?fmtK(d/(sec/3600)):'';doneMin=Math.max(1,Math.round(sec/60))}
+  if(!km){const d=planDistance(r);if(d>0)km=est=fmtK(d)}
   const tgt=rpeTarget(r);
   openSheet(`<header class="top"><div><div class="date">${esc(passTypeLabel(r))} · mål ${String(tgt).replace('.',',')}/10</div><h1>${esc(r.t)}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack">
@@ -3728,15 +3742,16 @@ function showRunLog(rid,doneMin,actual){
    <section class="card stack"><label class="f" for="runNote">Kommentar<textarea id="runNote" rows="2" placeholder="Tråkigt, bra flyt, bandet var segt …"></textarea></label>
      <details${actual?'':' open'}><summary>Detaljer${actual?' (ifyllt från timern)':''}</summary><div class="grid2" style="margin-top:8px">
        <label class="f" for="runMin">Tid (min)<input id="runMin" type="text" inputmode="decimal" autocomplete="off" value="${doneMin||r.min}"></label>
-       <label class="f" for="runKm">Distans (km)<input id="runKm" type="text" inputmode="decimal" autocomplete="off" value="${km}" placeholder="t.ex. 5,2"></label>
+       <label class="f" for="runKm">Distans (km)<input id="runKm" type="text" inputmode="decimal" autocomplete="off" value="${km}" placeholder="t.ex. 5,2">${est?`<span class="small muted" id="runKmEst" data-est="${est}">Uppskattat från passet – ändra till bandets värde</span>`:''}</label>
        <label class="f" for="runAvg">Snittfart (km/h)<input id="runAvg" type="text" inputmode="decimal" autocomplete="off" value="${avg}" placeholder="räknas ut"></label></div>
        ${photoCtl()}
      </details></section></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Avbryt</button><button class="btn run" type="button" data-saverun="${r.id}">Spara löppass</button>`);
+  bindRunCalc();
 }
 function saveRun(r){
   const st=S.settings; if(!runLog.rpe){toast('Välj hur jobbigt det var (1–10)');return}
-  const num=id=>{const el=$(id);return el?parseFloat(String(el.value).replace(',','.'))||0:0};
+  const num=id=>{const el=$(id);return el?parseDecimal(el.value)||0:0};
   const min=num('#runMin')||r.min, km=num('#runKm'), avg=num('#runAvg')||(km&&min?km/(min/60):0);
   const actual=runLog.actual, planned=r.seg.map((sg,i)=>{const p=segPlan(r,sg,i);return {typ:sg[1],min:sg[0],kmh:p.kmh,inc:p.inc}});
   const hardAct=actual?actual.filter(x=>x.typ==='h'&&x.sec>=40).map(x=>({kmh:x.kmh,f:x.f})):[];
@@ -3771,7 +3786,7 @@ async function readTreadmill(files){
     if(stt)stt.textContent=` Läser av ${files.length} bild${files.length>1?'er':''} …`;
     const v=await sample.json((files.length>1?'Det här är '+files.length+' foton från samma löppass (löpbandsskärm eller klocka). Kombinera uppgifterna. ':'Det här är ett foto av en löpbandsskärm efter ett pass. ')+' Läs av total tid i minuter, distans i km och snittfart i km/h (räkna ut snittfarten från tid och distans om den inte visas). Svara ENDAST med JSON: {"minuter":tal|null,"km":tal|null,"snittfart":tal|null}.',{images:files,modelTier:'quick'});
     const set=(id,x)=>{if(x!=null&&$(id))$(id).value=String(Math.round(x*100)/100).replace('.',',')};
-    set('#runMin',v&&v.minuter);set('#runKm',v&&v.km);set('#runAvg',v&&v.snittfart);if(stt)stt.textContent=' Klart – kolla att siffrorna stämmer.';
+    set('#runMin',v&&v.minuter);set('#runKm',v&&v.km);set('#runAvg',v&&v.snittfart);{const h=$('#runKmEst');if(h&&$('#runKm'))h.hidden=$('#runKm').value!==h.dataset.est}if(stt)stt.textContent=' Klart – kolla att siffrorna stämmer.';
   }catch(e){if(stt)stt.textContent=e&&e.code==='not_granted'?' Inte tillgängligt här.':' Kunde inte läsa bilden – fyll i själv.'}
 }
 let runState=null;
