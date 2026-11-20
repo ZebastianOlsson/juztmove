@@ -343,7 +343,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='1e19e363a0';
+const BUILD='public', VERSION='6eb7ada6f1';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -2193,11 +2193,12 @@ function saveOtherLog(){othRead();const {k}=oth;let act=oth.act;const num=x=>{co
 function passSummary(L){const sets=(L.ex||[]).reduce((a,e)=>a+(e.sets||[]).length,0),recs=[];
   flatEx(L).forEach(e=>{const top=exTop(e);if(!top)return;let best=0;S.log.forEach(o=>{if(o===L||!isStrLog(o))return;flatEx(o).forEach(x=>{if(x.n===e.n)best=Math.max(best,exTop(x))})});if(best>0&&top>best)recs.push({n:e.n,kg:top,d:top-best})});
   return {min:L.min,sets,vol:+L.vol||0,recs}}
-function showMoreAfter(k,sum){
+function showMoreAfter(k,sum,rts){
   openSheet(`<header class="top"><div><div class="date">Passet är sparat</div><h1>${sum?'Bra jobbat!':'Lägga till något mer?'}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack">
    ${sum?`<section class="card stack" aria-label="Sammanfattning"><div class="tiles"><div><div class="k num">${esc(kgTxt(sum.min))}</div><div class="small muted">min</div></div><div><div class="k num">${sum.sets}</div><div class="small muted">set</div></div><div><div class="k num">${sum.vol>=10000?fmtNum(sum.vol/1000,1):fmtNum(sum.vol)}</div><div class="small muted">${sum.vol>=10000?'ton totalt':'kg totalt'}</div></div></div>
      ${sum.recs.length?`<div class="donebox">${sum.recs.length===1?'Nytt rekord':sum.recs.length+' nya rekord'}</div><div class="list">${sum.recs.slice(0,5).map(r=>`<div class="li" style="cursor:default;padding:8px 0"><div class="grow"><strong>${esc(r.n)}</strong></div><span class="num"><strong>${fmtNum(r.kg,1)} kg</strong> <span class="dl up">+${fmtNum(r.d,1)}</span></span></div>`).join('')}</div>`:''}</section>
+   ${rts?`<button class="linkbtn small tall" type="button" data-resumelog="${rts}">Råkade du avsluta? Fortsätt passet</button>`:''}
    <h3 style="margin-top:4px">Lägga till något mer?</h3>`:''}
    <p class="small muted" style="margin:0">Till exempel lutande gång på bandet efter passet. Det räknas som extra och påverkar inte schemat.</p>
    <section class="card stack">
@@ -2301,7 +2302,7 @@ function viewToday(){
       ${!w&&swapped(gen)?swapBackHTML(gen):''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${workoutSummary(w)}
       <div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
-      ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
+      ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button>${canResume(doneW)&&!active?`<button class="btn ghost sm" type="button" data-resumelog="${doneW.ts}">Fortsätt passet</button>`:''}<button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
       :`<div class="row">${active?resumeBtn():`<button class="btn big" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt</button></div><div class="row between"><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa övningar</button></div>`}`
       :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
       ${did('styrka')?'':skipBox()}
@@ -2482,7 +2483,7 @@ function showStrengthLog(ts){
     return `<div class="slex"><div class="nm">${esc(e.n)}</div><div class="slsets">${(e.sets||[]).map((s,j)=>esc(fmtLogSet(s))+(j===hi&&mk?` <span class="small" title="${lab}" aria-label="${lab}">${mk}</span>`:'')).join(' · ')||'<span class="muted">Inga set</span>'}</div>
      ${pv?`<div class="small muted">Förra gången (${esc(shortDate(pv.o.date))}): tyngst ${esc(kgTxt(pt))} kg</div>`:''}</div>`}).join('');
   openSheet(`<header class="top"><div><div class="date cap">${esc(fmtDate(new Date(l.date+'T12:00:00')))}${l.min?' · '+esc(kgTxt(l.min))+' min':''}${logSource(l)?' · '+esc(logSource(l)):''}</div><h1 class="h1sm">${esc(isExtraStr(l)?l.title||OTHER_TITLE.styrka:svTitle(l.title)||'Styrkepass')}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
-   <div class="stack"><div class="card stack"><div class="small muted num">${isExtraStr(l)?'Annan träning · '+exCountTxt((l.ex||[]).length)+' · ':''}${vol?Math.round(vol).toLocaleString('sv-SE')+' kg totalt · ':''}${nSets} set${l.edited?' · redigerat':''}</div>${tpl?`<button class="linkbtn small tall" type="button" data-again="${l.ts}">Visa passmallen</button>`:''}</div>
+   <div class="stack"><div class="card stack"><div class="small muted num">${isExtraStr(l)?'Annan träning · '+exCountTxt((l.ex||[]).length)+' · ':''}${vol?Math.round(vol).toLocaleString('sv-SE')+' kg totalt · ':''}${nSets} set${l.edited?' · redigerat':''}</div>${canResume(l)&&!active?`<button class="btn ghost" type="button" data-resumelog="${l.ts}">Fortsätt passet</button><p class="small muted" style="margin:0">Råkade du avsluta? Passet öppnas igen med det du har fyllt i.</p>`:''}${tpl?`<button class="linkbtn small tall" type="button" data-again="${l.ts}">Visa passmallen</button>`:''}</div>
    <div class="card">${exs||'<p class="muted" style="margin:0">Inga övningar loggade.</p>'}</div></div>`);
   stickyBar(`<button class="btn ghost" type="button" data-close>Stäng</button><button class="btn" type="button" data-sledit="${l.ts}">Redigera</button>`);
 }
@@ -3381,6 +3382,40 @@ let active=null; // pågående pass
 const ACTK='rs-active';
 function saveActive(){try{if(active)localStorage.setItem(ACTK,JSON.stringify({uid:S.uid||null,a:active}))}catch(e){}}
 function clearActive(){try{localStorage.removeItem(ACTK)}catch(e){}}
+/* ---------- Fortsätt ett avslutat pass ----------
+   "Avsluta och spara" lägger en ögonblicksbild av passet i rs-last-done. Fortsätt passet öppnar passet igen precis som det var,
+   tar bort det sparade passet tills det avslutas på nytt och återställer det som avslutet ändrade (platsen i programmet, schemat). */
+const LASTK='rs-last-done';
+const canResume=l=>!!(l&&l.type==='styrka'&&!isExtraStr(l)&&l.ts&&l.date===today()&&(l.wid||l.wobj)&&Array.isArray(l.ex));
+function lastSnap(ts){try{const v=JSON.parse(localStorage.getItem(LASTK)||'null');if(v&&v.ts===+ts&&v.a&&Array.isArray(v.a.sets)&&(!v.uid||!S.uid||v.uid===S.uid))return v}catch(e){}return null}
+/* Utan ögonblicksbild (annan enhet, äldre pass): bygg upp passet från loggen. */
+function activeFromLog(l){
+  const t=l.wobj?JSON.parse(JSON.stringify(l.wobj)):wById(l.wid)?JSON.parse(JSON.stringify(wById(l.wid))):{i:l.wid||'res-'+l.ts,t:l.title,g:l.g||[],x:[]};
+  const ex=(l.ex||[]).map(e=>({...e,used:false})),x=[],sets=[];
+  /* Loggen sparar bara ifyllda set: lägg loggade dropset på passets dropset-platser och övriga set på de andra platserna, i ordning. */
+  const fill=(e,n,r)=>{const L=(e&&e.sets)||[],R9=(r&&r[9])||[],isD=j=>String(R9[j]??'').includes('+');
+      const mk=(ls,j)=>{const s=[String(ls[0]??''),String(ls[1]??''),true];if(Array.isArray(ls[2])&&ls[2].length)s[3]=ls[2].map(d=>[String(d[0]??''),String(d[1]??'')]);
+        if(Array.isArray(e.parts)&&e.parts.length)s[4]=e.parts.map(p=>{const q=(p.sets||[])[j]||['',''];return [String(q[0]??''),String(q[1]??'')]});return s};
+      const N=Math.max(n,L.length),out=[...Array(N)].map(()=>null),dPos=[...Array(N).keys()].filter(isD),oPos=[...Array(N).keys()].filter(j=>!isD(j));
+      L.forEach((ls,j)=>{const want=Array.isArray(ls[2])&&ls[2].length?dPos:oPos;let k=want.find(q=>!out[q]);if(k==null)k=out.findIndex(v=>!v);if(k<0){out.push(null);k=out.length-1}out[k]=mk(ls,j)});
+      return out.map(v=>v||['','',false])};
+  (t.x||[]).forEach(r=>{const m=ex.find(e=>!e.used&&e.n===r[0]);if(m)m.used=true;const row=[...r];const ss=fill(m,r[8]||3,r);row[8]=Math.max(row[8]||3,ss.length);x.push(row);sets.push(ss)});
+  ex.filter(e=>!e.used).forEach(e=>{const reps=(e.t&&e.t.length?e.t:e.sets.map(s=>s[1])).map(String);const n=e.sets.length||3;
+    x.push([e.n,'',null,'straight','',null,'',0,n,[...Array(n)].map((_,j)=>reps[j]||reps[0]||'10'),null,{add:true}]);sets.push(fill(e,n))});
+  const w={...t,x};regW(w);return {wid:w.i,start:Date.now()-Math.max(1,+l.min||1)*60000,w,date:l.date<today()?l.date:null,sets}}
+function resumeLog(ts){const l=S.log.find(x=>x.ts===+ts);if(!canResume(l))return toast('Det här passet kan inte fortsättas');
+  if(active)return toast('Avsluta eller avbryt det pågående passet först');
+  confirmBar('Fortsätt passet? Det sparade passet tas bort tills du avslutar igen.','Fortsätt passet',()=>doResume(+ts))}
+function doResume(ts){const idx=S.log.findIndex(x=>x.ts===ts);if(idx<0||active)return;const l=S.log[idx],snap=lastSnap(ts),st=S.settings;
+  let a;if(snap){a=snap.a;a.start+=Math.max(0,Date.now()-(snap.at||Date.now()));if(!WBYID[a.wid])regW(a.w)}else a=activeFromLog(l);
+  /* Ångra det avslutet ändrade, men bara om inget annat har ändrat samma sak sedan dess. */
+  if(snap&&snap.after){if(st.lastProg===snap.after.lastProg)st.lastProg=snap.st.lastProg;
+    if(l.wobj&&(st.splitIdx||0)===(snap.after.splitIdx||0)&&!st.genCur){st.splitIdx=snap.st.splitIdx;st.lastTheme=snap.st.lastTheme;st.genCur=snap.st.genCur;st.genOrig=snap.st.genOrig;if(st.genCur)regW(st.genCur)}}
+  else if(l.wid&&DP_SEQ.length&&st.lastProg===progBase(l.wid)){const i=DP_SEQ.findIndex(w=>w.i===progBase(l.wid));if(i>0)st.lastProg=DP_SEQ[i-1].i}
+  S.log.splice(idx,1);st.delTs=[...(st.delTs||[]),l.ts].slice(-300);markDirty('settings');markDirty('log',monthOf(l.date));
+  if(l.date===today())unresolveToday();
+  try{localStorage.removeItem(LASTK)}catch(e){}
+  active=a;restOpen=-1;addPanel=null;swapPick=null;saveActive();sugCache=null;closeSheet();renderActive();toast('Passet är öppet igen – avsluta när du är klar')}
 (function(){try{const v=JSON.parse(localStorage.getItem(ACTK)||'null');
   if(v&&v.a&&v.a.wid&&Array.isArray(v.a.sets)&&v.a.w&&Array.isArray(v.a.w.x)&&(!v.uid||!S.uid||v.uid===S.uid)){active=v.a;if(!WBYID[active.wid])WBYID[active.wid]=active.w}}catch(e){}})();
 ['input','change','click'].forEach(ev=>document.addEventListener(ev,()=>{if(active)saveActive()}));
@@ -3711,11 +3746,13 @@ function finishWorkout(){
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
   const min=Math.min(240,Math.max(1,Math.round((Date.now()-active.start)/60000)));
+  const st0=S.settings,snap={a:JSON.parse(JSON.stringify(active)),st:JSON.parse(JSON.stringify({lastProg:st0.lastProg,splitIdx:st0.splitIdx,lastTheme:st0.lastTheme,genCur:st0.genCur,genOrig:st0.genOrig})),at:Date.now()};
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w.x.some(isAdded)?{...w,x:w.x.filter(e=>!isAdded(e))}:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
   if(w.p==='DP'&&S.settings.mode==='program'&&progBase(w.i)===programNext().i){S.settings.lastProg=progBase(w.i);markDirty('settings')}
-  const fdate=active.date||today(), sum=passSummary(S.log[S.log.length-1]);
-  active=null; clearActive(); sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate,sum);
+  const fdate=active.date||today(), L=S.log[S.log.length-1], sum=passSummary(L);
+  snap.ts=L.ts;snap.uid=S.uid||null;snap.after={lastProg:S.settings.lastProg,splitIdx:S.settings.splitIdx};try{localStorage.setItem(LASTK,JSON.stringify(snap))}catch(e){}
+  active=null; clearActive(); sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate,sum,L.ts);
 }
 /* Vilotimern räknar mot en sluttid så att den stämmer efter skärmlås eller appbyte. */
 let restT=null,restLeft=0,restEnd=0;
@@ -4161,6 +4198,7 @@ function bind(root){
   root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{const n=filledSets(),drop=()=>{active=null;clearActive();closeSheet();toast('Passet avbröts')};
     if(n)confirmBar(`Kasta passet? ${n} set är ${n===1?'ifyllt':'ifyllda'}`,'Kasta passet',drop,'Fortsätt passet');else drop()});
   root.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>{if(active)renderActive()});
+  root.querySelectorAll('[data-resumelog]').forEach(b=>b.onclick=()=>resumeLog(b.dataset.resumelog));
   root.querySelectorAll('[data-finish]').forEach(b=>b.onclick=()=>{const a=active.sets.flat(),d=a.filter(s=>s[2]||(s[0]&&s[1])).length;
     if(d<a.length/2)confirmBar(`${d} av ${a.length} set klara – avsluta ändå?`,'Avsluta och spara',finishWorkout,'Fortsätt passet');else finishWorkout()});
   root.querySelectorAll('[data-kg]').forEach(inp=>{
