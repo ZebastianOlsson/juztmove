@@ -3649,7 +3649,16 @@ function followKg(i,j,old){ensurePre();const row=active.sets[i],nw=kgNum(row[j][
     const inp=document.querySelector(`[data-kg="${i}:${k}"]`);if(inp){inp.value=String(v).replace('.',',');if(!inp.parentElement.querySelector('.pdot'))inp.insertAdjacentHTML('afterend','<span class="pdot" aria-hidden="true"></span>')}}
   updPrefillBar()}
 function updPrefillBar(){const el=document.querySelector('#sheetBody .prefill');if(!el)return;const t=document.createElement('div');t.innerHTML=prefillBar();const n=t.firstElementChild;if(n&&n.outerHTML===el.outerHTML)return;n?el.replaceWith(n):el.remove();const nn=document.querySelector('#sheetBody .prefill');if(nn)bind(nn)}
-function renderActive(){
+/* Tar bort tomma rader för bortvalda muskelgrupper ur ett pågående pass (t.ex. ett pass som sparats innan de valdes bort,
+   eller som byggts upp igen i en äldre version). Rader med något ifyllt och tillagda övningar ligger kvar. */
+function pruneAvoided(){if(!active||!active.w||!Array.isArray(active.w.x)||!avoidGroups().length)return false;
+  const pm=passMuscles(active.w),empty=r=>(r||[]).every(s=>!s[0]&&!s[1]&&!s[2]&&!(Array.isArray(s[3])&&s[3].some(d=>d[0]||d[1]))&&!(Array.isArray(s[4])&&s[4].some(d=>d[0]||d[1])));
+  const drop=active.w.x.map((e,i)=>{if(isAdded(e))return false;const P=String(e[0]).split(' / ');return P.every(p=>groupAvoided(p,P.length===1?e[1]:'',pm))&&empty(active.sets[i])});
+  if(!drop.some(Boolean))return false;ensurePre();const keep=i=>!drop[i],map=[];let n=0;drop.forEach((d,i)=>{map[i]=d?-1:n++});
+  active.w={...active.w,x:active.w.x.filter((_,i)=>keep(i))};['sets','pre','preKg'].forEach(k=>{if(Array.isArray(active[k]))active[k]=active[k].filter((_,i)=>keep(i))});
+  ['spreOn','spreKg'].forEach(o=>{const m={};Object.entries(active[o]||{}).forEach(([key,v])=>{const [a,b,c]=key.split(':').map(Number);if(map[a]>=0)m[map[a]+':'+b+':'+c]=v});active[o]=m});
+  restOpen=-1;saveActive();return true}
+function renderActive(){pruneAvoided();
   const w=active.w?AW(active.w,{drop:false}):AW(WBYID[active.wid],{drop:false});sheetCtx={t:'active'};
   const doneSets=active.sets.flat().filter(s=>s[2]).length, all=active.sets.flat().length;
   openSheet(`<header class="top"><div><div class="date num">${active.date?'Loggas på '+esc(new Date(active.date+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'short'}))+' · ':''}${doneSets}/${all} set klara</div><h1 class="h1sm">${esc(wTitle(w))}</h1></div><button class="btn ghost sm" type="button" data-close>Pausa</button></header>
