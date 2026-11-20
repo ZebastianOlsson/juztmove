@@ -343,7 +343,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='6eb7ada6f1';
+const BUILD='public', VERSION='01276de602';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -3390,7 +3390,9 @@ const canResume=l=>!!(l&&l.type==='styrka'&&!isExtraStr(l)&&l.ts&&l.date===today
 function lastSnap(ts){try{const v=JSON.parse(localStorage.getItem(LASTK)||'null');if(v&&v.ts===+ts&&v.a&&Array.isArray(v.a.sets)&&(!v.uid||!S.uid||v.uid===S.uid))return v}catch(e){}return null}
 /* Utan ögonblicksbild (annan enhet, äldre pass): bygg upp passet från loggen. */
 function activeFromLog(l){
-  const t=l.wobj?JSON.parse(JSON.stringify(l.wobj)):wById(l.wid)?JSON.parse(JSON.stringify(wById(l.wid))):{i:l.wid||'res-'+l.ts,t:l.title,g:l.g||[],x:[]};
+  const raw=l.wobj?JSON.parse(JSON.stringify(l.wobj)):wById(l.wid)?JSON.parse(JSON.stringify(wById(l.wid))):{i:l.wid||'res-'+l.ts,t:l.title,g:l.g||[],x:[]};
+  /* Samma version som passet visades i: bortvalda muskelgrupper borta och undvikna övningar utbytta. */
+  const t=JSON.parse(JSON.stringify(AW(raw)||raw));
   const ex=(l.ex||[]).map(e=>({...e,used:false})),x=[],sets=[];
   /* Loggen sparar bara ifyllda set: lägg loggade dropset på passets dropset-platser och övriga set på de andra platserna, i ordning. */
   const fill=(e,n,r)=>{const L=(e&&e.sets)||[],R9=(r&&r[9])||[],isD=j=>String(R9[j]??'').includes('+');
@@ -3399,10 +3401,18 @@ function activeFromLog(l){
       const N=Math.max(n,L.length),out=[...Array(N)].map(()=>null),dPos=[...Array(N).keys()].filter(isD),oPos=[...Array(N).keys()].filter(j=>!isD(j));
       L.forEach((ls,j)=>{const want=Array.isArray(ls[2])&&ls[2].length?dPos:oPos;let k=want.find(q=>!out[q]);if(k==null)k=out.findIndex(v=>!v);if(k<0){out.push(null);k=out.length-1}out[k]=mk(ls,j)});
       return out.map(v=>v||['','',false])};
-  (t.x||[]).forEach(r=>{const m=ex.find(e=>!e.used&&e.n===r[0]);if(m)m.used=true;const row=[...r];const ss=fill(m,r[8]||3,r);row[8]=Math.max(row[8]||3,ss.length);x.push(row);sets.push(ss)});
+  /* Loggen följer passets ordning. En loggad övning som inte finns i passet och inte var tillagd är ett "bara idag"-byte:
+     den läggs på den första ej loggade raden före nästa matchade övning, och markeras som utbytt så att "Ångra byte" fungerar. */
+  const T=(t.x||[]).map(r=>({r,m:null}));let ptr=0;
+  ex.forEach(e=>{if(e.add)return;const k=T.findIndex((o,j)=>j>=ptr&&!o.m&&o.r[0]===e.n);
+    if(k>=0){T[k].m=e;e.used=true;ptr=k+1;return}
+    let free=e.swapOf?T.findIndex(o=>!o.m&&o.r[0]===e.swapOf):-1;if(free<0)free=T.findIndex((o,j)=>j>=ptr&&!o.m);if(free<0)return;
+    const o=T[free],orig=String(o.r[0]),row=[...o.r],m0=row[10]||{},v=typeof m0.v==='string'?m0.v:(row[1]||'');
+    row[0]=e.n;row[10]={orig:[orig],once:[orig],sw:[[orig,e.n]],v};row[1]=swapNote(v,[orig]);o.r=row;o.m=e;e.used=true;ptr=free+1});
+  T.forEach(o=>{const row=[...o.r];const ss=fill(o.m,o.r[8]||3,o.r);row[8]=Math.max(row[8]||3,ss.length);x.push(row);sets.push(ss)});
   ex.filter(e=>!e.used).forEach(e=>{const reps=(e.t&&e.t.length?e.t:e.sets.map(s=>s[1])).map(String);const n=e.sets.length||3;
     x.push([e.n,'',null,'straight','',null,'',0,n,[...Array(n)].map((_,j)=>reps[j]||reps[0]||'10'),null,{add:true}]);sets.push(fill(e,n))});
-  const w={...t,x};regW(w);return {wid:w.i,start:Date.now()-Math.max(1,+l.min||1)*60000,w,date:l.date<today()?l.date:null,sets}}
+  const w={...t,x};if(!WBYID[w.i])regW(w);return {wid:w.i,start:Date.now()-Math.max(1,+l.min||1)*60000,w,date:l.date<today()?l.date:null,sets}}
 function resumeLog(ts){const l=S.log.find(x=>x.ts===+ts);if(!canResume(l))return toast('Det här passet kan inte fortsättas');
   if(active)return toast('Avsluta eller avbryt det pågående passet först');
   confirmBar('Fortsätt passet? Det sparade passet tas bort tills du avslutar igen.','Fortsätt passet',()=>doResume(+ts))}
@@ -3737,6 +3747,7 @@ function finishWorkout(){
     if(Array.isArray(s[3])){const pt=tg.split('+');s[3].forEach((d,k)=>{if(d[1]===''&&((k?d[0]:s[0])!==''||(s[2]&&!k)))d[1]=String(pt[k]??pt[0]??'')});return}
     if(s[0]&&!s[1])s[1]=tg}));
   const ex=w.x.map((e,i)=>{active.sets[i].forEach(syncDrop);active.sets[i].forEach(syncSup);const sets=active.sets[i].filter(s=>s[0]||s[1]||s[2]).map(s=>{const D=Array.isArray(s[3])?s[3].filter(d=>d[0]||d[1]).map(d=>[d[0],d[1]]):[];return D.length?[s[0],s[1],D]:[s[0],s[1]]});const o={n:e[0],sets,t:(e[9]||[]).slice(0,sets.length)};if(isAdded(e))o.add=true;
+    {const pr=e[10]&&(e[10].sw||[]).find(q=>q[1]===e[0]);if(pr)o.swapOf=pr[0]}
     const PN=supParts(e);if(PN.length>1&&active.sets[i].some(s=>Array.isArray(s[4]))){
       o.parts=PN.map((pn,k)=>{const idx=active.sets[i].map((s,j)=>j).filter(j=>{const d=active.sets[i][j][4];return d&&d[k]&&(d[k][0]!==''||d[k][1]!=='')});
         const p={n:pn,sets:idx.map(j=>[active.sets[i][j][4][k][0],active.sets[i][j][4][k][1]]),t:idx.map(j=>{const a=String((e[9]||[])[j]??'').split('/');return a[k]??''})};
