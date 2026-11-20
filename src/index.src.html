@@ -698,7 +698,11 @@ function syncHTML(){
   if(dirty.size)return off?'Väntar på nät – sparas på telefonen så länge':'Sparar …';
   return 'Sparat i ditt konto';
 }
-function updSync(){const el=document.getElementById('syncStatus');if(!el)return;const h=syncHTML();if(el._h===h)return;el._h=h;el.innerHTML=h;bind(el)}
+/* Sedan när det funnits osparade ändringar (bara för visning – påverkar inte sparandet). */
+const USK='rs-unsynced-since';
+function unsyncedSince(){try{return +localStorage.getItem(USK)||0}catch(e){return 0}}
+function trackUnsynced(){try{if(dirty.size){if(!unsyncedSince())localStorage.setItem(USK,String(Date.now()))}else localStorage.removeItem(USK)}catch(e){}}
+function updSync(){trackUnsynced();const el=document.getElementById('syncStatus');if(!el)return;const h=syncHTML();if(el._h===h)return;el._h=h;el.innerHTML=h;bind(el)}
 async function initSupabase(){
   if(!sbCfg()) return; SB=true;
   try{const c=JSON.parse(localStorage.getItem(LIBK)||'null'),ss=sbLoadSess();if(c&&ss&&ss.user&&c.uid===ss.user.id)setLibrary(c.lib)}catch(e){}
@@ -2352,7 +2356,7 @@ function viewToday(){
    ${weekStrip()}
    ${wait&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
    ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
-   ${backupDue()?backupCard():''}
+   ${backupDue()?backupCard():syncStaleNote()}
    ${floorCard(k,d,goal,mobToday)}
    ${!done.some(isPass)?ciCard():''}
    ${active&&!(plan==='s'&&!did('styrka'))?`<section class="card stack"><span class="eyebrow">Pågående pass</span><strong>${esc(wTitle(active.w||WBYID[active.wid]))}</strong><div class="row">${resumeBtn()}</div></section>`:''}
@@ -2431,7 +2435,12 @@ function backupError(v){const bad='Det där ser inte ut som en säkerhetskopia',
   if(!v.log.every(l=>isO(l)&&typeof l.type==='string'&&typeof l.date==='string'&&dk.test(l.date)&&typeof l.ts==='number'&&isFinite(l.ts)&&(l.ex==null||Array.isArray(l.ex))))return 'Säkerhetskopian innehåller pass som inte går att läsa';
   if(!Object.entries(v.days).every(([k,d])=>dk.test(k)&&isO(d)&&(d.steps==null||typeof d.steps==='number')&&(d.moves==null||Array.isArray(d.moves))))return 'Säkerhetskopian innehåller dagar som inte går att läsa';
   return ''}
-function backupDue(){const st=S.settings;return cloud!=='moln'&&S.log.length>0&&(!st.lastBackup||Date.now()-st.lastBackup>7*864e5)}
+/* Inloggad = har en Supabase-användare eller en sparad session. Gäller även medan molnet laddar eller när en synk misslyckats. */
+function signedIn(){if(SBUSER)return true;if(!sbCfg())return false;const ss=sbLoadSess();return !!(ss&&ss.user)}
+function backupDue(){const st=S.settings;return !signedIn()&&cloud!=='moln'&&S.log.length>0&&(!st.lastBackup||Date.now()-st.lastBackup>7*864e5)}
+/* Diskret rad i stället för backupkortet: inloggad, men ändringar har inte gått att skicka på över ett dygn. */
+function syncStale(){const t=unsyncedSince();return signedIn()&&dirty.size>0&&!!t&&Date.now()-t>864e5}
+function syncStaleNote(){return syncStale()?'<p class="small muted" role="status" style="margin:0">Senaste synk misslyckades – dina ändringar finns kvar på den här enheten och skickas när nätet fungerar.</p>':''}
 function backupCard(){return `<section class="card stack backupcard"><h3>Spara en kopia av dina loggar</h3>
   <p class="small" style="margin:0">Dina loggar sparas bara i den här webbläsaren. Byter du telefon eller rensar webbläsaren försvinner de. Kopiera all data och klistra in den i en anteckning – det tar fem sekunder.</p>
   <div class="row"><button class="btn sm" type="button" data-backup>Kopiera all data</button><button class="btn ghost sm" type="button" data-backuplater>Påminn mig om en vecka</button></div></section>`}
