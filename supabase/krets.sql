@@ -11,12 +11,23 @@
 --   - Under Table Editor finns nu tabellerna kretsar, krets_medlem, krets_status,
 --     krets_pepp och krets_delning, alla märkta "RLS enabled".
 --   - Under Database → Functions finns skapa_krets, ga_med, krets_namn_for_kod,
---     krets_idag, ar_medlem, samma_krets och delar.
+--     krets_idag, ar_medlem, samma_krets, delar och krets_rensa.
 --   - Kör gärna den här raden i en ny query som kontroll (ska ge 5):
 --       select count(*) from pg_tables where schemaname='public' and tablename like 'krets%' and rowsecurity;
 --
 -- Vad som delas: bara om dagen är hel (ja/nej) för var och en, samt peppningar.
 -- Inga mängder, inga loggar, inga jämförelser.
+--
+-- VEM KAN LÄSA OCH SKRIVA VAD (inloggade; anonyma kommer inte åt något)
+--   kretsar        läsa: medlemmar i kretsen.  skriva: ingen direkt – bara via skapa_krets(); tas bort av trigger när den blir tom.
+--   krets_medlem   läsa: medlemmar i samma krets.  skriva: gå med via ga_med()/skapa_krets(), ändra eget visningsnamn, ta bort egen rad (lämna).
+--   krets_status   läsa: bara ägaren.  skriva: bara egna rader, datum kring idag; ta bort egna rader.
+--                  De andras läge (hel/tom/neutral) kommer bara via krets_idag().
+--   krets_pepp     läsa: skickade och mottagna.  skriva: i eget namn till någon i samma krets, en per dag och mottagare;
+--                  ta bort skickade och mottagna (rensning av gamla).
+--   krets_delning  läsa och skriva: bara ägaren.
+--   Funktioner     skapa_krets, ga_med, krets_namn_for_kod, krets_idag: inloggade.
+--                  ar_medlem, samma_krets: inloggade (behövs av policyerna).  delar, krets_rensa: ingen klient.
 -- ============================================================================
 
 -- ---------- Tabeller ----------
@@ -89,7 +100,7 @@ language sql stable security definer set search_path = public as $$
     where a.anvandare = auth.uid() and b.anvandare = u);
 $$;
 
--- Delar användaren u sin status (inte pausad)?
+-- Delar användaren u sin status (inte pausad)? Används bara inne i krets_idag() – inte körbar för klienter.
 create or replace function public.delar(u uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select not exists (select 1 from krets_delning where anvandare = u and pausad);
@@ -110,25 +121,30 @@ create policy "medlem läsa" on public.krets_medlem for select to authenticated 
 create policy "medlem ändra eget namn" on public.krets_medlem for update to authenticated using (anvandare = auth.uid()) with check (anvandare = auth.uid());
 create policy "medlem lämna" on public.krets_medlem for delete to authenticated using (anvandare = auth.uid());
 
--- krets_status: läsa sin egen, och andras bara om man är i samma krets och de inte pausat.
--- Skriva bara sin egen, och bara för idag och igår (med en dags marginal för tidszoner).
+-- krets_status: bara ägaren läser sina rader. De andras läge kommer bara som hel/tom/neutral via krets_idag().
+-- Skriva bara sin egen, och bara för idag och igår (med en dags marginal för tidszoner). Ta bort egna rader (appen rensar äldre än två dagar).
 drop policy if exists "status läsa" on public.krets_status;
 drop policy if exists "status skapa" on public.krets_status;
 drop policy if exists "status ändra" on public.krets_status;
+drop policy if exists "status ta bort" on public.krets_status;
 create policy "status läsa" on public.krets_status for select to authenticated
-  using (anvandare = auth.uid() or (public.samma_krets(anvandare) and public.delar(anvandare)));
+  using (anvandare = auth.uid());
 create policy "status skapa" on public.krets_status for insert to authenticated
   with check (anvandare = auth.uid() and datum between current_date - 2 and current_date + 1);
 create policy "status ändra" on public.krets_status for update to authenticated
   using (anvandare = auth.uid())
   with check (anvandare = auth.uid() and datum between current_date - 2 and current_date + 1);
+create policy "status ta bort" on public.krets_status for delete to authenticated using (anvandare = auth.uid());
 
 -- krets_pepp: läsa de man skickat och de man fått. Skicka bara i eget namn, till någon i samma krets, för idag.
+-- Ta bort de man skickat eller fått (appen rensar äldre än två dagar).
 drop policy if exists "pepp läsa" on public.krets_pepp;
 drop policy if exists "pepp skicka" on public.krets_pepp;
+drop policy if exists "pepp ta bort" on public.krets_pepp;
 create policy "pepp läsa" on public.krets_pepp for select to authenticated using (fran = auth.uid() or till = auth.uid());
 create policy "pepp skicka" on public.krets_pepp for insert to authenticated
   with check (fran = auth.uid() and till <> auth.uid() and public.samma_krets(till) and datum between current_date - 1 and current_date + 1);
+create policy "pepp ta bort" on public.krets_pepp for delete to authenticated using (fran = auth.uid() or till = auth.uid());
 
 -- krets_delning: bara ägaren läser och skriver.
 drop policy if exists "delning egen läsa" on public.krets_delning;
@@ -146,8 +162,8 @@ grant select on public.kretsar to authenticated;
 revoke insert, update on public.krets_medlem from authenticated;
 grant select, delete on public.krets_medlem to authenticated;
 grant update (visningsnamn) on public.krets_medlem to authenticated;
-grant select, insert, update on public.krets_status to authenticated;
-grant select, insert on public.krets_pepp to authenticated;
+grant select, insert, update, delete on public.krets_status to authenticated;
+grant select, insert, delete on public.krets_pepp to authenticated;
 grant select, insert, update on public.krets_delning to authenticated;
 
 -- ---------- En tom krets tas bort när sista medlemmen lämnat ----------
@@ -224,4 +240,9 @@ $$;
 
 revoke all on function public.skapa_krets(text, text), public.ga_med(text, text), public.krets_namn_for_kod(text), public.krets_idag(date) from anon, public;
 grant execute on function public.skapa_krets(text, text), public.ga_med(text, text), public.krets_namn_for_kod(text), public.krets_idag(date) to authenticated;
-grant execute on function public.ar_medlem(uuid), public.samma_krets(uuid), public.delar(uuid) to authenticated;
+-- Hjälpfunktionerna: ar_medlem och samma_krets behövs av policyerna och får köras av inloggade, inte av anon/public.
+-- delar och triggerfunktionen krets_rensa är inte körbara för någon klient.
+revoke all on function public.ar_medlem(uuid), public.samma_krets(uuid) from public, anon;
+grant execute on function public.ar_medlem(uuid), public.samma_krets(uuid) to authenticated;
+revoke all on function public.delar(uuid) from public, anon, authenticated;
+revoke all on function public.krets_rensa() from public, anon, authenticated;

@@ -2306,7 +2306,12 @@ function kStatus(){if(!kOn()||!K.rows||!K.rows.length)return;const sent=kLS(KST,
   if(!ch.length)return;
   kFetch('/rest/v1/krets_status',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(ch.map(({v,...x})=>x))}).then(r=>{if(!r.ok)return;
     const s2=kLS(KST,{}),keep={};ch.forEach(x=>s2[x.datum]=x.v);Object.keys(s2).filter(k=>k>=dkey(addDays(new Date(),-3))).forEach(k=>keep[k]=s2[k]);kLSset(KST,keep);
+    kClean();
     const me=ch.find(x=>x.datum===today());if(me&&K.rows)K.rows.forEach(r=>{if(r.ar_jag)r.lage=K.pause||me.neutral?'neutral':me.hel?'hel':'tom'})})}
+/* Rensning: egna statusrader och peppningar (skickade eller mottagna) äldre än två dagar tas bort, högst en gång per dag. */
+function kClean(){const t=today();if(kLS('rs-kclean','')===t)return;const old=dkey(addDays(new Date(),-2)),u=encodeURIComponent(kUid());
+  Promise.all([kFetch('/rest/v1/krets_status?anvandare=eq.'+u+'&datum=lt.'+old,{method:'DELETE',headers:{Prefer:'return=minimal'}}),
+    kFetch('/rest/v1/krets_pepp?or=(fran.eq.'+u+',till.eq.'+u+')&datum=lt.'+old,{method:'DELETE',headers:{Prefer:'return=minimal'}})]).then(rs=>{if(rs.every(r=>r.ok))kLSset('rs-kclean',t)})}
 /* Körs efter varje ritning: status vid ändring, hämtning högst var femte minut när Idag visas, väntande inbjudan. */
 function kTick(){if(!kOn())return;try{kStatus();if(tab==='idag'||!K.at)kLoad();kJoinPending()}catch(e){}}
 /* Raden på Idag: en prick per person. Fylld solgul när dagen är hel, tom annars, neutral vid paus. */
