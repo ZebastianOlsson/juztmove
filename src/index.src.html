@@ -83,6 +83,14 @@ h3{font-size:18px}
 .stepq{display:flex;gap:6px;flex-wrap:nowrap;margin-top:8px}.stepq input{flex:1;min-width:0;font-size:16px}
 .kand{display:flex;gap:6px;flex-wrap:wrap}
 .why1{font-size:13px;color:var(--muted)}
+.krow{display:flex;gap:6px 14px;flex-wrap:wrap;margin:-6px 0 14px}
+.kp{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:4px 2px;min-height:36px;cursor:pointer;color:var(--ink);font:inherit}
+.kp[aria-pressed="true"] .kn{text-decoration:underline}
+.kd{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:800;font-size:12px;border:2px solid var(--line);color:var(--muted)}
+.kd.hel{background:var(--spot);border-color:var(--spot);color:#1D1B16}.kd.neutral{border-style:dashed;border-color:var(--muted);background:transparent}
+.kn{font-size:14px;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ksel{margin:-8px 0 14px}.kpepp{margin:-8px 0 14px;font-size:14px;color:var(--muted)}
+.klist{margin:0;padding-left:18px}
 .dayline{margin:-8px 0 14px;font-size:16px;font-weight:500}
 .movebox .btn.big{min-height:54px;font-size:17px}
 .mvk{color:var(--ink);font-weight:600}
@@ -793,6 +801,7 @@ function showLogin(){
   openSheet(`<header class="top"><div><div class="date">JuztMove</div><h1>${su?'Skapa konto':'Logga in'}</h1></div>${S.settings.onb?'<button class="btn ghost sm" type="button" data-close>Stäng</button>':''}</header>
    <div class="stack login">
     <section class="card stack">
+      ${(()=>{try{return JSON.parse(localStorage.getItem(KJ)||'null')}catch(e){return null}})()?'<p style="margin:0"><strong>Du har fått en inbjudan till en krets.</strong> Logga in eller skapa ett konto först, så kommer frågan sedan.</p>':''}
       <p style="margin:0">${su?'Skapa ett konto så sparas din träning i molnet och följer med till nya telefoner.':'Logga in så hämtas din träning och allt sparas i molnet.'}</p>
       <label class="f" for="lgEmail">E-post<input id="lgEmail" type="email" inputmode="email" autocomplete="email" value="${esc(st.email)}" placeholder="namn@exempel.se"></label>
       <label class="f" for="lgPw">Lösenord${su?' (minst 6 tecken)':''}<input id="lgPw" type="password" autocomplete="${su?'new-password':'current-password'}" value="${esc(st.pw||'')}"></label>
@@ -2255,6 +2264,133 @@ function saveSteps(k,v,est){const d=day(k),before=+d.steps||0;d.steps=v;if(est)d
   if(k===today()&&before<7000&&v>=7000&&!d.n7){d.n7=1;setTimeout(()=>toast('Här har du fått det mesta av nyttan.'),50)}
   setDay(k,{})}
 
+/* ---------- Den lilla kretsen ----------
+   Delar bara om dagen är hel (ja/nej) och peppningar. Tabellerna skapas med supabase/krets.sql.
+   Allt här är frivilligt: saknas tabellerna, är man offline eller blir det fel visas kretsen bara inte.
+   Anropen har en egen fetch med tidsgräns och påverkar aldrig synken av träningsdata. */
+const KJ='rs-kjoin', KST='rs-kstat', KSEEN='rs-kpepp', KSENT='rs-ksent';
+let K={rows:null,err:false,at:0,busy:false,pause:false,pepp:[],sel:null,shown:new Set()};
+(function(){try{const u=new URL(location.href),k=(u.searchParams.get('krets')||'').trim();if(k&&/^[A-Za-z0-9]{4,16}$/.test(k)){localStorage.setItem(KJ,JSON.stringify({kod:k.toUpperCase(),at:Date.now()}));
+  u.searchParams.delete('krets');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)}}catch(e){}})();
+const kOn=()=>BUILD==='public'&&!!SB&&!!SBUSER&&!!sbCfg();
+const kUid=()=>SBUSER&&SBUSER.id;
+const kLS=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k)||'null');return v&&v.uid===kUid()?v.v:d}catch(e){return d}};
+const kLSset=(k,v)=>{try{localStorage.setItem(k,JSON.stringify({uid:kUid(),v}))}catch(e){}};
+async function kFetch(path,opt={}){if(!kOn())return {ok:false,status:0};
+  const c=sbCfg(),ctl=typeof AbortController!=='undefined'?new AbortController():null,t=setTimeout(()=>ctl&&ctl.abort(),8000);
+  try{const ss=sbLoadSess();if(!ss||!ss.access_token)return {ok:false,status:0};
+    const r=await fetch(c.supabaseUrl+path,{...opt,signal:ctl&&ctl.signal,headers:{apikey:c.supabaseAnonKey,Authorization:'Bearer '+ss.access_token,'Content-Type':'application/json',...(opt.headers||{})}});
+    const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null}catch(e){}
+    return {ok:r.ok,status:r.status,j,msg:(j&&(j.message||j.msg||j.error))||''}}
+  catch(e){return {ok:false,status:0}}finally{clearTimeout(t)}}
+const kRpc=(fn,args)=>kFetch('/rest/v1/rpc/'+fn,{method:'POST',body:JSON.stringify(args||{})});
+/* Läser kretsarna, mitt pausläge och dagens peppningar. Vid fel: K.err och raden döljs. */
+async function kLoad(force){if(!kOn()||K.busy)return;if(!force&&K.at&&Date.now()-K.at<5*60e3)return;K.busy=true;
+  try{const r=await kRpc('krets_idag',{p_dag:today()});K.at=Date.now();
+    if(!r.ok||!Array.isArray(r.j)){K.err=true;K.rows=null;return}
+    K.err=false;K.rows=r.j;
+    if(K.rows.length){const [d,pp]=await Promise.all([kFetch('/rest/v1/krets_delning?select=pausad'),kFetch('/rest/v1/krets_pepp?select=fran,datum&till=eq.'+encodeURIComponent(kUid())+'&datum=eq.'+today())]);
+      K.pause=!!(d.ok&&Array.isArray(d.j)&&d.j[0]&&d.j[0].pausad);K.pepp=pp.ok&&Array.isArray(pp.j)?pp.j:[]}
+    else{K.pause=false;K.pepp=[]}
+    kStatus();
+  }finally{K.busy=false;kSoft()}}
+function kSoft(){const sh=document.querySelector('#sheet.open');if(sh&&$('#kBox')){const t=document.createElement('div');t.innerHTML=kretsHTML();const n=t.firstElementChild;$('#kBox').replaceWith(n);bind(n)}
+  if(!sh&&(tab==='idag'||tab==='jag'))softRender()}
+/* Personer i mina kretsar (utom jag själv), en gång var även om man delar flera kretsar. */
+function kPeople(){if(!K.rows)return [];const m=new Map();K.rows.forEach(r=>{if(r.ar_jag)return;const o=m.get(r.anvandare);if(!o||r.lage==='hel'||(o.lage==='tom'&&r.lage==='neutral'))m.set(r.anvandare,{id:r.anvandare,namn:r.visningsnamn,lage:r.lage})});return [...m.values()]}
+function kMine(){if(!K.rows)return [];const m=new Map();K.rows.forEach(r=>{if(!m.has(r.krets))m.set(r.krets,{id:r.krets,namn:r.namn,kod:r.kod,folk:[]});m.get(r.krets).folk.push(r)});return [...m.values()]}
+/* Min status skrivs när golvet för idag eller igår ändras – aldrig äldre dagar – och bara om jag är med i en krets. */
+function kStatus(){if(!kOn()||!K.rows||!K.rows.length)return;const sent=kLS(KST,{});let ch=[];
+  [0,-1].forEach(o=>{const k=dkey(addDays(new Date(),o)),hel=dayFloor(k).ok,neutral=!hel&&(o===0?!!pauseNow():inPauseHist(k)),v=(hel?'h':'')+(neutral?'n':'');
+    if(sent[k]!==v)ch.push({anvandare:kUid(),datum:k,hel,neutral,uppdaterad:new Date().toISOString(),v})});
+  if(!ch.length)return;
+  kFetch('/rest/v1/krets_status',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(ch.map(({v,...x})=>x))}).then(r=>{if(!r.ok)return;
+    const s2=kLS(KST,{}),keep={};ch.forEach(x=>s2[x.datum]=x.v);Object.keys(s2).filter(k=>k>=dkey(addDays(new Date(),-3))).forEach(k=>keep[k]=s2[k]);kLSset(KST,keep);
+    const me=ch.find(x=>x.datum===today());if(me&&K.rows)K.rows.forEach(r=>{if(r.ar_jag)r.lage=K.pause||me.neutral?'neutral':me.hel?'hel':'tom'})})}
+/* Körs efter varje ritning: status vid ändring, hämtning högst var femte minut när Idag visas, väntande inbjudan. */
+function kTick(){if(!kOn())return;try{kStatus();if(tab==='idag'||!K.at)kLoad();kJoinPending()}catch(e){}}
+/* Raden på Idag: en prick per person. Fylld solgul när dagen är hel, tom annars, neutral vid paus. */
+function kRow(){if(!kOn()||K.err||!K.rows)return '';const P=kPeople();if(!P.length)return '';
+  const seen=kLS(KSEEN,[]),from=K.pepp.filter(x=>!seen.includes(x.fran+'|'+x.datum)||K.shown.has(x.fran+'|'+x.datum));
+  if(from.length){from.forEach(x=>K.shown.add(x.fran+'|'+x.datum));kLSset(KSEEN,[...new Set([...seen,...from.map(x=>x.fran+'|'+x.datum)])].slice(-60))}
+  const names=new Map(K.rows.map(r=>[r.anvandare,r.visningsnamn])),sent=kLS(KSENT,{})[today()]||[];
+  const sel=P.find(p=>p.id===K.sel);
+  return `<div class="krow" aria-label="Din krets">${P.map(p=>`<button class="kp" type="button" data-kp="${esc(p.id)}" aria-pressed="${K.sel===p.id}" aria-label="${esc(p.namn)}${p.lage==='hel'?', dagen är hel':''}"><span class="kd ${p.lage}">${esc(String(p.namn||'?').trim().charAt(0).toLocaleUpperCase('sv-SE'))}</span><span class="kn">${esc(p.namn)}</span></button>`).join('')}</div>
+   ${sel?`<div class="ksel">${sent.includes(sel.id)?`<span class="small muted">Skickat till ${esc(sel.namn)} ✓</span>`:`<button class="btn sm" type="button" data-kpepp="${esc(sel.id)}">${sel.lage==='hel'?'Heja '+esc(sel.namn):'Tänker på dig, '+esc(sel.namn)}</button>`}</div>`:''}
+   ${from.map(x=>`<p class="kpepp" role="status">${esc(names.get(x.fran)||'Någon i kretsen')} hejar på dig.</p>`).join('')}`}
+async function kPepp(uid){const r=await kFetch('/rest/v1/krets_pepp',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify([{fran:kUid(),till:uid,datum:today()}])});
+  if(r.ok||r.status===409){const all=kLS(KSENT,{}),t=today();kLSset(KSENT,{[t]:[...new Set([...(all[t]||[]),uid])]});toast('Skickat');K.sel=null;render()}else toast('Det gick inte att skicka just nu')}
+/* Inbjudan: appens adress med ?krets=KOD. */
+const kLink=kod=>location.origin+location.pathname+'?krets='+encodeURIComponent(kod);
+async function kShare(kod,namn){const url=kLink(kod),text=`Vill du vara med i ${namn}? Vi ser bara om dagen är hel för var och en. Inget annat.`;
+  try{if(navigator.share){await navigator.share({title:namn,text,url});return}}catch(e){if(e&&e.name==='AbortError')return}
+  try{await navigator.clipboard.writeText(text+' '+url);toast('Länken är kopierad – klistra in den i ett meddelande')}catch(e){toast('Kopiera länken: '+url)}}
+const kDefName=()=>{const e=String((SBUSER&&SBUSER.email)||'').split('@')[0].replace(/[._-]+/g,' ').trim();return (e.charAt(0).toLocaleUpperCase('sv-SE')+e.slice(1)).slice(0,30)||'Jag'};
+const K_ERR={'kretsen är full':'Kretsen är full – den har redan sex personer.','högst 3 kretsar':'Du kan vara med i högst tre kretsar.','okänd kod':'Koden hittades inte. Kolla stavningen.'};
+function kErr(r){const m=Object.keys(K_ERR).find(k=>String(r.msg||'').includes(k));return m?K_ERR[m]:'Det gick inte just nu. Försök igen om en stund.'}
+async function kCreate(){const n=($('#kNamn').value||'').trim()||'Min krets',v=($('#kJag').value||'').trim()||kDefName();
+  const r=await kRpc('skapa_krets',{p_namn:n,p_visningsnamn:v});if(!r.ok||!r.j||!r.j.kod){toast(kErr(r));return}
+  K.at=0;await kLoad(true);kShare(r.j.kod,r.j.namn)}
+async function kJoin(kod,name){const r=await kRpc('ga_med',{p_kod:kod,p_visningsnamn:(name||'').trim()||kDefName()});
+  try{localStorage.removeItem(KJ)}catch(e){}
+  if(!r.ok||!r.j){toast(kErr(r));return false}
+  closeSheet();toast(r.j.redan?`Du är redan med i ${r.j.namn}`:`Du är med i ${r.j.namn}`);await kLoad(true);return true}
+/* Väntande inbjudan från en länk: frågan visas när man är inloggad och inget annat ark är öppet. */
+let kAsking=false;
+async function kJoinPending(){if(kAsking||!kOn()||!S.settings.onb||document.querySelector('#sheet.open'))return;let p=null;try{p=JSON.parse(localStorage.getItem(KJ)||'null')}catch(e){}
+  if(!p||!p.kod)return;if(Date.now()-(p.at||0)>14*864e5){try{localStorage.removeItem(KJ)}catch(e){}return}
+  kAsking=true;try{const r=await kRpc('krets_namn_for_kod',{p_kod:p.kod});
+    if(!r.ok){if(r.status&&r.status!==0){try{localStorage.removeItem(KJ)}catch(e){}}return}
+    if(!r.j||!r.j.namn){try{localStorage.removeItem(KJ)}catch(e){}toast('Inbjudan fungerar inte längre');return}
+    if(r.j.medlem){try{localStorage.removeItem(KJ)}catch(e){}return}
+    if(document.querySelector('#sheet.open'))return;
+    openSheet(`<header class="top"><div><div class="date">Inbjudan</div><h1>Gå med i ${esc(r.j.namn)}?</h1></div></header>
+     <div class="stack"><section class="card stack"><p style="margin:0"><strong>Ni ser bara om dagen är hel för var och en. Inget annat.</strong></p>
+      <p class="small muted" style="margin:0">Du kan skicka en peppning med ett tryck, pausa delningen eller lämna när du vill.</p>
+      <label class="f" for="kJoinName">Ditt namn i kretsen<input id="kJoinName" type="text" maxlength="30" autocomplete="nickname" value="${esc(kDefName())}"></label></section></div>`);
+    stickyBar(`<button class="btn ghost" type="button" data-kjoinno>Inte nu</button><button class="btn" type="button" data-kjoinyes="${esc(p.kod)}">Gå med</button>`);
+  }finally{kAsking=false}}
+/* Min krets under Jag. */
+function kretsHTML(){
+  if(!(BUILD==='public'&&SB&&sbCfg()))return '<div id="kBox"></div>';
+  if(!SBUSER)return `<div id="kBox" class="stack" style="gap:8px"><p class="small" style="margin:0">Kretsen kräver att du är inloggad.</p><div><button class="btn sm" type="button" data-login>Logga in</button></div></div>`;
+  if(K.err)return `<div id="kBox" class="stack" style="gap:8px"><p class="small muted" style="margin:0">Kretsen går inte att nå just nu.</p></div>`;
+  if(!K.rows)return `<div id="kBox"><p class="small muted" style="margin:0">Hämtar …</p></div>`;
+  const mine=kMine(),me=K.rows.find(r=>r.ar_jag);
+  const what='<p style="margin:0"><strong>Ni ser bara om dagen är hel för var och en. Inget annat.</strong> Inga siffror, inga topplistor. Ni kan skicka en peppning med ett tryck.</p>';
+  const create=`<div class="stack" style="gap:8px"><label class="f" for="kNamn">Kretsens namn<input id="kNamn" type="text" maxlength="40" value="Min krets"></label>
+    <label class="f" for="kJag">Ditt namn i kretsen<input id="kJag" type="text" maxlength="30" autocomplete="nickname" value="${esc(me?me.visningsnamn:kDefName())}"></label>
+    <div><button class="btn" type="button" data-kcreate>Skapa och dela länk</button></div><p class="small muted" style="margin:0">Högst sex personer. Länken öppnar appen och frågar om de vill gå med.</p></div>`;
+  const join=`<details><summary class="small">Har du en kod?</summary><div class="ancadd" style="margin-top:8px"><input id="kKod" type="text" maxlength="16" autocapitalize="characters" placeholder="Kod, t.ex. 7F3A9C21" aria-label="Inbjudningskod"><button class="btn ghost sm" type="button" data-kcode>Gå med</button></div></details>`;
+  if(!mine.length)return `<div id="kBox" class="stack" style="gap:12px">${what}${create}${join}</div>`;
+  return `<div id="kBox" class="stack" style="gap:12px">${what}
+   ${mine.map(k=>`<div class="kret stack" style="gap:8px"><div class="row between"><strong>${esc(k.namn)}</strong><span class="small muted">${k.folk.length} av 6</span></div>
+     <ul class="klist">${k.folk.map(f=>`<li>${esc(f.visningsnamn)}${f.ar_jag?' <span class="small muted">(du)</span>':''}</li>`).join('')}</ul>
+     <div class="row"><button class="btn sm" type="button" data-kshare="${esc(k.kod)}|${esc(k.namn)}" ${k.folk.length>=6?'disabled':''}>Bjud in</button><button class="btn ghost sm" type="button" data-kleave="${esc(k.id)}|${esc(k.namn)}">Lämna kretsen</button></div></div>`).join('')}
+   <div class="ancadd"><input id="kNy" type="text" maxlength="30" value="${esc(me?me.visningsnamn:'')}" aria-label="Mitt visningsnamn"><button class="btn ghost sm" type="button" data-krename>Byt mitt namn</button></div>
+   <label class="setrow tog"><span>Pausa delning<span class="small muted d">Din prick visas som neutral för de andra så länge.</span></span><input type="checkbox" class="sw" data-kpause ${K.pause?'checked':''}></label>
+   ${mine.length<3?`<details><summary class="small">Skapa en till krets</summary><div style="margin-top:8px">${create}</div></details>`:''}${join}</div>`}
+function bindKrets(root){
+  root.querySelectorAll('[data-kp]').forEach(b=>b.onclick=()=>{K.sel=K.sel===b.dataset.kp?null:b.dataset.kp;render()});
+  root.querySelectorAll('[data-kpepp]').forEach(b=>b.onclick=()=>{b.disabled=true;kPepp(b.dataset.kpepp)});
+  root.querySelectorAll('[data-kcreate]').forEach(b=>b.onclick=()=>{b.disabled=true;kCreate().finally(()=>{b.disabled=false})});
+  root.querySelectorAll('[data-kshare]').forEach(b=>b.onclick=()=>{const [k,n]=b.dataset.kshare.split('|');kShare(k,n)});
+  root.querySelectorAll('[data-kcode]').forEach(b=>b.onclick=()=>{const v=($('#kKod').value||'').trim().toUpperCase();if(!/^[A-Z0-9]{4,16}$/.test(v)){toast('Skriv koden du fått');return}
+    try{localStorage.setItem(KJ,JSON.stringify({kod:v,at:Date.now()}))}catch(e){}kJoinPending()});
+  root.querySelectorAll('[data-kjoinyes]').forEach(b=>b.onclick=()=>{b.disabled=true;kJoin(b.dataset.kjoinyes,($('#kJoinName')||{}).value).finally(()=>{b.disabled=false})});
+  root.querySelectorAll('[data-kjoinno]').forEach(b=>b.onclick=()=>{try{localStorage.removeItem(KJ)}catch(e){}closeSheet()});
+  root.querySelectorAll('[data-krename]').forEach(b=>b.onclick=async()=>{const v=($('#kNy').value||'').trim().slice(0,30);if(!v){toast('Skriv ett namn');return}
+    const r=await kFetch('/rest/v1/krets_medlem?anvandare=eq.'+encodeURIComponent(kUid()),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({visningsnamn:v})});
+    if(r.ok){toast('Namnet är bytt');K.at=0;kLoad(true)}else toast('Det gick inte just nu')});
+  root.querySelectorAll('[data-kpause]').forEach(c=>c.onchange=async()=>{const on=c.checked;
+    const r=await kFetch('/rest/v1/krets_delning',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{anvandare:kUid(),pausad:on}])});
+    if(r.ok){K.pause=on;toast(on?'Delningen är pausad':'Du delar igen');K.at=0;kLoad(true)}else{c.checked=!on;toast('Det gick inte just nu')}});
+  root.querySelectorAll('[data-kleave]').forEach(b=>b.onclick=()=>{const [id,n]=b.dataset.kleave.split('|');
+    confirmBar(`Lämna ${n}? Du slutar se de andra och de slutar se dig. Inget meddelande skickas.`,'Lämna',async()=>{
+      const r=await kFetch('/rest/v1/krets_medlem?krets=eq.'+encodeURIComponent(id)+'&anvandare=eq.'+encodeURIComponent(kUid()),{method:'DELETE',headers:{Prefer:'return=minimal'}});
+      if(r.ok){toast('Du har lämnat '+n);K.at=0;kLoad(true)}else toast('Det gick inte just nu')},'Avbryt')});
+}
+
 /* ---------- Views ---------- */
 // Flikarna styrs bara av appens eget läge – inte av adressfältet (som kan skrivas över av värdsidan i mobilen).
 let tab='idag';
@@ -2276,6 +2412,7 @@ function render(){
     v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress,jag:viewJag})[tab]();
     bind(v);
     celeCheck();
+    kTick();
   }catch(e){
     v.innerHTML=`<section class="card stack"><h2>Sidan kunde inte visas</h2><p class="muted">Något gick fel när sidan ritades. Dina loggar är kvar. Skicka gärna texten nedan till Claude.</p><div class="note">${esc(tab+': '+(e&&e.message||e))}</div><button class="btn" type="button" data-gohome>Till Idag</button></section>`;
     const b=v.querySelector('[data-gohome]');if(b)b.onclick=()=>go('idag');
@@ -2646,6 +2783,7 @@ function viewToday(){
      ${weekPill()}</header>
    <p class="dayline" role="status">${esc(dayLine(k))}</p>
    ${pauseRow()}
+   ${kRow()}
    <div class="stack">
    ${weekStrip()}
    ${wait&&!pauseNow()&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
@@ -2676,8 +2814,15 @@ function dayLine(k){const f=dayFloor(k),pz=pauseNow();
   /* Båda delarna kvar: räkna ner det som är närmast. */
   if(need<=2)return `${nTxt} kvar – sedan är rörelsen klar.`;
   if(f.calm===1)return 'En lugn rörlighetspaus kvar – sedan är rörligheten klar.';
-  if(!f.pauses)return 'En promenad och lite rörlighet kvar till en hel dag.';
+  if(!f.pauses)return `${NUM_SV[need]||need} pauser eller en promenad, plus lite rörlighet, gör dagen hel.`;
   return `Lite rörlighet och ${(NUM_SV[need]||String(need)).toLowerCase()} pauser (eller en promenad) kvar till en hel dag.`}
+/* Kortet ställer högst en fråga åt gången. Stunderna erbjuds inte samma dag som en annan fråga (avstämning eller gummiband). */
+function otherQuestionToday(nm){return ciDue()||S.settings.bandAt===today()||(nm&&nm.k==='styrka'&&!S.settings.band)}
+/* Gummibandsfrågan ställs först när en styrkepaus är förslaget och man trycker "Rör dig nu". Sedan startar rätt variant. */
+function showBandAsk(){S.settings.bandAt=today();markDirty('settings');
+  openSheet(`<header class="top"><div><div class="date">Rörelsepaus</div><h1>Har du ett gummiband?</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+   <div class="stack"><section class="card stack"><p style="margin:0">Då görs pausen med band. Annars blir det en variant utan, mot väggen eller bordet.</p>
+   <div class="stack" style="gap:8px"><button class="btn" type="button" data-band="ja">Ja</button><button class="btn ghost" type="button" data-band="nej">Nej</button><button class="btn ghost" type="button" data-band="skaffar">Skaffar ett</button></div></section></div>`)}
 function pulsToday(){return movesToday().filter(x=>(MV(x.id)||{}).k==='puls').length}
 function movesCard(){
   const m=movesToday(), g=S.settings.moveGoal, nm=nextMove(), since=minsSinceMove(), h=new Date().getHours();
@@ -2687,15 +2832,13 @@ function movesCard(){
   const dots=[...Array(Math.max(g,m.length))].map((_,i)=>`<span class="mdot ${i<m.length?'on':''} ${i>=g?'bonus':''}"></span>`).join('');
   return `<section class="card stack" aria-labelledby="h-move">
     <div class="mvhead"><h2 id="h-move">Rörelsepauser</h2><div class="mvcount"><div class="mdots" aria-hidden="true">${dots}</div><span class="small muted num">${m.length} av ${g}</span></div></div>
-    <div class="row between" style="margin-top:-6px;flex-wrap:nowrap;gap:8px"><span class="small muted num">${sick?'Bara lugna pauser just nu':'Pulshöjande idag: '+(pu<3?pu+' av 3':pu)}</span>
-      <div class="mvplace" role="group" aria-label="Var är du?"><button class="chip" type="button" data-place="jobb" aria-pressed="${pl0==='jobb'}">På jobbet</button><button class="chip" type="button" data-place="hem" aria-pressed="${pl0==='hem'}">Hemma</button></div></div>
+    <div class="small muted num" style="margin-top:-6px">${sick?'Bara lugna pauser just nu':'Pulshöjande idag: '+(pu<3?pu+' av 3':pu)}</div>
     ${anc}
     ${nudge?`<div class="nudge" role="status">${esc(nudge)}</div>`:''}
-    ${anchorOfferDue()?`<div class="mvoffer"><strong>Vill du knyta pauserna till stunder i din dag?</strong><span class="small muted">Till exempel efter kaffet eller efter lunch. Det gör det lättare att komma ihåg dem.</span><div class="row"><button class="btn sm" type="button" data-ancoffer>Välj stunder</button><button class="btn ghost sm" type="button" data-ancno>Inte nu</button></div></div>`:''}
+    ${anchorOfferDue()&&!otherQuestionToday(nm)?`<div class="mvoffer"><strong>Vill du knyta pauserna till stunder i din dag?</strong><span class="small muted">Till exempel efter kaffet eller efter lunch. Det gör det lättare att komma ihåg dem.</span><div class="row"><button class="btn sm" type="button" data-ancoffer>Välj stunder</button><button class="btn ghost sm" type="button" data-ancno>Inte nu</button></div></div>`:''}
     <div class="movebox"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">${animSVG(mvAnim(nm),88)}<div class="grow"><div class="small muted">Förslag just nu${nm.k?` · <span class="mvk">${MOVE_K[nm.k]}</span>`:''}</div><strong>${esc(nm.t)}</strong><div class="small muted">${esc(nm.h)}</div></div></div>
-      ${nm.k==='styrka'&&!S.settings.band?`<div class="mvoffer" style="margin-top:10px"><span class="small"><strong>Har du ett gummiband?</strong> Då kan pausen göras med band. Annars blir det en variant utan.</span><div class="row"><button class="btn ghost sm" type="button" data-band="ja">Ja</button><button class="btn ghost sm" type="button" data-band="nej">Nej</button><button class="btn ghost sm" type="button" data-band="skaffar">Skaffar ett</button></div></div>`:''}
       <button class="btn big" style="width:100%;margin-top:10px" type="button" data-movedo="${nm.id}">Rör dig nu</button>
-      <div class="row between" style="margin-top:4px"><button class="linkbtn small tall" type="button" data-move="${nm.id}">Redan gjort</button><button class="linkbtn small tall" type="button" data-movenext>Visa ett annat</button></div>
+      <div class="row between" style="margin-top:4px"><button class="linkbtn small tall" type="button" data-move="${nm.id}">Redan gjort</button><span class="row" style="gap:12px;flex-wrap:nowrap"><button class="linkbtn small tall muted" type="button" data-place="${pl0==='jobb'?'hem':'jobb'}" aria-label="Plats: ${pl0==='jobb'?'på jobbet':'hemma'}. Tryck för att byta.">${pl0==='jobb'?'På jobbet':'Hemma'} · byt</button><button class="linkbtn small tall" type="button" data-movenext>Visa ett annat</button></span></div>
       <details class="why"><summary>Varför?</summary><p>${esc(nm.w||'')}</p><button class="linkbtn" type="button" data-whyall>Läs mer om varför vardagsrörelse lönar sig</button></details></div>
     <details ${movesOpen?'open':''} data-movesdet><summary>Alla rörelsepauser – tryck för att se hur</summary>
       <div class="chips wrap" style="margin-top:8px">${MOVES.map(x=>`<button class="chip" type="button" data-moveopen="${x.id}" aria-pressed="${doneIds.has(x.id)}">${esc(x.t)}</button>`).join('')}</div></details>
@@ -3455,11 +3598,14 @@ const MILESTONES=[
  /* Dagar i rad visas inte längre som mål, men den som redan nått en sådan milstolpe behåller märket. */
  ['streak','Dagar i rad',[3,7,14,30,60,100],v=>v+' i rad',1]];
 /* Räknare som bara växer: hela dagar totalt, godkända veckor totalt och hela dagar av de senaste 30.
-   En godkänd vecka = minst WEEK_OK hela dagar (golvet nått) samma vecka. */
-const WEEK_OK=4;
+   En godkänd vecka = minst weekOk() hela dagar (golvet nått, valbart 3–6, förvalt 4) samma vecka. */
+const weekOk=()=>Math.max(3,Math.min(6,+S.settings.weekOk||4));
 function okCounters(){const tk=today(),keys=[...new Set([...Object.keys(S.days),...S.log.map(l=>l.date)])].filter(k=>k&&k<=tk),ok=keys.filter(k=>dayFloor(k).ok);
   const wk={};ok.forEach(k=>{const m=dkey(monday(new Date(k+'T12:00:00')));wk[m]=(wk[m]||0)+1});
-  const f30=dkey(addDays(new Date(),-29));return {days:ok.length,weeks:Object.values(wk).filter(n=>n>=WEEK_OK).length,last30:ok.filter(k=>k>=f30).length}}
+  /* Veckor som en gång blivit godkända sparas (settings.okWk) och räknas inte om bakåt om antalet dagar ändras. */
+  const st=S.settings,kept=new Set(Array.isArray(st.okWk)?st.okWk:[]),n0=kept.size;Object.entries(wk).forEach(([m,n])=>{if(n>=weekOk())kept.add(m)});
+  if(kept.size>n0){st.okWk=[...kept].sort();markDirty('settings')}
+  const f30=dkey(addDays(new Date(),-29));return {days:ok.length,weeks:kept.size,last30:ok.filter(k=>k>=f30).length}}
 function milestoneData(stk){const t={pass:S.log.filter(isPass).length,km:S.log.filter(l=>l.type==='löpning').reduce((a,l)=>a+(+l.km||0),0),
   ton:S.log.filter(l=>l.type==='styrka').reduce((a,l)=>a+logVol(l),0)/1000,mob:S.log.filter(l=>l.type==='rörlighet').length,
   stepdays:Object.values(S.days).filter(d=>(+d.steps||0)>=S.settings.stepGoal).length,streak:stk.best,okdays:okCounters().days};
@@ -3515,7 +3661,7 @@ function viewProgress(){
        <div><div class="small muted">Löpning</div><div class="k2 num">${fmtNum(tw.km,1)} km</div>${delta(tw.km,lw.km,'km')}</div><div><div class="small muted">Lyft</div><div class="k2 num">${tw.vol>=1000?fmtNum(tw.vol/1000,1)+' t':fmtNum(tw.vol)+' kg'}</div>${delta(tw.vol/1000,lw.vol/1000,'t')}</div></div></section>
    <section class="card stack"><div class="row between"><h3>Aktivitet</h3><span class="small muted">${okc.last30} av de senaste 30 dagarna</span></div>
      <div class="tiles"><div><div class="k num">${fmtNum(okc.days)}</div><div class="small muted">hela dagar totalt</div></div><div><div class="k num">${fmtNum(okc.weeks)}</div><div class="small muted">godkända veckor</div></div><div><div class="k num">${okc.last30}<span class="small muted">/30</span></div><div class="small muted">senaste 30 dagarna</div></div></div>
-     <p class="small muted" style="margin:0">Räknarna går bara uppåt. En missad dag ändrar ingenting. En vecka är godkänd när minst ${WEEK_OK} dagar är hela.</p>
+     <p class="small muted" style="margin:0">Totalerna går bara uppåt. En missad dag ändrar ingenting. En vecka är godkänd när minst ${weekOk()} dagar är hela.</p>
      ${heatmap()}<div class="row between small muted"><span id="hmTip">Tryck på en dag för att se vad du gjorde.</span>${(S.settings.pauseHist||[]).length?'<span class="hmpz"><i></i>Lugn period</span>':''}<span class="hmleg">Mindre ${[0,1,2,3,4].map(i=>`<i style="background:var(--h${i})"></i>`).join('')} Mer</span></div></section>
    <section class="card stack"><h3>Träningstid per vecka</h3>${legend}${weekBars(weeks)}<div class="small muted" id="wkTip">Tryck på en vecka för detaljer. Snitt senaste 4 veckorna: ${fmtHM(weeks.slice(-4).reduce((a,w)=>a+w.s+w.r+w.m+w.o,0)/4)||'0 min'}.</div></section>
    ${stepsCard()}
@@ -4448,6 +4594,7 @@ function viewJag(){
   const daily=`${sStep('stepGoal','Stegmål per dag',+st.stepGoal||10000,2000,25000,v=>v.toLocaleString('sv-SE'))}
    ${sTog('adaptSteps','Anpassa stegmålet efter mig',!!st.adaptSteps,'Varje måndag sätts målet strax över din vanliga nivå de senaste dagarna. Det ändras högst 1 000 steg i veckan och ligger mellan 3 000 och 12 000.')}
    ${sStep('moveGoal','Rörelsepauser per dag',+st.moveGoal||8,4,12)}
+   ${sStep('weekOk','Hela dagar för en godkänd vecka',weekOk(),3,6,null,'Redan godkända veckor räknas inte om.')}
    <div class="setfield"><div class="lab">Mina stunder</div>${anchorsHTML()}</div>
    <p class="small muted" style="margin:0">Dagens golv: lite rörelse (promenad, stegmålet eller hälften av pauserna) och lite rörlighet (en rutin eller två lugna pauser) ger en hel dag.</p>`;
   const vSum=`${(+st.stepGoal||10000).toLocaleString('sv-SE')} steg · ${+st.moveGoal||8} rörelsepauser/dag${anchors().length?' · '+pl(anchors().length,'stund','stunder'):''}`;
@@ -4481,6 +4628,7 @@ function viewJag(){
    ${setSec('m','Rörlighet',mSum,mob)}
    ${setSec('v','Vardagsmotion',vSum,daily)}
    ${setSec('k','Om dig & kroppen',kSum,body)}
+   ${BUILD==='public'&&SB&&sbCfg()?setSec('c','Min krets',!SBUSER?'Kräver inloggning':K.rows&&K.rows.length?kMine().map(k=>k.namn).join(' · '):'Dela om dagen är hel med några få',kretsHTML()):''}
    ${setSec('a','Appen',aSum,app)}
    <p class="small muted num" style="text-align:center;margin:8px 0 0">Version 1.2${VERSION.indexOf('VERSION')<0?' · '+esc(VERSION):''}</p>
   </div>`;
@@ -4516,6 +4664,7 @@ function applySetting(k,v,silent){
     case 'adaptSteps':st.adaptSteps=!!v;break;
     case 'sound':st.sound=!!v;if(v){audioInit();signal('done')}break;
     case 'moveGoal':st.moveGoal=Math.max(4,Math.min(12,+v));break;
+    case 'weekOk':okCounters();st.weekOk=Math.max(3,Math.min(6,+v));break;
     case 'issue':{const a=new Set(st.issues||[]);a.has(v)?a.delete(v):a.add(v);st.issues=[...a];st.cycle=a.has('mens');if(v==='knä'&&a.has('knä'))st.kneeFocus=true;st.genCur=null;break}
     case 'ciEvery':ciConf().every=+v;break;
     case 'sex':st.sex=v||'';st.genCur=null;st.splitIdx=0;break;
@@ -4529,7 +4678,7 @@ function applySetting(k,v,silent){
 const SET_STEP={stepGoal:500,moveGoal:2,restFixed:15};
 function bindSettings(root){
   root.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>applySetting(b.dataset.set,b.dataset.val));
-  root.querySelectorAll('[data-setstep]').forEach(b=>b.onclick=()=>{const k=b.dataset.setstep;applySetting(k,(+S.settings[k]||0)+(+b.dataset.d)*(SET_STEP[k]||1))});
+  root.querySelectorAll('[data-setstep]').forEach(b=>b.onclick=()=>{const k=b.dataset.setstep;applySetting(k,(k==='weekOk'?weekOk():(+S.settings[k]||0))+(+b.dataset.d)*(SET_STEP[k]||1))});
   root.querySelectorAll('[data-settog]').forEach(c=>c.onchange=()=>applySetting(c.dataset.settog,c.checked));
   root.querySelectorAll('[data-setin]').forEach(c=>c.onchange=()=>applySetting(c.dataset.setin,c.value,c.tagName==='INPUT'));
   root.querySelectorAll('details[data-sec]').forEach(d=>d.addEventListener('toggle',()=>{d.open?setOpen.add(d.dataset.sec):setOpen.delete(d.dataset.sec)}));
@@ -4537,6 +4686,7 @@ function bindSettings(root){
 
 /* ---------- Events ---------- */
 function bind(root){
+  bindKrets(root);
   if(root.querySelector&&root.querySelector('#ancBox'))bindAnchors(root);
   root.querySelectorAll('[data-addsteps]').forEach(b=>b.onclick=()=>{const k=today();setDay(k,{steps:Math.min(100000,Math.max(0,(+day(k).steps||0)+ +b.dataset.addsteps))})});
   root.querySelectorAll('[data-stepq]').forEach(b=>b.onclick=()=>{const v=stepEstimate(b.dataset.stepq);saveSteps(today(),v,true);toast(`Ungefär ${v.toLocaleString('sv-SE')} steg sparade`)});
@@ -4562,7 +4712,7 @@ function bind(root){
   root.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>logMove(b.dataset.move));
   root.querySelectorAll('[data-movesdet]').forEach(d=>d.ontoggle=()=>{movesOpen=d.open});
   root.querySelectorAll('[data-moveopen]').forEach(b=>b.onclick=()=>showMove(b.dataset.moveopen,false));
-  root.querySelectorAll('[data-movedo]').forEach(b=>b.onclick=()=>showMove(b.dataset.movedo,true));
+  root.querySelectorAll('[data-movedo]').forEach(b=>b.onclick=()=>{const m=MV(b.dataset.movedo);if(m&&m.k==='styrka'&&!S.settings.band)return showBandAsk();showMove(b.dataset.movedo,true)});
   root.querySelectorAll('[data-mvplay]').forEach(b=>b.onclick=toggleMoveTimer);
   root.querySelectorAll('[data-mvdone]').forEach(b=>b.onclick=finishMove);
   root.querySelectorAll('[data-mvclose]').forEach(b=>b.onclick=()=>{if(mvState){clearInterval(mvState.t);mvState=null}if(firstMv){firstMv=false;go('idag')}closeSheet()});
@@ -4578,7 +4728,7 @@ function bind(root){
   {const pw=root.querySelector('#lgPw');if(pw)pw.onkeydown=e=>{if(e.key==='Enter')lgGo()}}
   root.querySelectorAll('[data-lgskip]').forEach(b=>b.onclick=()=>{S.settings.skipLogin=true;lsSave();closeSheet();if(!S.settings.onb)showOnboarding()});
   root.querySelectorAll('[data-login]').forEach(b=>b.onclick=()=>{loginState={mode:'login',email:(SBUSER&&SBUSER.email)||loginState.email||''};showLogin()});
-  root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';cloudReady=false;const hadLib=WORKOUTS.length>0&&BUILD==='public';try{localStorage.removeItem(LIBK)}catch(e){}closeSheet();toast('Utloggad – data finns kvar på telefonen');if(hadLib)setTimeout(()=>location.reload(),800)});
+  root.querySelectorAll('[data-logout]').forEach(b=>b.onclick=async()=>{try{await sbFetch('/auth/v1/logout',{method:'POST'})}catch(e){}sbSaveSess(null);SBUSER=null;cloud='lokal';cloudReady=false;K={rows:null,err:false,at:0,busy:false,pause:false,pepp:[],sel:null,shown:new Set()};const hadLib=WORKOUTS.length>0&&BUILD==='public';try{localStorage.removeItem(LIBK)}catch(e){}closeSheet();toast('Utloggad – data finns kvar på telefonen');if(hadLib)setTimeout(()=>location.reload(),800)});
   root.querySelectorAll('[data-painok]').forEach(b=>b.onclick=()=>{S.settings.painAlert=null;markDirty('settings');render()});
   root.querySelectorAll('[data-dayjump]').forEach(b=>b.onclick=()=>{dayOff=Math.max(-14,Math.min(13,+b.dataset.dayjump));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-dayoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.dayoff;dayOff=v===0?0:Math.max(-14,Math.min(13,dayOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
@@ -4588,7 +4738,7 @@ function bind(root){
   root.querySelectorAll('[data-expref]').forEach(b=>b.onclick=()=>{const [n,v]=b.dataset.expref.split('|'),st=S.settings,P={...(st.exPref||{})};if(exPrefOf(n)===+v)delete P[n];else P[n]=+v;st.exPref=P;markDirty('settings');
     toast(P[n]>0?n+' väljs oftare framöver':P[n]<0?n+' väljs mer sällan framöver':'Som vanligt igen');b.closest('.exacts').querySelectorAll('[data-expref]').forEach(x=>{const on=exPrefOf(n)===+x.dataset.expref.split('|')[1];x.setAttribute('aria-pressed',String(on));x.textContent=(on?'✓ ':'')+(x.dataset.expref.endsWith('|-1')?'Mindre av den här':'Mer av den här')})});
   root.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{const st=S.settings;st.place={...(st.place||{}),[placeKey()]:b.dataset.place};moveIdx=0;markDirty('settings');render()});
-  root.querySelectorAll('[data-band]').forEach(b=>b.onclick=()=>{S.settings.band=b.dataset.band;moveIdx=0;markDirty('settings');render();toast(b.dataset.band==='ja'?'Pausen görs med band':'Du får varianten utan band')});
+  root.querySelectorAll('[data-band]').forEach(b=>b.onclick=()=>{S.settings.band=b.dataset.band;moveIdx=0;markDirty('settings');showMove(microId(),true)});
   root.querySelectorAll('[data-ancoffer]').forEach(b=>b.onclick=showAnchors);
   root.querySelectorAll('[data-ancno]').forEach(b=>b.onclick=()=>{S.settings.anchorOffer='no';markDirty('settings');render();toast('Du hittar Mina stunder under Jag → Vardagsmotion')});
   root.querySelectorAll('[data-pause]').forEach(b=>b.onclick=()=>{pz=null;showPause()});
@@ -4764,6 +4914,7 @@ initCloud().finally(()=>{regLogs();boot()});
 setTimeout(boot,3500);
 setInterval(()=>{if(tab==='idag'&&!$('#sheet').classList.contains('open')&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&tab==='idag'&&!$('#sheet').classList.contains('open'))render()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&kOn())kLoad(true)});
 </script>
 </body>
 </html>
