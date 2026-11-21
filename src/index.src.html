@@ -70,6 +70,19 @@ h3{font-size:18px}
 .mdot.on.bonus{background:var(--h4);border-color:var(--h4)}
 .movebox{background:var(--bg);border-radius:14px;padding:12px}
 .nudge{background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-weight:500}
+.dayline{margin:-8px 0 14px;font-size:16px;font-weight:500}
+.movebox .btn.big{min-height:54px;font-size:17px}
+.mvk{color:var(--ink);font-weight:600}
+/* Stillsamt firande: kort skutt med den solgula punkten (under 1,5 s). Utan rörelse om man valt minskad rörelse. */
+.cele{position:fixed;left:50%;top:40%;z-index:90;transform:translate(-50%,-50%) scale(.96);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:22px;padding:18px 26px 20px;
+  box-shadow:0 12px 40px rgba(0,0,0,.18);text-align:center;opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;min-width:200px;max-width:calc(100vw - 48px)}
+.cele.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.cele svg{display:block;margin:0 auto 8px;overflow:visible}
+.cele strong{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.02em;display:block}
+.cele.sm{padding:12px 20px 14px;min-width:0}.cele.sm strong{font-size:17px}.cele.sm svg{width:72px;height:auto}
+.cele.on .hop{animation:hop 1.2s cubic-bezier(.3,.6,.4,1) both}
+@keyframes hop{0%{transform:translate(0,0)}25%{transform:translate(19px,-24px)}50%{transform:translate(38px,0)}75%{transform:translate(61px,-30px)}100%{transform:translate(84px,0)}}
+@media (prefers-reduced-motion: reduce){.cele svg{display:none}}
 .chips.wrap{flex-wrap:wrap}
 .setsec{padding:0;--sc:var(--c-o)}.setsec.sec-s{--sc:var(--c-s)}.setsec.sec-r{--sc:var(--c-r)}.setsec.sec-m{--sc:var(--c-m)}.setsec.sec-v{--sc:var(--spot)}
 .setsec>summary::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:var(--sc)}
@@ -175,6 +188,11 @@ details.why{margin-top:8px}details.why p{margin:6px 0;font-size:14px}
 .opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer;min-height:48px}
 .opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
 .ob h1{font-size:28px}
+.hello{display:flex;flex-direction:column;gap:16px;padding-top:8px}.hello h1{font-size:32px}
+.hellolist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.hellolist li{padding-left:18px;position:relative;font-size:16px}.hellolist li::before{content:'';position:absolute;left:0;top:.55em;width:8px;height:8px;border-radius:50%;background:var(--spot)}
+.whylist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.whylist li{line-height:1.4}
+.firstmove{display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center;padding-top:12px}
 button.day{font:inherit;color:inherit;cursor:pointer}
 .day{min-width:0;padding-left:2px;padding-right:2px}.day .tag{overflow-wrap:anywhere;font-size:10.5px}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -412,39 +430,49 @@ const RUNS = [
 ];
 RUNS.forEach(r=>r.min=Math.round(r.seg.reduce((a,x)=>a+x[0],0)));
 const RUN_TIPS=['Lutning 1 % hela passet – motsvarar ute.','Titta inte på totaltiden, bara på biten du är i.','Spara en serie eller podd som bara får höras på bandet.','Fläkt och vattenflaska nära – det blir varmare än du tror.'];
-// Rörelsepauser: små saker att bocka av under dagen
+// Rörelsepauser: små saker att bocka av under dagen. k = 'puls' (pulshöjande) eller 'lugn'. gang = gångpaus.
+// Id:n får aldrig ändras – de ligger i sparad data (days.moves).
 const MOVES = [
- {id:'gå2',t:'Res dig och gå 2 min',h:'Runt kontoret, hämta vatten, gå till fönstret.',w:'Ett kort avbrott får igång cirkulationen och ger ny energi – huvudet känns klarare när du sätter dig igen.'},
- {id:'trappa',t:'Ta trappan',h:'Upp och ner en våning räknas.',w:'Trappor ger kort, hög belastning för ben och puls. Några gånger om dagen blir det en bra dos.'},
- {id:'kb10',t:'10 knäböj',h:'Lugnt och djupt, gärna vid skrivbordet.',w:'Benen är kroppens största muskler. Några knäböj väcker dem efter långt sittande och ger en snabb energikick.'},
- {id:'vad20',t:'20 tåhävningar',h:'Medan kaffet bryggs eller tandborsten går.',w:'Vaderna pumpar tillbaka blod från benen – ”muskelpumpen”. Tåhävningar motverkar tunga ben efter sittande.'},
- {id:'axel',t:'Axelrullningar och nacke, 1 min',h:'Rulla bakåt, luta huvudet sida till sida.',w:'Skärmarbete låser nacke och axlar framåt. Lite rörelse lättar på stelheten.'},
- {id:'höft',t:'Höftöppnare i utfall, 1 min',h:'30 s per sida – motverkar allt sittande.',w:'Sittande håller höftböjarna förkortade. Att öppna dem avlastar ländryggen och ger friare steg.'},
- {id:'telefon',t:'Gå under ett samtal',h:'Ta mötet eller samtalet stående eller gående.',w:'Steg du ändå hade tagit. Många tänker dessutom bättre i rörelse.'},
- {id:'lunch',t:'Promenad efter lunch, 10 min',h:'Ger jämnare energi under eftermiddagen.',w:'En kort promenad efter maten ger jämnare energi och gör det lättare att hålla fokus under eftermiddagen – redan några minuter märks.'},
- {id:'stå',t:'Stå upp i 15 min',h:'Höj skrivbordet eller jobba stående en stund.',w:'Att växla mellan att sitta och stå håller kroppen igång och brukar kännas skönt för ryggen.'},
- {id:'armh',t:'10 armhävningar',h:'Mot bordskanten går också bra.',w:'Små doser styrka under dagen blir mycket över en vecka.'},
- {id:'sträck',t:'Sträck på dig, 1 min',h:'Armarna upp, sidoböj, vrid bröstryggen.',w:'Ger kroppen en paus från samma position och ökar blodflödet.'},
- {id:'häng',t:'Häng eller planka 30 s',h:'Dörrstång, ribbstol eller planka på golvet.',w:'Sträcker ut ryggen efter sittandet och stärker greppet – skönt för axlarna och bra att ha i vardagen.'},
- {id:'ärende',t:'Gå i stället för att åka',h:'Ett ärende till fots eller hoppa av en hållplats tidigare.',w:'Vardagssteg räknas lika mycket som träningssteg. Du får luft och dagsljus på köpet och kommer fram piggare.'},
- {id:'dans',t:'En låt i rörelse',h:'Dansa, städa eller gå runt hemma under en låt.',w:'Rörelse till musik höjer både puls och humör – och känns sällan som träning.'}
+ {id:'gå2',k:'lugn',gang:1,t:'Res dig och gå 2 min',h:'Runt kontoret, hämta vatten, gå till fönstret.',w:'Ett kort avbrott från stolen ger lite ny energi. De flesta känner sig piggare när de sätter sig igen.'},
+ {id:'trappa',k:'puls',t:'Ta trappan, 1 min',h:'Upp och ner – en våning räknas.',w:'Trappor höjer pulsen snabbt. Några vändor om dagen märks efter några veckor: trapporna känns lättare.'},
+ {id:'kb10',k:'puls',t:'Knäböj i lugn takt, 1 min',h:'Ungefär 10–15 st, gärna vid skrivbordet.',w:'Benen är kroppens största muskler. En minut knäböj höjer pulsen lite och gör att kroppen känns vaken igen efter sittandet.'},
+ {id:'vad20',k:'puls',t:'Tåhävningar i tempo, 1 min',h:'Medan kaffet bryggs eller tandborsten går.',w:'Tåhävningar i lite högre tempo höjer pulsen en aning. Benen brukar kännas lättare efter långt sittande.'},
+ {id:'axel',k:'lugn',t:'Axelrullningar och nacke, 1 min',h:'Rulla bakåt, luta huvudet sida till sida.',w:'Nacke och axlar blir stela framför skärmen. En minut mjuk rörelse känns skönt direkt.'},
+ {id:'höft',k:'lugn',t:'Höftöppnare i utfall, 1 min',h:'30 s per sida.',w:'Höfterna blir stela av att sitta. Att öppna dem gör att de känns mjukare nu, och gradvis lite friare över veckor.'},
+ {id:'telefon',k:'lugn',t:'Gå under ett samtal',h:'Ta mötet eller samtalet stående eller gående.',w:'Steg du får utan att det tar någon extra tid. Ett samtal räcker för att bryta av sittandet.'},
+ {id:'lunch',k:'lugn',gang:1,t:'Promenad efter lunch, 10 min',h:'Ger jämnare energi under eftermiddagen.',w:'En promenad efter maten dämpar blodsockertoppen som kommer efter en måltid. Eftermiddagen brukar kännas piggare och mindre trög.'},
+ {id:'stå',k:'lugn',t:'Stå upp i 15 min',h:'Höj skrivbordet eller jobba stående en stund.',w:'Att växla mellan att sitta och stå bryter av stillheten. Många tycker att kroppen känns piggare av det.'},
+ {id:'armh',k:'puls',t:'Armhävningar, 1 min',h:'Ungefär 10–15 st i egen takt. Mot bordskanten går bra.',w:'En minut armhävningar höjer pulsen en stund och ger ny energi. Mot en bordskant fungerar lika bra som på golvet.'},
+ {id:'sträck',k:'lugn',t:'Sträck på dig, 1 min',h:'Armarna upp, sidoböj, vrid bröstryggen.',w:'Att sträcka på sig bryter av en ställning du suttit i länge. Kroppen känns mjukare direkt.'},
+ {id:'häng',k:'lugn',t:'Häng eller planka, 1 min',h:'Dörrstång, ribbstol eller planka på golvet. Dela gärna upp i 2–3 omgångar.',w:'Ett häng eller en planka bryter av sittandet och känns skönt i axlarna och ryggen.'},
+ {id:'ärende',k:'lugn',t:'Gå i stället för att åka',h:'Ett ärende till fots eller hoppa av en hållplats tidigare.',w:'Vardagssteg räknas lika mycket som träningssteg. Du får luft och dagsljus på köpet.'},
+ {id:'dans',k:'puls',t:'En låt i rörelse',h:'Dansa, städa eller gå runt hemma under en låt.',w:'Rörelse till musik höjer både puls och humör, och känns sällan som träning.'},
+ {id:'rask',k:'puls',gang:1,t:'Rask gång, 2 min',h:'I korridoren, runt huset eller i trapphuset – lite fortare än vanligt.',w:'Rask gång höjer pulsen utan att kännas som träning. Gör du det några gånger om dagen märks det över veckor.'},
+ {id:'marsch',k:'puls',t:'Marsch på stället, 90 s',h:'Lyft knäna lagom högt och sving armarna. Går att göra var som helst.',w:'Ett snällt sätt att höja pulsen utan utrustning. Efter en dryg minut känner sig de flesta piggare.'},
+ {id:'gå5',k:'lugn',gang:1,t:'Gå runt kvarteret, 5 min',h:'Ut genom dörren, en runda och tillbaka.',w:'Dagens mest effektiva paus. Några minuters gång ger ny energi, fler steg och en paus från stolen på samma gång.'},
+ {id:'gå3',k:'lugn',gang:1,t:'Gå en runda inomhus, 3 min',h:'Trapphuset, till en annan våning eller en sväng i korridoren.',w:'Dagens mest effektiva paus. Några minuters gång ger ny energi, fler steg och en paus från stolen på samma gång.'}
 ];
-// Hur man gör varje rörelsepaus: sek = timer, reps = antal, steg = instruktion, tänk = tips
+const MOVE_K={puls:'Pulshöjande',lugn:'Lugn'};
+// Hur man gör varje rörelsepaus: sek = timer, reps = antal, steg = instruktion, tänk = tips. Alla timers är minst 60 s.
 const MOVE_INFO={
  'gå2':{sek:120,steg:'Res dig och gå i lugn takt – runt kontoret, till köket eller till fönstret och tillbaka.',tank:['Rulla axlarna bakåt och titta upp från skärmen.','Ta gärna med vattenflaskan och fyll på.']},
- 'trappa':{steg:'Gå upp och ner minst en våning. Flera våningar eller flera vändor räknas som bonus.',tank:['Sätt hela foten på steget och tryck ifrån med rumpan.','Håll i ledstången om du behöver.']},
- 'kb10':{reps:10,steg:'Fötterna höftbrett. Sitt ner bakåt som mot en stol, så djupt det känns bra, och res dig igen.',tank:['Knäna får gå fram över tårna – det är helt okej.','Hälarna kvar i golvet och bröstet upp.','Lugnt ner, bestämt upp.']},
- 'vad20':{reps:20,steg:'Res dig upp på tå så högt du kan och sänk långsamt ner igen.',tank:['Håll i en bänk eller vägg för balansen.','Full rörelse: 1 sekund upp, 2 sekunder ner.']},
+ 'trappa':{sek:60,steg:'Gå upp och ner i trappan i en minut. En våning räcker – flera vändor går också bra.',tank:['Sätt hela foten på steget och tryck ifrån med rumpan.','Håll i ledstången om du behöver.']},
+ 'kb10':{sek:60,steg:'Fötterna höftbrett. Sitt ner bakåt som mot en stol, så djupt det känns bra, och res dig igen. Ungefär 10–15 st på en minut – vila några sekunder när du vill.',tank:['Knäna får gå fram över tårna – det är helt okej.','Hälarna kvar i golvet och bröstet upp.','Lugnt ner, bestämt upp.']},
+ 'vad20':{sek:60,steg:'Res dig upp på tå och sänk ner igen, i lite högre tempo. Ungefär 30 st på en minut.',tank:['Håll i en bänk eller vägg för balansen.','Hela vägen upp och kontrollerat ner.']},
  'axel':{sek:60,steg:'20 s axelrullningar bakåt, 20 s lugna nackrullningar, 20 s örat mot axeln – växla sida.',tank:['Långsamt och mjukt – aldrig ryck i nacken.','Andas ut när du sänker axlarna.']},
  'höft':{sek:60,byt:true,steg:'Ena knät i golvet, andra foten fram. Spänn rumpan och skjut höften framåt tills det sträcker framtill i höften. Byt sida efter halva tiden.',tank:['Ingen svank – spänn magen lätt.','Lägg något mjukt under knät.','Armen upp på samma sida som knät i golvet förstärker stretchen.']},
  'telefon':{steg:'Ta nästa samtal eller digitala möte stående eller gående.',tank:['Hörlurar gör det lättare att gå.','Ett gående möte på 30 min ger ca 3 000 steg.']},
- 'lunch':{sek:600,steg:'Gå direkt efter maten, i lugn till rask takt.',tank:['Redan 2–5 minuter gör att eftermiddagen känns piggare.','Ute i dagsljus är bonus för humör och sömn.']},
+ 'lunch':{sek:600,steg:'Gå direkt efter maten, i lugn till rask takt.',tank:['Redan 2–5 minuter gör att eftermiddagen känns piggare.','Ute i dagsljus är en bonus.']},
  'stå':{sek:900,steg:'Höj skrivbordet eller jobba stående vid en bänk i 15 minuter.',tank:['Växla vikt mellan fötterna och ha mjuka knän.','Stå inte helt still – små rörelser räknas.']},
- 'armh':{reps:10,steg:'Händerna lite bredare än axlarna, kroppen rak från huvud till häl. Sänk bröstet mot golvet och tryck upp.',tank:['Lättare: mot en bordskant eller på knä.','Armbågarna ca 45° ut från kroppen, inte rakt ut.','Spänn magen så att höften inte hänger.']},
+ 'armh':{sek:60,steg:'Händerna lite bredare än axlarna, kroppen rak från huvud till häl. Sänk bröstet mot golvet och tryck upp. Ungefär 10–15 st i egen takt på en minut.',tank:['Lättare: mot en bordskant eller på knä.','Armbågarna ca 45° ut från kroppen, inte rakt ut.','Spänn magen så att höften inte hänger.']},
  'sträck':{sek:60,steg:'Armarna rakt upp och sträck dig lång (15 s). Sidoböj åt vänster och höger (15 s var). Vrid bröstryggen åt båda håll (15 s).',tank:['Andas lugnt och djupt.','Gör det mjukt – det ska kännas skönt.']},
- 'häng':{sek:30,steg:'Häng i en stång eller ribbstol med raka armar. Inget att hänga i? Håll en planka i stället.',tank:['Häng: slappna av i axlarna och andas.','Planka: rak linje huvud–häl, spänn mage och rumpa.']},
+ 'häng':{sek:60,steg:'Häng i en stång eller ribbstol med raka armar. Inget att hänga i? Håll en planka i stället. Dela gärna upp minuten i 2–3 omgångar.',tank:['Häng: slappna av i axlarna och andas.','Planka: rak linje huvud–häl, spänn mage och rumpa.']},
  'ärende':{steg:'Gå eller cykla till nästa ärende, eller kliv av en hållplats tidigare.',tank:['Varje steg räknas – även de du inte planerat.']},
- 'dans':{sek:210,steg:'Sätt på en låt och rör dig hela låten – dansa, städa, gå runt.',tank:['Det finns inget rätt eller fel. Bara rör dig.']}
+ 'dans':{sek:210,steg:'Sätt på en låt och rör dig hela låten – dansa, städa, gå runt.',tank:['Det finns inget rätt eller fel. Bara rör dig.']},
+ 'rask':{sek:120,steg:'Gå lite fortare än du brukar, så att du andas lite tyngre men fortfarande kan prata.',tank:['Sving armarna – det går lättare då.','Trappor på vägen är en bonus.']},
+ 'marsch':{sek:90,steg:'Marschera på stället. Börja lugnt och lyft sedan knäna lite högre och sving armarna. Inga hopp – ena foten är alltid i golvet.',tank:['Lyft knäna så högt det känns bra, inte högre.','Andas lugnt – du ska kunna prata.']},
+ 'gå5':{sek:300,steg:'Gå ut och ta en runda runt kvarteret i lugn till rask takt.',tank:['Dagsljus på vägen är en bonus.','Kortare runda? 3 minuter räknas också.']},
+ 'gå3':{sek:180,steg:'Gå en runda inomhus – i trapphuset, till en annan våning eller längs korridoren.',tank:['Ta trappan om det finns en.','Lämna telefonen vid skrivbordet om du kan.']}
 };
 const DP_SEQ = WORKOUTS.filter(w=>w.p==='DP').slice().sort((a,b)=>(a.s-b.s)||((a.wk||99)-(b.wk||99))||(a.d-b.d));
 /* Eget passbibliotek som laddas från kontot (bara för den som läst in en programfil – syns aldrig för andra). */
@@ -790,12 +818,33 @@ function minsSinceMove(){const m=movesToday();const last=m.length?m[m.length-1].
 function streak(){let n=0;for(let i=0;i<400;i++){const k=dkey(addDays(new Date(),-i)),d=S.days[k];const ok=d&&((d.moves||[]).length>=S.settings.moveGoal||d.steps>=S.settings.stepGoal);if(ok)n++;else if(i>0)break}return n}
 let moveIdx=0;
 /* Förslag som bara passar vissa tider på dygnet (lunchpromenaden runt lunch, jobbsaker under arbetstid). */
-const MOVE_HOURS={lunch:[11,15],telefon:[8,18],'stå':[8,18],dans:[16,23],'ärende':[7,20]};
-function nextMove(){const h=new Date().getHours(),fit=m=>{const w=MOVE_HOURS[m.id];return !w||(h>=w[0]&&h<w[1])};
-  const done=new Set(movesToday().map(m=>m.id));const ok=MOVES.filter(fit),base=ok.length?ok:MOVES;const left=base.filter(m=>!done.has(m.id));const pool=left.length?left:base;return pool[(moveIdx+h)%pool.length]}
-function logMove(id){const d=day();d.moves.push({id,at:Date.now()});markDirty('days',monthOf(today()));moveIdx=0;const n=d.moves.length,g=S.settings.moveGoal;toast(n===g?'Dagens mål nått – snyggt!':n>g?'Extra rörelse – bonus!':`${n} av ${g} rörelsepauser`);render()}
-function setDay(k,patch){Object.assign(day(k),patch);markDirty('days',monthOf(k));render()}
-function addLog(entry){entry.ts=Date.now();S.log.push(entry);markDirty('log',monthOf(entry.date));const T={styrka:'s','löpning':'r','rörlighet':'m'}[entry.type];
+const MOVE_HOURS={lunch:[11,15],telefon:[8,18],'stå':[8,18],dans:[16,23],'ärende':[7,20],'gå5':[7,20]};
+/* Förslaget styrs av tid på dagen. Varje fönster har en egen lista; "Visa ett annat" bläddrar där först. */
+const MOVE_PULS=['trappa','kb10','vad20','armh','rask','marsch'];
+const MOVE_WIN=[
+ {to:9,ids:['sträck','höft','axel','häng']},                       // före 09: lugn rörlighet
+ {to:12,ids:MOVE_PULS,gang:1},                                       // 09–12: pulshöjande (+ gångpaus)
+ {to:14,ids:['lunch','gå5','gå3','gå2']},                            // 12–14: promenad efter lunch
+ {to:17,ids:MOVE_PULS,neck:['axel','sträck'],gang:1},                // 14–17: pulshöjande, varannan gång nacke och axlar
+ {to:21,ids:['sträck','höft','axel','dans','häng']},                 // 17–21: lugnt eller en låt i rörelse
+ {to:24,ids:['sträck','axel','höft'],calm:1}];                       // efter 21: bara lugna
+const MV=id=>MOVES.find(m=>m.id===id);
+function moveWin(h){return MOVE_WIN.find(w=>h<w.to)||MOVE_WIN[MOVE_WIN.length-1]}
+function moveQueue(){const now=new Date(),h=now.getHours(),w=moveWin(h),fit=m=>{const r=MOVE_HOURS[m.id];return !r||(h>=r[0]&&h<r[1])};
+  const today_=movesToday(),done=new Set(today_.map(m=>m.id)),y=S.days[dkey(addDays(now,-1))],yday=new Set(((y&&y.moves)||[]).map(m=>m.id));
+  const tier=id=>done.has(id)?2:yday.has(id)?1:0, rot=(h+now.getDate())|0;
+  /* I första hand något som inte gjorts idag, i andra hand något som inte gjordes igår. Inom samma nivå roterar ordningen med timmen. */
+  const order=ids=>ids.map((id,i)=>({id,i:(i-rot%ids.length+ids.length)%ids.length})).sort((a,b)=>tier(a.id)-tier(b.id)||a.i-b.i).map(x=>x.id);
+  let ids=order(w.ids);
+  if(w.neck){const n=order(w.neck);ids=today_.length%2?n.concat(ids):ids.concat(n)}
+  if(w.gang&&!today_.some(m=>(MV(m.id)||{}).gang)){const g=order(['gå5','gå3'].filter(id=>fit(MV(id))));ids.splice(1,0,...g)}
+  ids=[...new Set(ids)].filter(id=>MV(id)&&fit(MV(id)));
+  const rest=order(MOVES.filter(m=>!ids.includes(m.id)&&fit(m)&&(!w.calm||m.k==='lugn')).map(m=>m.id));
+  return {win:ids.map(MV),all:ids.concat(rest).map(MV)}}
+function nextMove(){const q=moveQueue(),l=q.all.length?q.all:MOVES;return l[moveIdx%l.length]}
+function logMove(id,quiet){celeArm=true;const d=day();d.moves.push({id,at:Date.now()});markDirty('days',monthOf(today()));moveIdx=0;const n=d.moves.length,g=S.settings.moveGoal;if(!quiet)toast(n===g?'Alla rörelsepauser för idag gjorda':n>g?'Extra rörelse – bonus':`${n} av ${g} rörelsepauser`);render()}
+function setDay(k,patch){celeArm=true;Object.assign(day(k),patch);markDirty('days',monthOf(k));render()}
+function addLog(entry){celeArm=true;entry.ts=Date.now();S.log.push(entry);markDirty('log',monthOf(entry.date));const T={styrka:'s','löpning':'r','rörlighet':'m'}[entry.type];
   if(entry.date===today()&&T)resolveDay(entry.type);else if(T&&entry.date<today())resolvePast(entry.date,T)}
 /* Pass som loggas i efterhand: om schemat har väntat sedan före den dagen räknas dagen som gjord och kön flyttar fram. */
 function resolvePast(k,T){const q=seqInit(),d=day(k);if(q.res&&q.res>=k)return;
@@ -1864,7 +1913,7 @@ const RUNS_5K=[
 RUNS.push(...RUNS_NYB,...RUNS_5K);RUNS.forEach(r=>r.min=Math.round(r.seg.reduce((a,x)=>a+x[0],0)));
 /* ---------- Kom igång: frågor → schema ---------- */
 let OB=null;
-const OB_STEPS=['me','goal','steps','days','split','strength','run','issues','sit','preview'];
+const OB_STEPS=['hello','me','goal','steps','days','split','strength','run','issues','sit','preview'];
 function obDefaults(){const st=S.settings;return {sex:st.sex||'',goal:st.goal||'balans',stepsNow:st.stepsNow??2,days:(st.strength||0)+(st.cardio||0)||4,minutes:st.minutes||45,
   strength:st.strength??2,cardio:st.cardio??2,level:st.level||2,equip:st.equip||'gym',follow:st.mode==='program'?'dp':'',runLevel:st.runLevel||'5k',
   runWhere:st.runPref||'auto',runStyle:st.runStyle||'intervaller',fiveK:String(st.fiveK||''),tenK:String(st.tenK||''),nybJog:+st.nybJog||'',issues:[...(st.issues||[])],sit:st.sit||'mycket',knee:st.kneeFocus?1:0,avoidGroups:[...(st.avoidGroups||[])],plan:null}}
@@ -1874,9 +1923,11 @@ function splitFromGoal(goal,d){
   const s=Math.min(6,m);return [s,Math.min(7-s,d-s)];
 }
 const OBK='rs-ob';
-const obVis=a=>OB_STEPS.filter(s=>!(s==='run'&&a.cardio===0)&&!(s==='strength'&&a.strength===0));
+/* Bara steg som faktiskt visas räknas i "Steg x av y" – inledningen räknas inte. */
+const obVis=a=>OB_STEPS.filter(s=>s!=='hello'&&!(s==='run'&&a.cardio===0)&&!(s==='strength'&&a.strength===0));
+const obFirst=()=>S.settings.onb?OB_STEPS.indexOf('me'):0;
 /* Första gången: kom ihåg var man var och vad man svarat om sidan laddas om. */
-function showOnboarding(){OB={i:0,a:obDefaults()};
+function showOnboarding(){OB={i:obFirst(),a:obDefaults()};
   try{if(S.settings.onb)localStorage.removeItem(OBK);else{const v=JSON.parse(localStorage.getItem(OBK)||'null');
     if(v&&v.a&&typeof v.a==='object'&&typeof v.i==='number'&&Date.now()-v.at<7*864e5)OB={i:Math.max(0,Math.min(OB_STEPS.length-1,v.i|0)),a:{...OB.a,...v.a}}}}catch(e){}
   renderOB()}
@@ -1892,10 +1943,19 @@ function obRunTime(a){
     <div class="row" style="gap:6px;align-items:center"><button class="btn ghost sm" type="button" data-obtimeclear="${key}">Vet inte</button><span class="small muted">Lämnas tomt börjar appen på en standardfart för nivån.</span></div>`}
 function renderOB(){
   const a=OB.a, step=OB_STEPS[OB.i];
+  if(step==='hello'&&S.settings.onb){OB.i=obFirst();return renderOB()}
   if(step==='run'&&a.cardio===0){OB.i+=OB._dir||1;return renderOB()}
   if(step==='strength'&&a.strength===0){OB.i+=OB._dir||1;return renderOB()}
   if(!S.settings.onb){try{localStorage.setItem(OBK,JSON.stringify({i:OB.i,a:OB.a,at:Date.now()}))}catch(e){}}
   let body='';
+  if(step==='hello') body=`<div class="hello"><svg width="88" height="42" viewBox="0 0 104 50" aria-hidden="true"><path d="M10 44 A19 19 0 0 1 48 44 A22 22 0 0 1 92 44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/><circle cx="94" cy="20" r="6" fill="var(--spot)"/></svg>
+    <h1>Rör dig lite, varje dag</h1>
+    <ul class="hellolist">
+     <li><strong>En liten start räcker.</strong> En promenad och några minuters rörlighet gör dagen hel.</li>
+     <li><strong>Korta pass för stela kroppar.</strong> Pauser på någon minut och rörlighet som är gjord för den som sitter mycket.</li>
+     <li><strong>Styrka och löpning är tillval.</strong> Lägg till dem när du vill – eller inte alls.</li>
+    </ul>
+    <p class="muted" style="margin:0">Några snabba frågor, sedan får du ett schema och gör din första rörelsepaus.</p></div>`;
   if(step==='me') body=`<h1>Vem tränar?</h1><p class="muted">Gör att appen kan anpassa passen efter dig. Du kan ändra det när som helst under Jag.</p><div class="opts">
     ${obOpt('sex','k','Tjej / kvinna','Mer fokus på rumpa och ben i styrkepassen, överkroppen tränas också. Val för mens, graviditet och bäckenbotten.')}${obOpt('sex','m','Kille / man')}${obOpt('sex','','Vill inte ange','Passen blir jämnt fördelade över hela kroppen')}</div>`;
   if(step==='goal') body=`<h1>Vad vill du främst?</h1><p class="muted">Appen bygger alltid på vardagsrörelse. Det här styr resten.</p><div class="opts">
@@ -1930,24 +1990,43 @@ function renderOB(){
     const lab={s:'Styrka',r:'Löpning',m:'Rörlighet'};
     const tmp={...S.settings,level:a.level,goal:a.goal,sex:a.sex,kneeFocus:!!a.knee,weekPlan:a.plan};const save=S.settings;let sp=[];S.settings=tmp;try{sp=a.plan.includes('s')?kneeSwap(splitPlan()):[]}finally{S.settings=save}
     const sg=[5000,7500,10000,12000][a.stepsNow], mg={mycket:10,varierat:8,lite:6}[a.sit];
-    const rl={nyb:'från gång/jogg upp till 30 min löpning',['5k']:'från 5 km mot 10 km',['10k']:'intervaller och tempo'}[a.runLevel];
+    const nS=a.plan.filter(x=>x==='s').length,nR=a.plan.filter(x=>x==='r').length,gen=!(a.follow==='dp'&&DP_SEQ.length),iss=a.issues;
+    /* Svaren spelas upp som skäl – bara rader som stämmer med vad appen faktiskt gör med svaret. */
+    const why=[];const W=(x,y)=>why.push(`<li><span class="muted">${esc(x)}</span> → ${esc(y)}</li>`);
+    W({mycket:'Du sitter mycket',varierat:'Blandad vardag',lite:'Du rör dig mycket i jobbet'}[a.sit],`${mg} rörelsepauser utspridda över dagen`);
+    W(['Under 4 000 steg idag','4 000–7 000 steg idag','7 000–10 000 steg idag','Över 10 000 steg idag'][a.stepsNow],`stegmål ${sg.toLocaleString('sv-SE')}${a.stepsNow<2?' som höjs när du klarar det':''}`);
+    if(nS+nR===0)W('Inga träningspass','fokus på steg, rörelsepauser och rörlighet');
+    if(nS&&gen)W(`${a.minutes} min per pass`,`styrkepass på ungefär ${a.minutes} min`);
+    if(nS&&gen&&a.equip!=='gym')W(a.equip==='kropp'?'Bara kroppsvikt':'Hemma med hantlar',a.equip==='kropp'?'pass utan redskap':'pass med hantlar och kroppsvikt');
+    if(nS&&gen&&a.level===1)W('Nybörjare','enklare övningar att börja med');
+    if(nS&&!gen)W('Eget program','styrkepassen fortsätter där du är');
+    if(nS&&gen&&a.sex==='k'&&a.goal!=='styrka')W('Tjej / kvinna','lite mer fokus på rumpa och ben, överkroppen tränas också');
+    if(iss.includes('knä'))W('Knän',[gen&&nS?'inga hopp eller knätunga övningar':'',a.knee&&gen&&nS?'knästarka benpass':'',a.knee?'en knästark rörlighetsrutin':''].filter(Boolean).join(', ')||'hänsyn i passen');
+    else if(a.knee)W('Knästarka benpass',[gen&&nS?'knästarka benpass':'','en knästark rörlighetsrutin'].filter(Boolean).join(' och '));
+    if(gen&&nS&&iss.includes('rygg'))W('Ländrygg','övningar som belastar ländryggen väljs bort');
+    if(gen&&nS&&iss.includes('axel'))W('Axlar','övningar som belastar axlarna väljs bort');
+    if(gen&&nS&&iss.includes('fot'))W('Fötter eller vader','inga hopp eller tåhävningar i passen');
+    if(iss.includes('bäckenbotten'))W('Bål & bäckenbotten','korta bålrutiner bland rörligheten');
+    if(iss.includes('gravid'))W('Gravid eller nyförlöst','försiktig start på nybörjarnivå'+(gen&&nS?', inga hopp':'')+(nR?', gång och jogg för löpningen':''));
+    if(iss.includes('mens'))W('Mensdagar','en knapp för en lättare dag');
+    if(a.avoidGroups.length&&nS)W(`Inte ${a.avoidGroups.join(', ').toLowerCase()}`,'de övningarna tas bort ur dina pass');
+    if(nR)W({nyb:'Inte 5 km än',['5k']:'Runt 5 km',['10k']:'10 km eller mer'}[a.runLevel],{nyb:'löpning från gång och jogg upp till 30 min',['5k']:'löpning från 5 mot 10 km',['10k']:'intervaller och tempo'}[a.runLevel]);
+    const passTxt=nS+nR?` och ${nS+nR} ${nS+nR===1?'kort pass':'korta pass'}`:'';
     body=`<h1>Ditt schema</h1><p class="muted">Tryck på en dag för att byta mellan styrka, löpning och rörlighet.</p>
     <div class="week">${a.plan.map((x,i)=>`<button class="day" type="button" data-obday="${i}" aria-label="${DAYS_SV[i]}: ${lab[x]}. Tryck för att byta."><span class="dn">${DAYS_SV[i]}</span><span class="dot ${x}"></span><span class="tag">${({s:'Styrka',r:'Löp',m:'Rörl.'})[x]}</span></button>`).join('')}</div>
     <div class="card stack">
-      <div><strong>Varje dag:</strong> ${sg.toLocaleString('sv-SE')} steg, ${mg} rörelsepauser och en kort rörlighetsrutin.</div>
-      ${a.plan.includes('s')?`<div><strong>Styrka:</strong> ${a.plan.filter(x=>x==='s').length} pass/vecka, ${a.follow==='dp'?'ditt program där du är':esc(sp.join(' → '))}. ${EQUIP_SV[a.equip]}, ca ${a.minutes} min.</div>`:''}
-      ${a.plan.includes('s')&&a.sex==='k'&&a.goal!=='styrka'?`<div class="small muted">Anpassat för dig: styrkepassen lägger lite mer fokus på rumpa och ben, och överkroppen och bålen tränas också.</div>`:''}
-      ${a.plan.includes('r')?`<div><strong>Löpning:</strong> ${a.plan.filter(x=>x==='r').length} pass/vecka, ${rl}.</div>`:''}
-      <div><strong>Mål:</strong> ${esc(({rorelse:'Röra mig mer',styrka:'Bli starkare',muskler:'Bygga muskler',rumpa:'Rumpa och ben',form:'Form och kondition',kondition:'Bättre kondition',balans:'Allt i balans'})[a.goal]||'')}.</div>
-      ${a.issues.length?`<div class="small muted">Tar hänsyn till: ${esc(a.issues.join(', '))}.${a.issues.includes('gravid')?' Försiktig start: nybörjarnivå, inga hopp och gång/jogg-spåret för löpning.':''}</div>`:''}
-    </div>`;
+      <div>Så ser en vanlig vecka ut: ungefär ${mg} pauser om dagen, en promenad, några minuters rörlighet${passTxt}.</div>
+      ${nS&&gen&&sp.length?`<div class="small muted">Styrkepassen i tur och ordning: ${esc(sp.join(' → '))}.</div>`:''}
+      <div class="small muted">Det brukar ta två till fem månader innan en ny vana går av sig själv. En missad dag ändrar ingenting.</div>
+    </div>
+    <div class="card stack"><h3>Därför ser det ut så här</h3><ul class="whylist">${why.join('')}</ul></div>`;
   }
-  const last=OB.i===OB_STEPS.length-1;
-  openSheet(`<header class="top"><div><div class="date num">Steg ${obVis(a).indexOf(step)+1} av ${obVis(a).length}</div></div>${S.settings.onb?'<button class="btn ghost sm" type="button" data-close>Avbryt</button>':''}</header><div class="stack ob">${body}</div>`);
-  stickyBar(`${OB.i?'<button class="btn ghost" type="button" data-obback>Tillbaka</button>':''}<button class="btn" type="button" data-obnext>${last?'Spara mitt schema':'Nästa'}</button>`);
+  const last=OB.i===OB_STEPS.length-1, hello=step==='hello';
+  openSheet(`<header class="top"><div><div class="date num">${hello?'Välkommen':`Steg ${obVis(a).indexOf(step)+1} av ${obVis(a).length}`}</div></div>${S.settings.onb?'<button class="btn ghost sm" type="button" data-close>Avbryt</button>':''}</header><div class="stack ob">${body}</div>`);
+  stickyBar(hello?'<button class="btn big" style="flex:1" type="button" data-obnext>Kom igång</button>':`${OB.i>obFirst()?'<button class="btn ghost" type="button" data-obback>Tillbaka</button>':''}<button class="btn" type="button" data-obnext>${last?'Spara mitt schema':'Nästa'}</button>`);
 }
 function obSave(){
-  const a=OB.a, st=S.settings;
+  const a=OB.a, st=S.settings, first=!st.onb;
   Object.assign(st,{sex:a.sex||'',goal:a.goal,stepsNow:a.stepsNow,minutes:a.minutes,level:a.level,equip:a.equip,runLevel:a.runLevel,runPref:a.runWhere,runStyle:a.runStyle,issues:a.issues,sit:a.sit,kneeFocus:!!a.knee,avoidGroups:[...a.avoidGroups],cycle:a.issues.includes('mens'),
     stepGoal:[5000,7500,10000,12000][a.stepsNow],adaptSteps:a.stepsNow<2,moveGoal:{mycket:10,varierat:8,lite:6}[a.sit],
     weekPlan:a.plan,strength:a.plan.filter(x=>x==='s').length,cardio:a.plan.filter(x=>x==='r').length,
@@ -1958,8 +2037,19 @@ function obSave(){
     else if(st.runLevel==='5k'){const raw=String(a.fiveK||'').trim(),f=parseFiveK(raw);if(f&&(raw!==String(st.fiveK||'')||!+st.v10)){st.fiveK=raw;st.v10=v10FromFiveK(f)}}
     else {const raw=String(a.tenK||'').trim(),t=parseTenK(raw);if(t&&(raw!==String(st.tenK||'')||!+st.v10)){st.tenK=raw;st.v10=Math.round(600/t*100)/100}}
   }
-  markDirty('settings');sugCache=null;sugIdx=0;OB=null;try{localStorage.removeItem(OBK)}catch(e){}closeSheet();toast('Ditt schema är klart');
+  markDirty('settings');sugCache=null;sugIdx=0;OB=null;try{localStorage.removeItem(OBK)}catch(e){}
+  if(first)return showFirstMove();
+  closeSheet();toast('Ditt schema är klart');
 }
+/* Sista steget första gången: en första rörelsepaus på 90 s, så att introduktionen slutar i något man gjort.
+   Marsch på stället: pulshöjande men snäll, utan utrustning och utan hopp (passar även knän, fötter och graviditet). */
+let firstMv=false;
+function showFirstMove(){const m=MV('marsch'),inf=MOVE_INFO.marsch;
+  if(tab!=='idag'){tab='idag';dayOff=0}
+  openSheet(`<header class="top"><div><div class="date">Ditt schema är klart</div></div></header>
+   <div class="firstmove">${animSVG(exAnimKey(m.t),150)}<h1 style="font-size:28px">Din första rörelsepaus – 90 sekunder</h1>
+   <p style="margin:0">${esc(inf.steg)}</p><p class="small muted" style="margin:0">${esc(m.w)}</p></div>`);
+  stickyBar('<button class="btn ghost" type="button" data-fmlater>Senare</button><button class="btn big" style="flex:1" type="button" data-fmnow>Gör den nu</button>')}
 function bindOB(root){
   root.querySelectorAll('[data-ob]').forEach(b=>b.onclick=()=>{const k=b.dataset.ob;let v=b.dataset.val;if(/^-?\d+$/.test(v))v=+v;
     if(b.dataset.multi){const arr=OB.a[k];const i=arr.indexOf(v);i<0?arr.push(v):arr.splice(i,1);if(k==='issues'&&v==='knä'&&i<0)OB.a.knee=1}else OB.a[k]=v;
@@ -1973,7 +2063,7 @@ function bindOB(root){
   root.querySelectorAll('[data-obnext]').forEach(b=>b.onclick=()=>{OB._dir=1;
     if(OB_STEPS[OB.i]==='run'){const a=OB.a,five=a.runLevel==='5k',raw=String((five?a.fiveK:a.tenK)||'').trim();
       if(a.runLevel!=='nyb'&&raw&&!(five?parseFiveK(raw):parseTenK(raw))){toast(five?'Skriv 5 km-tiden i minuter, t.ex. 30':'Skriv 10 km-tiden i minuter, t.ex. 50');return}}if(OB.i===OB_STEPS.length-1)return obSave();if(OB_STEPS[OB.i]==='split')OB.a.plan=null;OB.i++;renderOB();$('#sheet').scrollTop=0});
-  root.querySelectorAll('[data-obback]').forEach(b=>b.onclick=()=>{OB._dir=-1;OB.i=Math.max(0,OB.i-1);renderOB()});
+  root.querySelectorAll('[data-obback]').forEach(b=>b.onclick=()=>{OB._dir=-1;OB.i=Math.max(obFirst(),OB.i-1);renderOB()});
 }
 function adaptSteps(){
   const st=S.settings;if(!st.adaptSteps||st.stepGoal>=10000)return;
@@ -2004,6 +2094,7 @@ function render(){
     autoAdvance();
     v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress,jag:viewJag})[tab]();
     bind(v);
+    celeCheck();
   }catch(e){
     v.innerHTML=`<section class="card stack"><h2>Sidan kunde inte visas</h2><p class="muted">Något gick fel när sidan ritades. Dina loggar är kvar. Skicka gärna texten nedan till Claude.</p><div class="note">${esc(tab+': '+(e&&e.message||e))}</div><button class="btn" type="button" data-gohome>Till Idag</button></section>`;
     const b=v.querySelector('[data-gohome]');if(b)b.onclick=()=>go('idag');
@@ -2045,7 +2136,7 @@ function floorRing(n){const r=34,c=2*Math.PI*r;
 function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(100,Math.round(st/goal*100));
   const box=(on,attr,lab)=>`<button class="box" type="button" role="checkbox" aria-checked="${on}" ${attr} aria-label="${lab}">${on?'✓':''}</button>`;
   return `<section class="card" aria-labelledby="h-golv">
-   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">${f.ok?'Dagen är godkänd. Allt annat är bonus.':'Promenad och lite rörlighet – då är dagen godkänd.'}</p></div></div>
+   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">Promenad och lite rörlighet ger en hel dag.</p></div></div>
    <div class="fl ${d.walk?'done':''}">${box(!!d.walk,'data-toggle="walk"','Promenad klar')}<div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
    <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighet</strong><div class="small muted">${esc(m.t)}, ${m.min} min</div></div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
    <div class="fl ${f.steps?'done':''}">${box(f.steps,'disabled','Stegmål nått')}<div class="grow"><strong class="num">${goal.toLocaleString('sv-SE')} steg</strong><div class="sbar"><div class="t"><span style="width:${pct}%"></span></div><span class="small muted num">${st.toLocaleString('sv-SE')}</span></div></div><button class="btn ghost sm" type="button" data-addsteps="1000" aria-label="Lägg till 1 000 steg">+1 000</button></div>
@@ -2352,38 +2443,43 @@ function viewToday(){
   const mobToday=mobFor(new Date());
   return `<header class="top"><div><div class="date cap">${esc(fmtDate(new Date()))}</div><h1>Idag</h1></div>
      ${weekPill()}</header>
+   <p class="dayline" role="status">${esc(dayLine(k))}</p>
    <div class="stack">
    ${weekStrip()}
    ${wait&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
    ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
    ${backupDue()?backupCard():syncStaleNote()}
+   ${movesCard()}
    ${floorCard(k,d,goal,mobToday)}
    ${!done.some(isPass)?ciCard():''}
    ${active&&!(plan==='s'&&!did('styrka'))?`<section class="card stack"><span class="eyebrow">Pågående pass</span><strong>${esc(wTitle(active.w||WBYID[active.wid]))}</strong><div class="row">${resumeBtn()}</div></section>`:''}
    ${hero}
    ${done.some(isPass)?ciCard():''}
-   ${movesCard()}
    ${done.filter(l=>!inHero.has(l)).length?`<section class="card"><h3>${inHero.size?'Mer loggat idag':'Loggat idag'}</h3><div class="list">${done.filter(l=>!inHero.has(l)).map(logRow).join('')}</div></section>`:''}
    <button class="addother" type="button" data-otherlog="${k}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Logga annan träning</button>
    <p class="small muted" id="syncStatus" role="status">${syncHTML()}</p>
    </div>`;
 }
+/* Dagsläget i en mening: uttrycker dagens golv (dayFloor) – reglerna ändras inte här. Aldrig något om vad som missats. */
+function dayLine(k){const f=dayFloor(k);if(f.ok)return 'Dagen är hel. Allt härifrån är bonus.';
+  const w=f.walk||f.steps;
+  if(!w&&!f.mob)return 'En promenad och lite rörlighet kvar till en hel dag.';
+  return !w?'En promenad kvar – sedan är dagen hel.':'Lite rörlighet kvar – sedan är dagen hel.'}
+function pulsToday(){return movesToday().filter(x=>(MV(x.id)||{}).k==='puls').length}
 function movesCard(){
   const m=movesToday(), g=S.settings.moveGoal, nm=nextMove(), since=minsSinceMove(), h=new Date().getHours();
-  const doneIds=new Set(m.map(x=>x.id));
+  const doneIds=new Set(m.map(x=>x.id)), pu=pulsToday();
   let nudge='';
-  if(h>=8&&h<21){
-    if(since===null&&h>=9) nudge='Ingen rörelsepaus än idag – ta den första nu.';
-    else if(since!==null&&since>=60) nudge=`Det har gått ${since>=120?Math.floor(since/60)+' tim':since+' min'} sedan du rörde på dig senast.`;
-  }
+  if(h>=8&&h<21&&since!==null&&since>=90) nudge=`Senaste pausen var för ${since>=120?Math.floor(since/60)+' tim':since+' min'} sedan – en ny passar bra nu.`;
   const dots=[...Array(Math.max(g,m.length))].map((_,i)=>`<span class="mdot ${i<m.length?'on':''} ${i>=g?'bonus':''}"></span>`).join('');
-  const st=streak();
   return `<section class="card stack" aria-labelledby="h-move">
     <div class="mvhead"><h2 id="h-move">Rörelsepauser</h2><div class="mvcount"><div class="mdots" aria-hidden="true">${dots}</div><span class="small muted num">${m.length} av ${g}</span></div></div>
+    <div class="small muted num" style="margin-top:-6px">Pulshöjande idag: ${pu<3?pu+' av 3':pu}</div>
     ${nudge?`<div class="nudge" role="status">${esc(nudge)}</div>`:''}
-    <div class="movebox"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">${animSVG(exAnimKey(nm.t),88)}<div class="grow"><div class="small muted">Förslag just nu</div><strong>${esc(nm.t)}</strong><div class="small muted">${esc(nm.h)}</div></div></div>
-      <details class="why"><summary>Varför?</summary><p>${esc(nm.w||'')}</p><button class="linkbtn" type="button" data-whyall>Läs mer om varför vardagsrörelse lönar sig</button></details>
-      <div class="row" style="margin-top:8px;flex-wrap:nowrap"><button class="btn" style="flex:1" type="button" data-movedo="${nm.id}">Gör nu</button><button class="btn ghost" style="flex:1" type="button" data-move="${nm.id}">Redan gjort</button></div><button class="linkbtn small tall" type="button" data-movenext>Visa ett annat förslag</button></div>
+    <div class="movebox"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">${animSVG(exAnimKey(nm.t),88)}<div class="grow"><div class="small muted">Förslag just nu${nm.k?` · <span class="mvk">${MOVE_K[nm.k]}</span>`:''}</div><strong>${esc(nm.t)}</strong><div class="small muted">${esc(nm.h)}</div></div></div>
+      <button class="btn big" style="width:100%;margin-top:10px" type="button" data-movedo="${nm.id}">Rör dig nu</button>
+      <div class="row between" style="margin-top:4px"><button class="linkbtn small tall" type="button" data-move="${nm.id}">Redan gjort</button><button class="linkbtn small tall" type="button" data-movenext>Visa ett annat</button></div>
+      <details class="why"><summary>Varför?</summary><p>${esc(nm.w||'')}</p><button class="linkbtn" type="button" data-whyall>Läs mer om varför vardagsrörelse lönar sig</button></details></div>
     <details ${movesOpen?'open':''} data-movesdet><summary>Alla rörelsepauser – tryck för att se hur</summary>
       <div class="chips wrap" style="margin-top:8px">${MOVES.map(x=>`<button class="chip" type="button" data-moveopen="${x.id}" aria-pressed="${doneIds.has(x.id)}">${esc(x.t)}</button>`).join('')}</div></details>
   </section>`;
@@ -2422,7 +2518,9 @@ function toggleMoveTimer(){
   const pb=document.querySelector('[data-mvplay]');if(pb)pb.textContent=mvState.run?'Pausa':'Fortsätt';
   const db=document.querySelector('[data-mvdone]');if(db)db.textContent='Klar';
 }
-function finishMove(){const id=mvState.id;clearInterval(mvState.t);mvState=null;closeSheet();logMove(id)}
+function finishMove(){const id=mvState.id;clearInterval(mvState.t);mvState=null;
+  if(firstMv){firstMv=false;tab='idag';dayOff=0;closeSheet();logMove(id,true);try{window.scrollTo(0,0)}catch(e){}celebrate('Första rörelsepausen är gjord.',true);return}
+  closeSheet();logMove(id)}
 /* Kontroll av en inklistrad säkerhetskopia. Ger en feltext, eller '' om den går att läsa in. */
 function backupError(v){const bad='Det där ser inte ut som en säkerhetskopia',isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x),dk=/^\d{4}-\d{2}-\d{2}$/;
   if(!isO(v)||!Array.isArray(v.log)||!isO(v.days))return bad;
@@ -3791,10 +3889,39 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&restEnd)t
 /* Ljudsignal (WebAudio) utöver vibration – vibration finns inte i Safari på iPhone. Ljudet låses upp vid ett tryck. */
 let AC=null;
 function audioInit(){try{if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(C)AC=new C()}if(AC&&AC.state==='suspended')AC.resume()}catch(e){}}
-function tone(pat){try{audioInit();if(!AC)return;let t=AC.currentTime+0.02;pat.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;
-  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02);t+=d+0.08})}catch(e){}}
-function signal(k){const v={seg:[300,100,300],pre:[150,80,150],side:[200,100,200],done:[300,100,300],rest:[200,100,200]}[k]||150;try{navigator.vibrate&&navigator.vibrate(v)}catch(e){}
+const soundOn=()=>S.settings.sound!==false;
+function tone(pat,vol){if(!soundOn())return;try{audioInit();if(!AC)return;let t=AC.currentTime+0.02;pat.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol||0.25,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02);t+=d+0.08})}catch(e){}}
+function signal(k){const v={seg:[300,100,300],pre:[150,80,150],side:[200,100,200],done:[300,100,300],rest:[200,100,200],warm:[60]}[k]||150;try{navigator.vibrate&&navigator.vibrate(v)}catch(e){}
+  if(k==='warm')return tone([[523.25,.16],[659.25,.16],[783.99,.5]],.16);
   tone(k==='pre'?[[660,.12]]:k==='next'?[[880,.18]]:k==='rest'||k==='done'?[[880,.15],[1175,.25]]:[[880,.15],[880,.15]])}
+/* Ljudet låses upp av första trycket (iPhone kräver det). Lyssnaren tas bort när ljudet väl är igång. */
+function audioUnlock(){if(!soundOn())return;audioInit();try{if(AC&&!audioUnlock.done){const b=AC.createBuffer(1,1,22050),src=AC.createBufferSource();src.buffer=b;src.connect(AC.destination);src.start(0);audioUnlock.done=1}}catch(e){}
+  if(AC&&AC.state==='running'){['touchend','click'].forEach(ev=>document.removeEventListener(ev,audioUnlock,true))}}
+['touchend','click'].forEach(ev=>document.addEventListener(ev,audioUnlock,true));
+/* ---------- Stillsamt firande ----------
+   Visas när dagens golv nås (en gång per dag, sparas i den här webbläsaren), lite mindre efter första rörelsepausen
+   och vid de tidiga milstolparna. Bara efter något man själv gjort (celeArm), aldrig när data laddas från molnet. */
+let celeArm=false, celeSeen=null, celeSig='', celeT=0;
+const CELE_K='rs-cele', MS_K='rs-ms';
+function celebrate(txt,small){let el=$('#cele');
+  if(!el){el=document.createElement('div');el.id='cele';el.setAttribute('role','status');el.setAttribute('aria-live','polite');document.body.appendChild(el)}
+  el.className='cele'+(small?' sm':'');
+  el.innerHTML=`<svg width="104" height="50" viewBox="0 0 104 50" aria-hidden="true"><path d="M10 44 A19 19 0 0 1 48 44 A22 22 0 0 1 92 44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/><circle class="hop" cx="10" cy="36" r="6" fill="var(--spot)"/></svg><strong>${esc(txt)}</strong>`;
+  void el.offsetWidth;el.classList.add('on');signal('warm');clearTimeout(celeT);celeT=setTimeout(()=>el.classList.remove('on'),small?1900:2400)}
+const MS_TXT={pass:v=>v===1?'Ditt första pass':v+' pass',km:v=>v+' km löpning',ton:v=>v+' ton lyft totalt',mob:v=>v+' rörlighetspass',stepdays:v=>v+' dagar över stegmålet',streak:v=>v+' dagar i rad'};
+function celeCheck(){const arm=celeArm;celeArm=false;
+  try{const k=today(),ok=dayFloor(k).ok;let shown=false;
+    if(arm&&celeSeen&&celeSeen.k===k&&!celeSeen.ok&&ok&&localStorage.getItem(CELE_K)!==k){localStorage.setItem(CELE_K,k);celebrate('Dagen är hel.');shown=true}
+    celeSeen={k,ok};
+    const sig=S.log.length+'/'+Object.keys(S.days).length;if(!arm&&sig===celeSig&&localStorage.getItem(MS_K))return;celeSig=sig;
+    let prev=null;try{prev=JSON.parse(localStorage.getItem(MS_K)||'null')}catch(e){}
+    const got=milestoneData(streaks()).got,cur=got.map(x=>x.k+'|'+x.txt);
+    if(Array.isArray(prev)&&arm){
+      const fresh=got.filter(x=>{if(prev.includes(x.k+'|'+x.txt))return false;const row=MILESTONES.find(r=>r[0]===x.k);return row&&row[2].slice(0,2).some(t=>row[3](t)===x.txt)});
+      if(fresh.length){const x=fresh[0],row=MILESTONES.find(r=>r[0]===x.k),v=row[2].find(t=>row[3](t)===x.txt),txt=(MS_TXT[x.k]||(()=>x.txt))(v);shown?toast(txt):celebrate(txt,true)}}
+    localStorage.setItem(MS_K,JSON.stringify([...new Set([...(Array.isArray(prev)?prev:[]),...cur])]));
+  }catch(e){}}
 /* Håll skärmen tänd under pågående styrke-, löp- och rörlighetspass. */
 let wakeL=null,wakeP=false;
 const wantWake=()=>!!(runState||mobState||(active&&sheetCtx&&sheetCtx.t==='active'&&$('#sheet').classList.contains('open')));
@@ -3932,39 +4059,48 @@ function runNext(carry){
 let mobState=null;
 function showMobility(id){
   const m=MOBILITY.find(x=>x.id===id)||MOBILITY[0];
-  mobState={m,i:0,left:m.items[0][1],run:false,t:null,done:new Set()};
+  mobState={m,i:0,left:m.items[0][1],run:false,t:null,done:new Set(),tr:false,half:false};
   renderMob();
 }
+const MOB_TR=5; // sekunder att byta position mellan momenten
+const mobSides=it=>/per (sida|ben)|byt sida|växla sida/i.test(it[2]||'');
 function renderMob(){
-  const {m,i,left,run}=mobState, it=m.items[i];
+  const {m,i,left,run,tr}=mobState, it=m.items[i];
   openSheet(`<header class="top"><div><div class="date num">Övning ${i+1} av ${m.items.length}</div><h1>${esc(m.t)}</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
-   <div class="stack"><div class="card stack" style="text-align:center;align-items:center">${animSVG(exAnimKey(it[0]),150)}<h2>${esc(it[0])}</h2>${it[2]?`<div class="muted">${esc(it[2])}</div>`:''}<div class="mobtimer" id="mobT">${mmss(left)}</div></div>
+   <div class="stack"><div class="card stack" style="text-align:center;align-items:center">${animSVG(exAnimKey(it[0]),150)}${tr?`<div class="eyebrow">Nästa</div>`:''}<h2>${esc(it[0])}</h2>${it[2]?`<div class="muted">${esc(it[2])}</div>`:''}<div class="mobtimer" id="mobT">${tr?'0:0'+Math.max(0,left):mmss(left)}</div>${tr?'<div class="small muted">Gör dig redo</div>':mobSides(it)?`<div class="pill line" id="mobSide">${mobState.half?'Andra sidan':'Första sidan'}</div>`:''}</div>
    ${howTo(it[0])?`<div class="card stack"><div><strong>Så gör du:</strong> ${esc(howTo(it[0]))}</div></div>`:''}
-   ${i===0&&!run?`<div class="card stack"><div class="small"><strong>Varför:</strong> ${esc(MOB_WHY[m.id]||'')}</div>${m.note?`<div class="note">${esc(m.note)}</div>`:''}${m.credit?`<div class="small muted">${esc(m.credit)}</div>`:''}</div>`:''}
+   ${i===0&&!run&&!tr?`<div class="card stack"><div class="small"><strong>Varför:</strong> ${esc(MOB_WHY[m.id]||'')}</div>${m.note?`<div class="note">${esc(m.note)}</div>`:''}${m.credit?`<div class="small muted">${esc(m.credit)}</div>`:''}</div>`:''}
    <div class="card"><div class="small muted" style="margin-bottom:4px">Tryck på en rörelse för att se hur den görs.</div><div class="list">${m.items.map((x,j)=>`<button class="li" type="button" data-mobgo="${j}" aria-current="${j===i}" style="width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;color:inherit;font:inherit;${j===i?'font-weight:600':''}"><span class="num muted" style="width:20px">${j<i&&mobState.done&&mobState.done.has(j)?'✓':j+1}</span><div class="grow">${esc(x[0])}</div><span class="small muted num">${mmss(x[1])}</span></button>`).join('')}</div></div></div>`);
-  stickyBar(`<button class="btn ghost" type="button" data-mobskip>Hoppa över</button><button class="btn mob" type="button" data-mobplay>${run?'Pausa':'Starta'}</button>`);
+  stickyBar(`<button class="btn ghost" type="button" data-mobskip>${tr?'Börja nu':'Hoppa över'}</button><button class="btn mob" type="button" data-mobplay>${run?'Pausa':'Starta'}</button>`);
 }
 function mobGo(){const s=mobState;if(!s)return;clearInterval(s.t);s.end=Date.now()+s.left*1000;s.t=setInterval(mobTick,250)}
 function mobTick(){const s=mobState;if(!s||!s.run||!s.end)return;let g=0;
   while(mobState===s&&(s.left=Math.ceil((s.end-Date.now())/1000))<=0&&g++<100){const end=s.end;mobNext();if(mobState!==s)return;s.end=end+s.left*1000}
-  s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));const el=$('#mobT');if(el)el.textContent=mmss(s.left);
+  s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));const el=$('#mobT');if(el)el.textContent=s.tr?'0:0'+s.left:mmss(s.left);
+  const it=s.m.items[s.i];
+  if(!s.tr&&!s.half&&mobSides(it)&&s.left<=Math.floor(it[1]/2)&&s.left>0){s.half=true;signal('side');const sd=$('#mobSide');if(sd)sd.textContent='Andra sidan';toast('Byt sida')}
 }
-function mobNext(){
-  const s=mobState; if(s.done&&s.left<s.m.items[s.i][1])s.done.add(s.i); s.i++;
-  if(s.i>=s.m.items.length){clearInterval(s.t);signal('done');const min=s.m.min;addLog({type:'rörlighet',date:today(),title:s.m.t,min});day().mob=true;markDirty('days',monthOf(today()));mobState=null;closeSheet();toast('Rörlighet klar');return}
-  s.left=s.m.items[s.i][1]; signal('next'); renderMob();
+/* Nästa steg: moment → 5 s övergång ("Nästa: …") → nästa moment. direct = hoppa direkt till nästa moment (utan övergång). */
+function mobNext(direct){
+  const s=mobState;
+  if(s.tr){s.tr=false;s.half=false;s.left=s.m.items[s.i][1];signal('pre');renderMob();return}
+  if(s.done&&s.left<s.m.items[s.i][1])s.done.add(s.i); s.i++;s.half=false;
+  if(s.i>=s.m.items.length){clearInterval(s.t);signal('done');const min=s.m.min;mobState=null;day().mob=true;addLog({type:'rörlighet',date:today(),title:s.m.t,min});markDirty('days',monthOf(today()));closeSheet();toast('Rörlighet klar');return}
+  signal('next');
+  if(direct){s.left=s.m.items[s.i][1];renderMob();return}
+  s.tr=true;s.left=MOB_TR;renderMob();
 }
 function progOptions(split,sel){return DP_SEQ.filter(w=>w.s===split).map(w=>`<option value="${w.i}" ${w.i===sel?'selected':''}>v${w.wk} d${w.d} – ${esc(wTitle(w))}</option>`).join('')}
 function showWhy(){
   const sec=(h,t)=>`<section class="card stack"><h3>${h}</h3><p style="margin:0">${t}</p></section>`;
   openSheet(`<header class="top"><div><div class="date">Därför rör vi oss</div><h1>Vardagsrörelse</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
   <div class="stack">
-   ${sec('Ny energi på ett par minuter','När du rest dig och rört dig en stund kommer cirkulationen igång, och de flesta känner sig piggare och klarare i huvudet när de sätter sig igen. Därför är många korta pauser bättre än en lång.')}
-   ${sec('Varje steg räknas','Steg behöver inte komma från en lång promenad. Trappan, ärendet till fots och samtalet du tar gående räknas lika mycket – och de dagar du rör dig mer brukar både humöret och sömnen bli bättre.')}
-   ${sec('En promenad efter maten','Några minuters gång efter lunchen ger jämnare energi under eftermiddagen och gör det lättare att hålla fokus. Dagsljuset är en bonus.')}
-   ${sec('Små doser blir stora','8 pauser à 2 minuter är 16 minuter rörelse om dagen – nästan två timmar i veckan – utan att du behöver boka in något.')}
-   ${sec('Rörlighet för en stel kropp','Nacke, rygg och höfter stelnar av att vara i samma läge länge. Några minuters rörlighet gör att kroppen känns lättare att röra, både vid skrivbordet och i träningen. Börja lätt och gör det som känns skönt.')}
-   ${sec('Styrka som märks i vardagen','Starkare ben, rygg och bål gör det lättare att bära, lyfta och orka en hel dag. Två styrkepass i veckan räcker långt.')}
+   ${sec('Mer energi samma dag','Efter några minuters rörelse känner sig de flesta piggare och på bättre humör. Det märks samma dag, ofta direkt. Små studier visar också att eftermiddagen känns mindre trött när man bryter av sittandet med korta pauser.')}
+   ${sec('Korta pauser som höjer pulsen','Trappor, knäböj eller en låt i rörelse höjer pulsen en liten stund. Gör du det några gånger om dagen märks det över veckor: trapporna känns lättare. Tre om dagen är ett bra riktmärke, inget krav.')}
+   ${sec('En promenad efter maten','Några minuters gång efter en måltid dämpar blodsockertoppen som kommer efter maten. Eftermiddagen brukar kännas jämnare.')}
+   ${sec('Steg i vardagen','Steg behöver inte komma från en lång promenad. Trappan, ärendet till fots och samtalet du tar gående räknas lika mycket. Runt sju tusen steg om dagen ger det mesta av nyttan.')}
+   ${sec('Rörlighet för en stel kropp','Nacke, rygg och höfter stelnar av att vara i samma läge länge. Några minuters rörlighet gör att kroppen känns mjukare nu, och gradvis lite rörligare över veckor. Gör det som känns skönt.')}
+   ${sec('En vana, inte en regel','Pauserna är en praktisk vana, inte en officiell rekommendation. Det viktiga är att de blir av, inte att varje dag ser likadan ut. Åtta pauser på ett par minuter blir en kvart rörelse om dagen, utan att du behöver boka in något.')}
   </div>`);
 }
 /* ---------- Inställningar: uppdelat på styrka, löpning, rörlighet och vardagsmotion ----------
@@ -4052,6 +4188,7 @@ function viewJag(){
   /* Appen */
   const ci=ciConf().every??3;
   const app=`${sOpt('ciEvery','Avstämning',[[3,'Var 3:e dag'],[7,'En gång i veckan'],[0,'Av']],ci)}
+   ${sTog('sound','Ljud',S.settings.sound!==false,'Korta signaler i timern och ett mjukt ljud när dagen är hel.')}
    ${BUILD==='public'&&SB?`<div class="setfield"><div class="lab">Konto</div>${SBUSER?`<p class="small" style="margin:0">Inloggad som <strong>${esc(SBUSER.email||'')}</strong>. Din träning sparas i molnet.</p><div><button class="btn ghost sm" type="button" data-logout>Logga ut</button></div>`:`<p class="small" style="margin:0">Du är inte inloggad – träningen sparas bara på den här telefonen.</p><div><button class="btn sm" type="button" data-login>Logga in</button></div>`}</div>`:''}
    ${BUILD==='public'&&SB&&SBUSER?`<div class="setfield"><div class="lab">Eget träningsprogram</div>${WORKOUTS.length?`<p class="small muted" style="margin:0">Inläst: ${LIB.programs.length} program, ${WORKOUTS.length} pass. Programmet ligger bara i ditt konto – ingen annan kan se det.</p><div><button class="btn ghost sm" type="button" data-libremove>Ta bort programmet</button></div>`:`<p class="small muted" style="margin:0">Har du en programfil? Läs in den så följer appen ditt eget program. Den sparas bara i ditt konto.</p><label class="btn ghost sm" style="align-self:flex-start;cursor:pointer">Läs in programfil<input type="file" accept=".json,application/json" data-libfile hidden></label>`}</div>`:''}
    <div class="setfield"><div class="lab">Säkerhetskopia</div><p class="small muted" style="margin:0">Dina loggar sparas ${cloud==='moln'?(BUILD==='public'?'i ditt konto och följer med mellan enheter':'i ditt Claude-konto och följer med mellan enheter'):'bara i den här webbläsaren'}.</p>
@@ -4059,7 +4196,7 @@ function viewJag(){
     <details><summary class="small">Klistra in en säkerhetskopia</summary><div class="stack" style="margin-top:8px"><textarea id="imp" rows="4" aria-label="Säkerhetskopia"></textarea><button class="btn ghost sm" type="button" data-import>Läs in</button></div></details></div>
    <div class="setfield"><div class="lab">Lägg appen på hemskärmen</div><p class="small muted" style="margin:0">iPhone: öppna länken i Safari, tryck på Dela och välj Lägg till på hemskärmen. Android: menyn i Chrome och Lägg till på startskärmen.</p></div>
    <div class="setfield"><div class="lab">Börja om</div><p class="small muted" style="margin:0 0 6px">Svara på frågorna igen och få ett nytt veckoschema. Dina loggar sparas.</p><button class="btn ghost sm" type="button" data-onb>Gör om frågorna</button></div>`;
-  const aSum=`Avstämning ${({3:'var 3:e dag',7:'en gång i veckan',0:'av'})[ci]||''} · säkerhetskopia${BUILD==='public'?' · konto':''}`;
+  const aSum=`Avstämning ${({3:'var 3:e dag',7:'en gång i veckan',0:'av'})[ci]||''} · säkerhetskopia${BUILD==='public'?' · konto':''}${S.settings.sound===false?' · ljud av':''}`;
   const ini=(SBUSER&&SBUSER.email?SBUSER.email.trim()[0]:'J').toLocaleUpperCase('sv-SE');
   return `<header class="top me"><div class="avatar" aria-hidden="true">${esc(ini)}</div><div><h1>Jag</h1><div class="date" id="setStatus">${Date.now()-setSavedAt<2500?'Sparat ✓':'Ändringar sparas direkt'}</div></div></header>
   <div class="stack">
@@ -4104,6 +4241,7 @@ function applySetting(k,v,silent){
     case 'pelvic':{const a=(st.issues||[]).filter(x=>x!=='bäckenbotten');if(v)a.push('bäckenbotten');st.issues=a;break}
     case 'stepGoal':st.stepGoal=Math.max(2000,Math.min(25000,Math.round(+v/500)*500));break;
     case 'adaptSteps':st.adaptSteps=!!v;break;
+    case 'sound':st.sound=!!v;if(v){audioInit();signal('done')}break;
     case 'moveGoal':st.moveGoal=Math.max(4,Math.min(12,+v));break;
     case 'issue':{const a=new Set(st.issues||[]);a.has(v)?a.delete(v):a.add(v);st.issues=[...a];st.cycle=a.has('mens');if(v==='knä'&&a.has('knä'))st.kneeFocus=true;st.genCur=null;break}
     case 'ciEvery':ciConf().every=+v;break;
@@ -4152,7 +4290,9 @@ function bind(root){
   root.querySelectorAll('[data-movedo]').forEach(b=>b.onclick=()=>showMove(b.dataset.movedo,true));
   root.querySelectorAll('[data-mvplay]').forEach(b=>b.onclick=toggleMoveTimer);
   root.querySelectorAll('[data-mvdone]').forEach(b=>b.onclick=finishMove);
-  root.querySelectorAll('[data-mvclose]').forEach(b=>b.onclick=()=>{if(mvState){clearInterval(mvState.t);mvState=null}closeSheet()});
+  root.querySelectorAll('[data-mvclose]').forEach(b=>b.onclick=()=>{if(mvState){clearInterval(mvState.t);mvState=null}if(firstMv){firstMv=false;go('idag')}closeSheet()});
+  root.querySelectorAll('[data-fmnow]').forEach(b=>b.onclick=()=>{firstMv=true;showMove('marsch',true)});
+  root.querySelectorAll('[data-fmlater]').forEach(b=>b.onclick=()=>{closeSheet();go('idag');toast('Ditt schema är klart')});
   root.querySelectorAll('[data-movenext]').forEach(b=>b.onclick=()=>{moveIdx++;render()});
   root.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>{sugFocus=b.dataset.focus;sugIdx=0;sugCache=null;render()});
   root.querySelectorAll('[data-next]').forEach(b=>b.onclick=()=>{sugIdx++;render()});
@@ -4289,8 +4429,8 @@ function bind(root){
   root.querySelectorAll('[data-runclose]').forEach(b=>b.onclick=()=>{const s=runState;clearInterval(s.t);if(!s.start){runState=null;closeSheet();return}recordSeg();const rid=s.r.id,act=s.actual;runState=null;showRunLog(rid,null,act)});
   root.querySelectorAll('[data-mob]').forEach(b=>b.onclick=()=>showMobility(b.dataset.mob));
   root.querySelectorAll('[data-mobplay]').forEach(b=>b.onclick=()=>{const s=mobState;audioInit();if(s.run&&s.end)s.left=Math.max(0,Math.ceil((s.end-Date.now())/1000));s.run=!s.run;clearInterval(s.t);if(s.run)mobGo();b.textContent=s.run?'Pausa':'Starta'});
-  root.querySelectorAll('[data-mobgo]').forEach(b=>b.onclick=()=>{const s=mobState;if(!s)return;const j=+b.dataset.mobgo;clearInterval(s.t);s.run=false;s.i=j;s.left=s.m.items[j][1];renderMob();try{document.querySelector('.sheet')&&(document.querySelector('.sheet').scrollTop=0)}catch(e){}});
-  root.querySelectorAll('[data-mobskip]').forEach(b=>b.onclick=()=>{const run=mobState.run;clearInterval(mobState.t);mobNext();if(mobState&&run){mobState.run=true;mobGo();const pb=document.querySelector('[data-mobplay]');if(pb)pb.textContent='Pausa'}});
+  root.querySelectorAll('[data-mobgo]').forEach(b=>b.onclick=()=>{const s=mobState;if(!s)return;const j=+b.dataset.mobgo;clearInterval(s.t);s.run=false;s.tr=false;s.half=false;s.i=j;s.left=s.m.items[j][1];renderMob();try{document.querySelector('.sheet')&&(document.querySelector('.sheet').scrollTop=0)}catch(e){}});
+  root.querySelectorAll('[data-mobskip]').forEach(b=>b.onclick=()=>{const run=mobState.run;clearInterval(mobState.t);mobNext(!run);if(mobState&&run){mobState.run=true;mobGo();const pb=document.querySelector('[data-mobplay]');if(pb)pb.textContent='Pausa'}});
   root.querySelectorAll('[data-settings]').forEach(b=>b.onclick=showSettings);
   const ss=root.querySelector('#sSplit'); if(ss) ss.onchange=()=>{$('#sLast').innerHTML=progOptions(+ss.value,'')};
   root.querySelectorAll('[data-savesettings]').forEach(b=>b.onclick=()=>{const st=S.settings;if(+$('#sStr').value!==st.strength||+$('#sCar').value!==st.cardio){st.weekPlan=null;st.genCur=null}st.strength=+$('#sStr').value;st.cardio=+$('#sCar').value;if($('#sCi'))ciConf().every=+$('#sCi').value;st.stepGoal=Math.max(1000,+$('#sSteps').value||10000);st.maxMin=+$('#sMax').value;st.runPref=$('#sRun').value;{const raw=$('#sTenK').value.trim();const tk=parseTenK(raw);if(tk&&raw!==String(st.tenK||'')){st.tenK=raw;st.v10=Math.round(600/tk*100)/100}
