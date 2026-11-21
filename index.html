@@ -75,6 +75,7 @@ h3{font-size:18px}
 .mdot.on.bonus{background:var(--h4);border-color:var(--h4)}
 .movebox{background:var(--bg);border-radius:14px;padding:12px}
 .nudge{background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-weight:500}
+.flpart{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:12px 0 2px;padding-top:10px;border-top:1px solid var(--line)}.flpart .small{text-align:right}
 .dayline{margin:-8px 0 14px;font-size:16px;font-weight:500}
 .movebox .btn.big{min-height:54px;font-size:17px}
 .mvk{color:var(--ink);font-weight:600}
@@ -361,7 +362,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='0423dc7834';
+const BUILD='public', VERSION='a207d2a381';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -403,12 +404,13 @@ MOBILITY.push({id:'mob-bal',t:'Bål & bäckenbotten',min:8,pelvic:1,note:'Gravid
   ['Bird dog',90,'På alla fyra. Sträck motsatt arm och ben, håll 3 s.'],
   ['Sidoplanka på knä',60,'30 s per sida, rak linje knä–huvud.'],
   ['Djupandning i ryggläge',45,'Andas in mot magen och sidorna, andas ut med ett lätt knip.']]});
-const MOB_WHY={'mob-bal':'En stark bål och bäckenbotten avlastar ryggen, minskar läckage vid hopp och löpning och är grunden för all annan träning – särskilt efter graviditet.','mob-morgon':'Kroppen är stelast på morgonen. Några minuter rörlighet ger bättre hållning och känsla resten av dagen.',
- 'mob-kontor':'Sittande förkortar höftböjare och drar axlarna framåt. Det här är motgiftet efter en dag vid skärmen.',
- 'mob-yoga':'Lugn rörlighet med andning sänker stressnivån och ger rörlighet i hela kroppen.',
- 'mob-ben':'Rörliga höfter och fotleder avlastar knän och rygg i både löpning och knäböj.',
- 'mob-lop':'Efter löpning är musklerna varma – ett bra läge att behålla rörligheten i vader och höfter.',
- 'mob-kna':'Knän och senor blir tåligare av gradvis belastning i hela rörelseomfånget – även med knät framför tårna. Börja lätt, öka långsamt.'};
+const MOB_WHY={'mob-bal':'Lugna övningar för bål och bäckenbotten, i takt med andningen. De flesta känner kontakt och stadga i mitten av kroppen redan efter några minuter, och det blir lättare gradvis över veckor.',
+ 'mob-morgon':'Kroppen känns ofta stelast på morgonen. Några minuters rörlighet gör att den känns mjukare nu, och gradvis lite rörligare över veckor.',
+ 'mob-kontor':'Efter en dag vid skärmen känns höfter, bröst och nacke ofta stela. Några minuter här gör att de känns mjukare nu, och gradvis friare över veckor.',
+ 'mob-yoga':'Lugn rörlighet i takt med andningen. Många känner sig lugnare efteråt, och kroppen känns mjukare nu och gradvis rörligare över veckor.',
+ 'mob-ben':'Höfter och fotleder blir lätt stela av att sitta. Några minuter här gör att de känns mjukare nu, och gradvis lite rörligare över veckor.',
+ 'mob-lop':'Efter löpning är musklerna varma, ett skönt läge att sträcka ut. Vader och höfter känns mjukare nu, och gradvis lite rörligare över veckor.',
+ 'mob-kna':'Lugn belastning i hela rörelseomfånget, även med knät framför tårna. Knäna brukar kännas mjukare och mer bekväma gradvis över veckor. Börja lätt och öka långsamt.'};
 // Löpbandsplanen: pass 1 = intervaller (tuffa), pass 2 = kortare tempo/fartlek. Lutning 1 % hela tiden.
 // seg: [minuter, typ, text]. typ: w=uppvärmning h=hårt j=lugn jogg c=nedvarvning s=jämn fart/progression
 const RUNS = [
@@ -436,19 +438,19 @@ const RUNS = [
 RUNS.forEach(r=>r.min=Math.round(r.seg.reduce((a,x)=>a+x[0],0)));
 const RUN_TIPS=['Lutning 1 % hela passet – motsvarar ute.','Titta inte på totaltiden, bara på biten du är i.','Spara en serie eller podd som bara får höras på bandet.','Fläkt och vattenflaska nära – det blir varmare än du tror.'];
 // Rörelsepauser: små saker att bocka av under dagen. k = 'puls' (pulshöjande) eller 'lugn'. gang = gångpaus.
-// Id:n får aldrig ändras – de ligger i sparad data (days.moves).
+// Id:n får aldrig ändras – de ligger i sparad data (days.moves). mob = lugn paus som räknas som rörlighet i dagens golv.
 const MOVES = [
  {id:'gå2',k:'lugn',gang:1,t:'Res dig och gå 2 min',h:'Runt kontoret, hämta vatten, gå till fönstret.',w:'Ett kort avbrott från stolen ger lite ny energi. De flesta känner sig piggare när de sätter sig igen.'},
  {id:'trappa',k:'puls',t:'Ta trappan, 1 min',h:'Upp och ner – en våning räknas.',w:'Trappor höjer pulsen snabbt. Några vändor om dagen märks efter några veckor: trapporna känns lättare.'},
  {id:'kb10',k:'puls',t:'Knäböj i lugn takt, 1 min',h:'Ungefär 10–15 st, gärna vid skrivbordet.',w:'Benen är kroppens största muskler. En minut knäböj höjer pulsen lite och gör att kroppen känns vaken igen efter sittandet.'},
  {id:'vad20',k:'puls',t:'Tåhävningar i tempo, 1 min',h:'Medan kaffet bryggs eller tandborsten går.',w:'Tåhävningar i lite högre tempo höjer pulsen en aning. Benen brukar kännas lättare efter långt sittande.'},
- {id:'axel',k:'lugn',t:'Axelrullningar och nacke, 1 min',h:'Rulla bakåt, luta huvudet sida till sida.',w:'Nacke och axlar blir stela framför skärmen. En minut mjuk rörelse känns skönt direkt.'},
- {id:'höft',k:'lugn',t:'Höftöppnare i utfall, 1 min',h:'30 s per sida.',w:'Höfterna blir stela av att sitta. Att öppna dem gör att de känns mjukare nu, och gradvis lite friare över veckor.'},
+ {id:'axel',k:'lugn',mob:1,t:'Axelrullningar och nacke, 1 min',h:'Rulla bakåt, luta huvudet sida till sida.',w:'Nacke och axlar blir stela framför skärmen. En minut mjuk rörelse känns skönt direkt.'},
+ {id:'höft',k:'lugn',mob:1,t:'Höftöppnare i utfall, 1 min',h:'30 s per sida.',w:'Höfterna blir stela av att sitta. Att öppna dem gör att de känns mjukare nu, och gradvis lite friare över veckor.'},
  {id:'telefon',k:'lugn',t:'Gå under ett samtal',h:'Ta mötet eller samtalet stående eller gående.',w:'Steg du får utan att det tar någon extra tid. Ett samtal räcker för att bryta av sittandet.'},
  {id:'lunch',k:'lugn',gang:1,t:'Promenad efter lunch, 10 min',h:'Ger jämnare energi under eftermiddagen.',w:'En promenad efter maten dämpar blodsockertoppen som kommer efter en måltid. Eftermiddagen brukar kännas piggare och mindre trög.'},
  {id:'stå',k:'lugn',t:'Stå upp i 15 min',h:'Höj skrivbordet eller jobba stående en stund.',w:'Att växla mellan att sitta och stå bryter av stillheten. Många tycker att kroppen känns piggare av det.'},
  {id:'armh',k:'puls',t:'Armhävningar, 1 min',h:'Ungefär 10–15 st i egen takt. Mot bordskanten går bra.',w:'En minut armhävningar höjer pulsen en stund och ger ny energi. Mot en bordskant fungerar lika bra som på golvet.'},
- {id:'sträck',k:'lugn',t:'Sträck på dig, 1 min',h:'Armarna upp, sidoböj, vrid bröstryggen.',w:'Att sträcka på sig bryter av en ställning du suttit i länge. Kroppen känns mjukare direkt.'},
+ {id:'sträck',k:'lugn',mob:1,t:'Sträck på dig, 1 min',h:'Armarna upp, sidoböj, vrid bröstryggen.',w:'Att sträcka på sig bryter av en ställning du suttit i länge. Kroppen känns mjukare direkt.'},
  {id:'häng',k:'lugn',t:'Häng eller planka, 1 min',h:'Dörrstång, ribbstol eller planka på golvet. Dela gärna upp i 2–3 omgångar.',w:'Ett häng eller en planka bryter av sittandet och känns skönt i axlarna och ryggen.'},
  {id:'ärende',k:'lugn',t:'Gå i stället för att åka',h:'Ett ärende till fots eller hoppa av en hållplats tidigare.',w:'Vardagssteg räknas lika mycket som träningssteg. Du får luft och dagsljus på köpet.'},
  {id:'dans',k:'puls',t:'En låt i rörelse',h:'Dansa, städa eller gå runt hemma under en låt.',w:'Rörelse till musik höjer både puls och humör, och känns sällan som träning.'},
@@ -1956,7 +1958,7 @@ function renderOB(){
   if(step==='hello') body=`<div class="hello"><svg width="88" height="42" viewBox="0 0 104 50" aria-hidden="true"><path d="M10 44 A19 19 0 0 1 48 44 A22 22 0 0 1 92 44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/><circle cx="94" cy="20" r="6" fill="var(--spot)"/></svg>
     <h1>Rör dig lite, varje dag</h1>
     <ul class="hellolist">
-     <li><strong>En liten start räcker.</strong> En promenad och några minuters rörlighet gör dagen hel.</li>
+     <li><strong>En liten start räcker.</strong> En promenad eller några rörelsepauser, plus några minuters rörlighet, gör dagen hel.</li>
      <li><strong>Korta pass för stela kroppar.</strong> Pauser på någon minut och rörlighet som är gjord för den som sitter mycket.</li>
      <li><strong>Styrka och löpning är tillval.</strong> Lägg till dem när du vill – eller inte alls.</li>
     </ul>
@@ -2123,10 +2125,16 @@ function workoutSummary(w0){
    <div class="small muted num">${pl(w.x.length,'övning','övningar')} · ca ${estMinutes(w)} min · ${esc(w.p==='GEN'?'Eget pass':PROG[w.p]?.n||w.p)}${w.s?' · Split '+w.s:''}${w.wk!=null?' · v'+w.wk+' d'+w.d:''}</div>`;
 }
 let dayOff=0;
-/* Dagens golv: promenad (eller stegmålet) och lite rörlighet ger en godkänd dag. Ett pass räknas också. */
-function dayFloor(k){const d=S.days[k]||{},L=logsOn(k),goal=S.settings.stepGoal;
-  const walk=!!d.walk,mob=!!d.mob||L.some(l=>l.type==='rörlighet'),steps=(+d.steps||0)>=goal;
-  return {walk,mob,steps,n:(walk?1:0)+(mob?1:0)+(steps?1:0),ok:(mob&&(walk||steps))||L.some(isPass)}}
+/* Dagens golv har två delar. Ett loggat pass räknar som en hel dag.
+   Rörelse: promenad ELLER stegmålet ELLER minst hälften av pausmålet (avrundat uppåt, minst 4 pauser).
+   Rörlighet: en rörlighetsrutin ELLER minst två lugna rörlighetspauser (MOVES med mob).
+   Regeln lägger bara till sätt att bli godkänd jämfört med den tidigare (rörlighet och promenad/steg). */
+function pauseHalf(){return Math.max(4,Math.ceil((+S.settings.moveGoal||8)/2))}
+function dayFloor(k){const d=S.days[k]||{},L=logsOn(k),goal=S.settings.stepGoal,mv=Array.isArray(d.moves)?d.moves:[];
+  const walk=!!d.walk,steps=(+d.steps||0)>=goal,half=pauseHalf(),pauses=mv.length,calm=mv.filter(x=>(MV(x.id)||{}).mob).length;
+  const routine=!!d.mob||L.some(l=>l.type==='rörlighet');
+  const move=walk||steps||pauses>=half,mob=routine||calm>=2;
+  return {walk,steps,pauses,half,calm,routine,move,mob,n:(move?1:0)+(mob?1:0),ok:(move&&mob)||L.some(isPass)}}
 function weekOkCount(){const mon=monday(new Date()),tk=today();let n=0;for(let i=0;i<7;i++){const k=dkey(addDays(mon,i));if(k<=tk&&dayFloor(k).ok)n++}return n}
 function weekPill(){const n=weekOkCount();return `<span class="wkpill">Veckan <strong class="num">${n}</strong> ${n===1?'godkänd':'godkända'}</span>`}
 /* Veckoremsan överst på Idag: tryck på en dag för att se den eller logga i efterhand. */
@@ -2137,14 +2145,17 @@ function weekStrip(){const tk=today(),sel=addDays(new Date(),dayOff),mon=monday(
     const lab=dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'})+(off===0?', idag':'')+(ok?', godkänd':'');
     return `<button type="button" class="sd ${off<0?'past':''} ${off===0?'today':''}" data-dayjump="${off}" aria-pressed="${off===dayOff}" aria-label="${esc(lab)}" ${can?'':'disabled'}><span class="w">${DAYS_SV[i].toLowerCase()}</span><span class="n">${dt.getDate()}</span><span class="p ${dot}"></span></button>`}).join('')}</nav>`}
 function floorRing(n){const r=34,c=2*Math.PI*r;
-  return `<svg class="ring" viewBox="0 0 84 84" role="img" aria-label="${n} av 3 klara"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--h0)" stroke-width="10"/>${n?`<circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--spot)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c*n/3).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>`:''}<text x="42" y="49" text-anchor="middle" font-family="Manrope,Helvetica Neue,Arial,sans-serif" font-weight="800" font-size="22" fill="var(--ink)">${n}/3</text></svg>`}
+  return `<svg class="ring" viewBox="0 0 84 84" role="img" aria-label="${n} av 2 delar klara"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--h0)" stroke-width="10"/>${n?`<circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--spot)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c*n/2).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>`:''}<text x="42" y="49" text-anchor="middle" font-family="Manrope,Helvetica Neue,Arial,sans-serif" font-weight="800" font-size="22" fill="var(--ink)">${n}/2</text></svg>`}
 function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(100,Math.round(st/goal*100));
   const box=(on,attr,lab)=>`<button class="box" type="button" role="checkbox" aria-checked="${on}" ${attr} aria-label="${lab}">${on?'✓':''}</button>`;
   return `<section class="card" aria-labelledby="h-golv">
-   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">Promenad och lite rörlighet ger en hel dag.</p></div></div>
+   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">Lite rörelse och lite rörlighet ger en hel dag.</p></div></div>
+   <div class="flpart"><strong>Rörelse</strong><span class="small muted num">${f.move?'Klart ✓':`promenad, stegmålet eller ${f.half} pauser`}</span></div>
    <div class="fl ${d.walk?'done':''}">${box(!!d.walk,'data-toggle="walk"','Promenad klar')}<div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
-   <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighet</strong><div class="small muted">${esc(m.t)}, ${m.min} min</div></div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
    <div class="fl ${f.steps?'done':''}">${box(f.steps,'disabled','Stegmål nått')}<div class="grow"><strong class="num">${goal.toLocaleString('sv-SE')} steg</strong><div class="sbar"><div class="t"><span style="width:${pct}%"></span></div><span class="small muted num">${st.toLocaleString('sv-SE')}</span></div></div><button class="btn ghost sm" type="button" data-addsteps="1000" aria-label="Lägg till 1 000 steg">+1 000</button></div>
+   <div class="fl ${f.pauses>=f.half?'done':''}">${box(f.pauses>=f.half,'disabled',f.half+' rörelsepauser')}<div class="grow"><strong class="num">${f.half} rörelsepauser</strong><div class="small muted num">${Math.min(f.pauses,f.half)} av ${f.half} gjorda</div></div></div>
+   <div class="flpart"><strong>Rörlighet</strong><span class="small muted num">${f.mob?'Klart ✓':'en rutin eller två lugna pauser'}</span></div>
+   <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighetsrutin</strong><div class="small muted">${esc(m.t)}, ${m.min} min${f.routine?'':` · eller två lugna pauser (${Math.min(f.calm,2)} av 2)`}</div></div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
    <details class="stepsmore"><summary>Skriv in steg</summary>
     <div class="row" style="gap:6px;margin-top:8px"><button class="btn ghost sm" type="button" data-addsteps="2500">+2 500</button><button class="btn ghost sm" type="button" data-addsteps="-1000">−1 000</button></div>
     <div class="row" style="gap:6px;flex-wrap:nowrap;margin-top:8px"><input id="stepsIn" type="number" inputmode="numeric" min="0" max="100000" step="100" placeholder="Antal steg" aria-label="Antal steg idag"><button class="btn sm" type="button" data-setsteps>Spara</button></div></details>
@@ -2466,10 +2477,17 @@ function viewToday(){
    </div>`;
 }
 /* Dagsläget i en mening: uttrycker dagens golv (dayFloor) – reglerna ändras inte här. Aldrig något om vad som missats. */
+const NUM_SV=['Noll','En','Två','Tre','Fyra','Fem','Sex','Sju','Åtta'];
 function dayLine(k){const f=dayFloor(k);if(f.ok)return 'Dagen är hel. Allt härifrån är bonus.';
-  const w=f.walk||f.steps;
-  if(!w&&!f.mob)return 'En promenad och lite rörlighet kvar till en hel dag.';
-  return !w?'En promenad kvar – sedan är dagen hel.':'Lite rörlighet kvar – sedan är dagen hel.'}
+  const need=Math.max(1,f.half-f.pauses),nTxt=`${NUM_SV[need]||need} ${need===1?'paus':'pauser'} eller en promenad`;
+  const mobTxt=f.calm===1?'En lugn rörlighetspaus':'Lite rörlighet';
+  if(f.move)return `${mobTxt} kvar – sedan är dagen hel.`;
+  if(f.mob)return `${nTxt} kvar – sedan är dagen hel.`;
+  /* Båda delarna kvar: räkna ner det som är närmast. */
+  if(need<=2)return `${nTxt} kvar – sedan är rörelsen klar.`;
+  if(f.calm===1)return 'En lugn rörlighetspaus kvar – sedan är rörligheten klar.';
+  if(!f.pauses)return 'En promenad och lite rörlighet kvar till en hel dag.';
+  return `Lite rörlighet och ${(NUM_SV[need]||String(need)).toLowerCase()} pauser (eller en promenad) kvar till en hel dag.`}
 function pulsToday(){return movesToday().filter(x=>(MV(x.id)||{}).k==='puls').length}
 function movesCard(){
   const m=movesToday(), g=S.settings.moveGoal, nm=nextMove(), since=minsSinceMove(), h=new Date().getHours();
@@ -2718,7 +2736,7 @@ function viewWeek(){
   const full={s:'Styrka',r:'Löpning',m:'Rörlighet',v:'Vila',skip:'Hoppad',none:'Ingen träning'};
   const keys=[...Array(7)].map((_,i)=>dkey(addDays(mon,i)));
   const okN=keys.filter(k=>k<=tk&&dayFloor(k).ok).length;
-  const bars=keys.map((k,i)=>{const f=k<=tk?dayFloor(k):null,h=f?(f.ok?100:Math.round(f.n/3*100)):0;
+  const bars=keys.map((k,i)=>{const f=k<=tk?dayFloor(k):null,h=f?(f.ok?100:Math.round(f.n/2*100)):0;
     return `<div><span class="b ${f&&f.ok?'ok':''}"><span style="height:${h}%"></span></span><span class="${k===tk?'cur':''}">${DAYS_SV[i][0]}</span></div>`}).join('');
   const rows=keys.map((k,i)=>{const dt=addDays(mon,i),L=logsOn(k),dd=S.days[k],chg=!!(dd&&dd.plan),off=daysBetween(tk,k);let x=plannedFor(dt);
     const lt=L.some(l=>l.type==='styrka')?'s':L.some(l=>l.type==='löpning')?'r':null;
@@ -3361,8 +3379,9 @@ function ciStats(){
   const steps=[...Array(days)].map((_,i)=>+(S.days[dkey(addDays(new Date(),-i))]?.steps)||0);
   const avg=Math.round(steps.reduce((a,b)=>a+b,0)/days);
   const runs=L.filter(l=>l.type==='löpning'&&+l.rpe);const rpe=runs.length?runs.reduce((a,l)=>a+ +l.rpe,0)/runs.length:0;
+  const pauses=[...Array(days)].reduce((a,_,i)=>a+((S.days[dkey(addDays(new Date(),-i))]||{}).moves||[]).length,0);
   const mob=L.filter(l=>l.type==='rörlighet').length+[...Array(days)].filter((_,i)=>S.days[dkey(addDays(new Date(),-i))]?.mob).length;
-  return {days,pass,exp,avg,runs:runs.length,rpe,mob,missed:exp-pass>=1};
+  return {days,pass,exp,avg,runs:runs.length,rpe,mob,pauses,missed:exp-pass>=1};
 }
 function ciDue(){
   const c=ciConf(),tk=today();if(!c.every)return false;
@@ -3379,9 +3398,10 @@ function ciCard(){
     <div class="row" style="gap:6px"><button class="btn ghost sm" type="button" data-ciev="3" aria-pressed="${ciConf().every===3}">Var 3:e dag</button><button class="btn ghost sm" type="button" data-ciev="7" aria-pressed="${ciConf().every===7}">En gång i veckan</button><button class="btn ghost sm" type="button" data-ciev="0">Nej tack</button></div></section>`}
   if(!ciDue())return '';
   const s=ciStats();
-  const bits=[`${s.pass} av ${Math.max(s.exp,s.pass)} pass`,s.avg?`snitt ${s.avg.toLocaleString('sv-SE')} steg`:'',s.runs?`löpningen ${String(Math.round(s.rpe*10)/10).replace('.',',')}/10`:''].filter(Boolean);
+  /* Neutralt: bara det som gjorts sedan sist, inget mot ett förväntat antal. Inget visas om inget gjorts. */
+  const bits=[s.pass?pl(s.pass,'pass','pass'):'',s.pauses?pl(s.pauses,'paus','pauser'):''].filter(Boolean);
   return `<section class="card stack checkin"><span class="eyebrow">Avstämning</span><h3>Hur går det?</h3>
-   <p class="small" style="margin:0">${s.days===1?'Senaste dagen':'Senaste '+s.days+' dagarna'}: ${esc(bits.join(' · '))}.</p>
+   ${bits.length?`<p class="small" style="margin:0">Sedan sist: ${esc(bits.join(' och '))}.</p>`:''}
    <p class="small muted" style="margin:0">${ciQuestions().length} korta frågor, sedan får du förslag som du själv godkänner.</p>
    <div class="row" style="gap:6px"><button class="btn sm" type="button" data-ciok>Funkar bra</button><button class="btn ghost sm" type="button" data-ciopen>Svara (1 min)</button><button class="btn ghost sm" type="button" data-cilater>Senare</button></div>
    <button class="linkbtn small muted" type="button" data-cioff>Vill inte ha avstämningar</button></section>`;
@@ -3905,10 +3925,10 @@ function audioUnlock(){if(!soundOn())return;audioInit();try{if(AC&&!audioUnlock.
   if(AC&&AC.state==='running'){['touchend','click'].forEach(ev=>document.removeEventListener(ev,audioUnlock,true))}}
 ['touchend','click'].forEach(ev=>document.addEventListener(ev,audioUnlock,true));
 /* ---------- Stillsamt firande ----------
-   Visas när dagens golv nås (en gång per dag, sparas i den här webbläsaren), lite mindre efter första rörelsepausen
+   Visas när dagens golv nås (en gång per dag, sparas som days[dag].cele så att det följer med mellan enheter), lite mindre efter första rörelsepausen
    och vid de tidiga milstolparna. Bara efter något man själv gjort (celeArm), aldrig när data laddas från molnet. */
 let celeArm=false, celeSeen=null, celeSig='', celeT=0;
-const CELE_K='rs-cele', MS_K='rs-ms';
+const MS_K='rs-ms';
 function celebrate(txt,small){let el=$('#cele');
   if(!el){el=document.createElement('div');el.id='cele';el.setAttribute('role','status');el.setAttribute('aria-live','polite');document.body.appendChild(el)}
   el.className='cele'+(small?' sm':'');
@@ -3917,7 +3937,7 @@ function celebrate(txt,small){let el=$('#cele');
 const MS_TXT={pass:v=>v===1?'Ditt första pass':v+' pass',km:v=>v+' km löpning',ton:v=>v+' ton lyft totalt',mob:v=>v+' rörlighetspass',stepdays:v=>v+' dagar över stegmålet',streak:v=>v+' dagar i rad'};
 function celeCheck(){const arm=celeArm;celeArm=false;
   try{const k=today(),ok=dayFloor(k).ok;let shown=false;
-    if(arm&&celeSeen&&celeSeen.k===k&&!celeSeen.ok&&ok&&localStorage.getItem(CELE_K)!==k){localStorage.setItem(CELE_K,k);celebrate('Dagen är hel.');shown=true}
+    if(arm&&celeSeen&&celeSeen.k===k&&!celeSeen.ok&&ok&&!(S.days[k]&&S.days[k].cele)){day(k).cele=1;markDirty('days',monthOf(k));celebrate('Dagen är hel.');shown=true}
     celeSeen={k,ok};
     const sig=S.log.length+'/'+Object.keys(S.days).length;if(!arm&&sig===celeSig&&localStorage.getItem(MS_K))return;celeSig=sig;
     let prev=null;try{prev=JSON.parse(localStorage.getItem(MS_K)||'null')}catch(e){}
@@ -4181,7 +4201,7 @@ function viewJag(){
   const daily=`${sStep('stepGoal','Stegmål per dag',+st.stepGoal||10000,2000,25000,v=>v.toLocaleString('sv-SE'))}
    ${sTog('adaptSteps','Höj stegmålet automatiskt',!!st.adaptSteps,'Höjs med 1 000 steg när du klarat målet minst 5 dagar en vecka, upp till 10 000.')}
    ${sStep('moveGoal','Rörelsepauser per dag',+st.moveGoal||8,4,12)}
-   <p class="small muted" style="margin:0">Varje dag finns också en promenad och en kort rörlighetsrutin att bocka av.</p>`;
+   <p class="small muted" style="margin:0">Dagens golv: lite rörelse (promenad, stegmålet eller hälften av pauserna) och lite rörlighet (en rutin eller två lugna pauser) ger en hel dag.</p>`;
   const vSum=`${(+st.stepGoal||10000).toLocaleString('sv-SE')} steg · ${+st.moveGoal||8} rörelsepauser/dag`;
   /* Kroppen */
   const body=`${sOpt('sex','Vem tränar?',[['k','Tjej / kvinna'],['m','Kille / man'],['','Vill inte ange']],st.sex||'')}
