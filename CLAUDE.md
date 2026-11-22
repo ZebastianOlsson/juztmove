@@ -19,6 +19,8 @@ Läs PRODUKT.md innan du bygger nya funktioner eller ändrar flöden.
 - `--spot` för framsteg (ringar, staplar, värmekarta); `--c-s`/`--run`/`--mob` bara för styrka/löpning/rörlighet.
 - Rubriker och siffror i Manrope 700/800 med tätt teckenavstånd, brödtext i IBM Plex Sans. Inga versaler i rubriker.
 - Inga röda varningar, gradienter eller fler än en accent per vy.
+- Kort på Idag får en mjuk ton i sin aktivitets färg (styrka/löpning/rörlighet/vardagsrörelse). Dagens huvudpass markeras med starkare ton + ram i aktivitetsfärgen, aldrig med mörk yta. --accent används bara för knappar och framsteg.
+- Tema: Auto/Ljust/Mörkt (`settings.theme`, Jag → Utseende). Varje regel för mörkt läge finns både som `:root[data-theme="dark"]` och under `prefers-color-scheme: dark` med `:root:not([data-theme="light"])`. Inga hårdkodade färger utanför variablerna.
 
 ## Regler som inte får brytas
 1. **Användarnas sparade data får aldrig gå sönder.** Lägg bara till nya fält, byt aldrig namn på eller ta bort befintliga (settings, days-ÅÅÅÅ-MM, log-ÅÅÅÅ-MM, library). Data från molnet kan vara fryst – klona (JSON) innan den ändras.
