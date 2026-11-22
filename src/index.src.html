@@ -2537,7 +2537,7 @@ function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(1
      <div class="chips wrap" style="margin-top:6px"><button class="chip" type="button" data-stepq="vanligt">Ungefär som vanligt</button><button class="chip" type="button" data-stepq="mindre">Mindre</button><button class="chip" type="button" data-stepq="mer">Mer</button></div></div></div>
    <div class="fl ${f.pauses>=f.half?'done':''}">${box(f.pauses>=f.half,'disabled',f.half+' rörelsepauser')}<div class="grow"><strong class="num">${f.half} rörelsepauser</strong><div class="small muted num">${Math.min(f.pauses,f.half)} av ${f.half} gjorda</div></div></div>
    <div class="flpart"><strong>Rörlighet</strong><span class="small muted num">${f.mob?'Klart ✓':'en rutin eller två lugna pauser'}</span></div>
-   <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighetsrutin</strong><div class="small muted">${esc(m.t)}, ${m.min} min${f.routine?'':` · eller två lugna pauser (${Math.min(f.calm,2)} av 2)`}</div>${(()=>{if(f.routine)return '';const mf=mobFeel();return mf.why?`<div class="why1">${esc(mf.why)}${mf.long&&mf.long.id!==m.id?` <button class="linkbtn small" type="button" data-mob="${mf.long.id}">${esc(mf.long.t)}, ${mf.long.min} min</button>`:''}</div>`:''})()}</div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
+   <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighetsrutin</strong><div class="small muted">${esc(m.t)}, ${m.min} min${f.routine?'':` · eller två lugna pauser (${Math.min(f.calm,2)} av 2)`}</div>${(()=>{if(f.routine)return '';const mf=mobFeel();return mf.why?`<div class="why1">${esc(mf.why)}${mf.long&&mf.long.id!==m.id?` <button class="linkbtn small" type="button" data-mob="${mf.long.id}">Starta rörlighet: ${esc(mf.long.t)} (${mf.long.min} min)</button>`:''}</div>`:''})()}</div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
   </section>`}
 function dayNav(){const dt=addDays(new Date(),dayOff);const lab=dayOff===0?'Idag':dayOff===1?'Imorgon':dayOff===-1?'Igår':dt.toLocaleDateString('sv-SE',{weekday:'long'});
   return `<div class="daynav" role="group" aria-label="Byt dag"><button class="btn ghost sm" type="button" data-dayoff="-1" ${dayOff<=-14?'disabled':''} aria-label="Föregående dag">‹</button>
@@ -2830,7 +2830,7 @@ function viewToday(){
       ${lowToggle()}<span class="kind v">Vilodag</span><h2 id="h-rest">${d.did==='skip'?'Du hoppade över idag':'Vila idag – helt okej'}</h2>
       <p style="margin:0">${d.did==='skip'?`Helt okej. Imorgon: ${esc(passLabel(1))}.`:`Passet (${({s:'styrka',r:'löpning',m:'rörlighet'})[seqType(0)]}) väntar till imorgon – ingenting hoppas över.`}</p>
       <p class="small muted" style="margin:0">Rörelsepauser och steg räknas fortfarande – lite rörelse hjälper återhämtningen.</p>
-      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">${esc(m.t)} (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
+      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta rörlighet: ${esc(m.t)} (${m.min} min)</button>${d.did==='skip'?(canUndoSkip()?'<button class="btn ghost sm" type="button" data-skipundo>Ångra</button>':''):'<button class="btn ghost sm" type="button" data-undoplan>Ångra</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över passet helt</button>'}</div>
     </section>`;
   } else {
     const m=mobFor(new Date());
@@ -2838,7 +2838,7 @@ function viewToday(){
       ${lowToggle()}<span class="kind m">Återhämtning</span>
       <h2 id="h-mob">Rörlighet och en lång promenad</h2>
       <p style="margin:0" class="muted">Vilodag från tung träning. Rör dig ändå: promenad, lite yoga eller stretch.</p>
-      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta ${esc(m.t)} (${m.min} min)</button>
+      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta rörlighet: ${esc(m.t)} (${m.min} min)</button>
       ${seqInit().res===k?'<span class="pill mob">Dagen avbockad ✓</span>':'<button class="btn ghost sm" type="button" data-resolve>Klar med dagen ✓</button>'}</div>
       <details><summary>Sugen på att träna ändå?</summary><p class="small muted" style="margin:8px 0">Kör gärna ett extra pass. Det räknas som bonus – nästa planerade pass ligger kvar och programmet fortsätter i ordning.</p>
       <div class="row"><button class="btn ghost sm" type="button" data-dayplan="s">Styrka idag</button><button class="btn ghost sm" type="button" data-dayplan="r">Löpning idag</button></div></details>
@@ -4592,7 +4592,11 @@ function mobRoutines(){const iss=S.settings.issues||[],pel=iss.includes('bäcken
   /* Längden gäller de allmänna rutinerna – knä- och bålrutinerna man själv valt till är alltid med. */
   const f=mp==='kort'?l.filter(x=>x.knee||x.pelvic||x.min<10):mp==='lång'?l.filter(x=>x.knee||x.pelvic||x.min>=10):l;return f.length?f:l}
 /* Rutinen för en viss dag – samma överallt (toppkortet, raden under Vardagsrörelse, Vecka och Framåt). */
-function mobFor(date){const l=mobRoutines(),d=date||new Date(),base=l[d.getDate()%l.length];
+/* "Efter löpning" föreslås bara när ett löppass är loggat samma dag eller dagen innan – då väljs den. Andra dagar väljs en annan rutin. */
+function runNear(d){const k=dkey(d),y=dkey(addDays(d,-1));return S.log.some(l=>l.type==='löpning'&&(l.date===k||l.date===y))}
+function mobFor(date){const all=mobRoutines(),d=date||new Date(),near=runNear(d),lop=all.find(x=>x.id==='mob-lop');
+  const l=all.filter(x=>x.id!=='mob-lop').length?all.filter(x=>x.id!=='mob-lop'):all;
+  const base=near&&lop?lop:l[d.getDate()%l.length];
   /* Efter en rutin som kändes tung blir nästa rutin kortare. */
   if(dkey(d)===today()&&mobFeel().short){const sh=l.filter(x=>!x.knee&&!x.pelvic&&x.min<base.min).sort((a,b)=>a.min-b.min)[0];if(sh)return sh}
   return base}
