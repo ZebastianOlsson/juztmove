@@ -32,7 +32,7 @@
 /* Grafisk profil Dagsljus: papper, svart och en solgul punkt för framsteg. Rubriker i Manrope. */
 :root{
   --bg:#F7F6F1; --surface:#FFFFFF; --ink:#1D1B16; --muted:#6B675C; --line:#E4E1D6;
-  --accent:#1D1B16; --accent-ink:#F7F6F1; --accent-soft:#FBEFC9; --spot:#E3A21A;
+  --accent:#1D1B16; --accent-ink:#F7F6F1; --accent-soft:#FBEFC9; --spot:#E3A21A; --spot-ink:#1D1B16;
   --run:#C2552D; --run-soft:#F8E4DA; --mob:#5E62B0; --mob-soft:#E6E7F5;
   --good:#2F7A55; --warn:#B45309; --on-run:#FFFFFF; --on-mob:#FFFFFF; --on-spot:#1D1B16; --knob:#FFFFFF;
   --str-soft:#E2EEE8; --str-tint:#CDE2D6; --run-tint:#F3CFBD; --mob-tint:#D3D5EF; --day-tint:#F7DE9C; --tone-muted:#55514A; --tone-line:#CFC7AE;
@@ -43,7 +43,7 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#14130F; --surface:#1D1C17; --ink:#F1EFE7; --muted:#A5A092; --line:#2F2D26;
-    --accent:#F2C14E; --accent-ink:#241A00; --accent-soft:#3A3016; --spot:#F2C14E;
+    --accent:#F2C14E; --accent-ink:#241A00; --accent-soft:#3A3016; --spot:#F2C14E; --spot-ink:#241A00;
     --run:#EE8F64; --run-soft:#3A2419; --mob:#A3A6EE; --mob-soft:#26284A;
     --good:#6FCB9B; --warn:#F59E0B; --on-run:#2A1206; --on-mob:#14163A; --on-spot:#1D1B16; --knob:#F1EFE7;
     --str-soft:#1E2E27; --str-tint:#26392F; --run-tint:#4A2D1F; --mob-tint:#30335C; --day-tint:#4A3C1A; --tone-muted:#CFCABD; --tone-line:#6A604A; color-scheme:dark;
@@ -51,7 +51,7 @@
 }
 :root[data-theme="dark"]{
   --bg:#14130F; --surface:#1D1C17; --ink:#F1EFE7; --muted:#A5A092; --line:#2F2D26;
-  --accent:#F2C14E; --accent-ink:#241A00; --accent-soft:#3A3016; --spot:#F2C14E;
+  --accent:#F2C14E; --accent-ink:#241A00; --accent-soft:#3A3016; --spot:#F2C14E; --spot-ink:#241A00;
   --run:#EE8F64; --run-soft:#3A2419; --mob:#A3A6EE; --mob-soft:#26284A;
   --good:#6FCB9B; --warn:#F59E0B; --on-run:#2A1206; --on-mob:#14163A; --on-spot:#1D1B16; --knob:#F1EFE7;
     --str-soft:#1E2E27; --str-tint:#26392F; --run-tint:#4A2D1F; --mob-tint:#30335C; --day-tint:#4A3C1A; --tone-muted:#CFCABD; --tone-line:#6A604A; color-scheme:dark;
@@ -115,6 +115,25 @@ h3{font-size:18px}
 .kn{font-size:14px;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ksel{margin:-8px 0 14px}.kpepp{margin:-8px 0 14px;font-size:14px;color:var(--muted)}
 .klist{margin:0;padding-left:18px}
+/* Avklarat läge på Idag: vanligt kort, bara bocken bär färg. Resten ligger hopfällt bakom ett tryck. */
+.card.isdone{padding:14px 16px}
+.donemore>summary{list-style:none;display:flex;align-items:center;gap:14px;cursor:pointer;color:var(--ink);min-height:48px;font-size:15px}
+.donemore>summary::-webkit-details-marker{display:none}
+.donemore>summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:12px}
+.donemore>summary .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.donemore>summary h2{font-size:20px;line-height:1.15}
+.donemore .dlab{font-size:13px;color:var(--muted)}
+.dmore{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)}.dmore::after{content:'▾'}.donemore[open] .dmore::after{content:'▴'}
+.dmore .o,.donemore[open] .dmore .c{display:none}.donemore[open] .dmore .o{display:inline}
+.donebody{margin-top:12px;padding-top:14px;border-top:1px solid var(--line)}
+.bigcheck{flex:none;width:44px;height:44px;border-radius:50%;background:var(--spot);display:grid;place-items:center}
+.bigcheck svg{width:24px;height:24px;fill:none;stroke:var(--spot-ink);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-reduced-motion: no-preference){
+  .bigcheck.fresh{animation:ckpop .4s cubic-bezier(.3,1.4,.5,1) both}
+  .bigcheck.fresh path{stroke-dasharray:20;stroke-dashoffset:20;animation:ckdraw .3s .2s ease-out forwards}
+}
+@keyframes ckpop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes ckdraw{to{stroke-dashoffset:0}}
 .dayline{margin:-8px 0 14px;font-size:16px;font-weight:500}
 .movebox .btn.big{min-height:54px;font-size:17px}
 .mvk{color:var(--ink);font-weight:600}
@@ -410,7 +429,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='2ff3e47dd3';
+const BUILD='public', VERSION='b58675d859';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -2483,7 +2502,8 @@ function render(){
   const v=$('#view');
   try{
     autoAdvance();
-    v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress,jag:viewJag})[tab]();
+    if(tab==='idag')doneNow=new Set();v.innerHTML=(newVer&&!active&&!runState&&!mobState?'<div class="note updnote" role="status"><span>Ny version finns – ladda om</span><button class="btn sm" type="button" data-reload>Ladda om</button></div>':'')+({idag:viewToday,vecka:viewWeek,bibliotek:viewLibrary,framsteg:viewProgress,jag:viewJag})[tab]();
+    if(tab==='idag'&&dayOff===0)markDoneSeen();
     bind(v);
     celeCheck();
     kTick();
@@ -2533,8 +2553,8 @@ function floorRing(n){const r=34,c=2*Math.PI*r;
   return `<svg class="ring" viewBox="0 0 84 84" role="img" aria-label="${n} av 2 delar klara"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--h0)" stroke-width="10"/>${n?`<circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--spot)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c*n/2).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>`:''}<text x="42" y="49" text-anchor="middle" font-family="Manrope,Helvetica Neue,Arial,sans-serif" font-weight="800" font-size="22" fill="var(--ink)">${n}/2</text></svg>`}
 function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(100,Math.round(st/goal*100));
   const box=(on,attr,lab)=>`<button class="box" type="button" role="checkbox" aria-checked="${on}" ${attr} aria-label="${lab}">${on?'✓':''}</button>`;
-  return `<section class="card t-d" aria-labelledby="h-golv">
-   <div class="floorhead">${floorRing(f.n)}<div><h2 id="h-golv">Dagens golv</h2><p class="small muted" style="margin:2px 0 0">Lite rörelse och lite rörlighet ger en hel dag.</p></div></div>
+  const whole=f.move&&f.mob;
+  const inner=`   <div class="floorhead">${floorRing(f.n)}<div><h2 ${whole?'':'id="h-golv"'}>Dagens golv</h2><p class="small muted" style="margin:2px 0 0">Lite rörelse och lite rörlighet ger en hel dag.</p></div></div>
    <div class="flpart"><strong>Rörelse</strong><span class="small muted num">${f.move?'Klart ✓':`promenad, stegmålet eller ${f.half} pauser`}</span></div>
    <div class="fl ${d.walk?'done':''}">${box(!!d.walk,'data-toggle="walk"','Promenad klar')}<div class="grow"><strong>Promenad 30 min</strong><div class="small muted">Ut och gå, gärna i dagsljus.</div></div></div>
    <div class="fl ${f.steps?'done':''}">${box(f.steps,'disabled','Stegmål nått')}<div class="grow"><strong class="num">${goal.toLocaleString('sv-SE')} steg</strong><div class="sbar"><div class="t"><span style="width:${pct}%"></span></div><span class="small muted num">${st.toLocaleString('sv-SE')}${d.stepsEst?' ca':''}</span></div>
@@ -2544,7 +2564,10 @@ function floorCard(k,d,goal,m){const f=dayFloor(k),st=+d.steps||0,pct=Math.min(1
    <div class="fl ${f.pauses>=f.half?'done':''}">${box(f.pauses>=f.half,'disabled',f.half+' rörelsepauser')}<div class="grow"><strong class="num">${f.half} rörelsepauser</strong><div class="small muted num">${Math.min(f.pauses,f.half)} av ${f.half} gjorda</div></div></div>
    <div class="flpart"><strong>Rörlighet</strong><span class="small muted num">${f.mob?'Klart ✓':'en rutin eller två lugna pauser'}</span></div>
    <div class="fl ${d.mob?'done':''}">${box(!!d.mob,'data-toggle="mob"','Rörlighet klar')}<div class="grow"><strong>Rörlighetsrutin</strong><div class="small muted">${esc(m.t)}, ${m.min} min${f.routine?'':` · eller två lugna pauser (${Math.min(f.calm,2)} av 2)`}</div>${(()=>{if(f.routine)return '';const mf=mobFeel();return mf.why?`<div class="why1">${esc(mf.why)}${mf.long&&mf.long.id!==m.id?` <button class="linkbtn small" type="button" data-mob="${mf.long.id}">Starta rörlighet: ${esc(mf.long.t)} (${mf.long.min} min)</button>`:''}</div>`:''})()}</div>${d.mob?'':`<button class="btn sm" type="button" data-mob="${m.id}">Starta</button>`}</div>
-  </section>`}
+`;
+  if(whole){const mv=f.walk?'promenad':f.steps?'stegmålet':f.half+' rörelsepauser',mb=f.routine?'rörlighetsrutin':'två lugna pauser',what=mv+' och '+mb;
+    return doneCard('floor:'+k,{id:'h-golv',label:'Dagens golv',title:'Dagen är hel',result:what[0].toUpperCase()+what.slice(1),more:'Visa dagen',body:inner})}
+  return `<section class="card t-d" aria-labelledby="h-golv">${inner}</section>`}
 function dayNav(){const dt=addDays(new Date(),dayOff);const lab=dayOff===0?'Idag':dayOff===1?'Imorgon':dayOff===-1?'Igår':dt.toLocaleDateString('sv-SE',{weekday:'long'});
   return `<div class="daynav" role="group" aria-label="Byt dag"><button class="btn ghost sm" type="button" data-dayoff="-1" ${dayOff<=-14?'disabled':''} aria-label="Föregående dag">‹</button>
    <div class="dn2"><strong class="cap">${esc(lab)}</strong><span class="small muted">${esc(dt.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}))}</span></div>
@@ -2789,10 +2812,21 @@ function viewAhead(){
     <section class="card hero ${a.typ==='r'?'run':a.typ==='s'?'':'mob'} stack"><span class="kind ${esc(a.typ)}">${esc(lab)}</span>${body}${act}</section>
     <button class="btn ghost" type="button" data-dayoff="0">Tillbaka till idag</button></div>`;
 }
+/* Avklarat läge: stor bock, rubrik och resultat på en rad. Allt annat ligger kvar, hopfällt bakom ett tryck på kortet.
+   Bocken ritas in första gången kortet syns avklarat utan blad över (inte vid första ritningen efter start). */
+let doneSeen=null,doneNow=new Set();const doneOpen=new Set();
+function markDoneSeen(){const now=doneNow;if(!doneSeen){doneSeen=new Set(now);return}
+  setTimeout(()=>{if(tab==='idag'&&dayOff===0&&!$('#sheet').classList.contains('open'))now.forEach(k=>doneSeen.add(k))},700)}
+function doneCard(key,o){const fresh=!!doneSeen&&!doneSeen.has(key),open=doneOpen.has(key);doneNow.add(key);
+  return `<section class="card isdone" aria-labelledby="${o.id}"><details class="donemore" data-donekey="${esc(key)}" ${open?'open':''}>
+   <summary aria-expanded="${open}"><span class="bigcheck ${fresh?'fresh':''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>
+    <div class="grow"><span class="dlab">${esc(o.label)}</span><h2 id="${o.id}">${esc(o.title)}</h2>${o.result?`<span class="small muted num">${esc(o.result)}</span>`:''}</div>
+    <span class="dmore"><span class="c">${esc(o.more||'Visa passet')}</span><span class="o">Dölj</span></span></summary>
+   <div class="stack donebody">${o.body}</div></details></section>`}
 function viewToday(){
   if(dayOff>0) return viewAhead();
   if(dayOff<0) return viewPast();
-  adaptSteps();
+  adaptSteps();doneNow=new Set();
   const k=today(), d=day(k), goal=S.settings.stepGoal, plan=d.did==='skip'?'v':plannedFor(new Date());
   const wait=waitingInfo();
   const done=logsOn(k), inHero=new Set();
@@ -2803,8 +2837,12 @@ function viewToday(){
     const doneW=done.find(l=>l.type==='styrka');if(doneW)inHero.add(doneW);
     const w0=doneW&&wById(doneW.wid)?wById(doneW.wid):gen?genCurrent():suggestion();
     const w=!doneW&&(d.low||pauseBackOn())?lighten(w0):w0, aw=w?AW(w):w;
-    hero=`<section class="card hero pass t-s stack" aria-labelledby="h-pass">${lowToggle()}
-      <div class="row between"><span class="kind s">Dagens pass · styrka</span>${did('styrka')?'<span class="pill">Klart ✓</span>':''}</div>
+    hero=doneW&&w?doneCard('pass:'+doneW.ts,{id:'h-pass',label:'Dagens pass · styrka',title:w.t?wTitle(w):'Styrkepass',
+       result:[doneW.min?decStr(doneW.min)+' min':'',+doneW.vol?Math.round(+doneW.vol).toLocaleString('sv-SE')+' kg':'',KAND[doneW.kand]?KAND[doneW.kand].toLowerCase():''].filter(Boolean).join(' · '),
+       body:`${workoutSummary(w)}<div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
+       <div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Öppna passet</button>${canResume(doneW)&&!active?`<button class="btn ghost sm" type="button" data-resumelog="${doneW.ts}">Fortsätt passet</button>`:''}<button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`})
+    :`<section class="card hero pass t-s stack" aria-labelledby="h-pass">${lowToggle()}
+      <div class="row between"><span class="kind s">Dagens pass · styrka</span></div>
       ${!w&&swapped(gen)?swapBackHTML(gen):''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${doneW?'':passLineHTML(w,gen)}${doneW?'':[w.why,(kgEase()||{}).why].filter(Boolean).map(t=>`<div class="why1">${esc(t)}</div>`).join('')}${workoutSummary(w)}
       <div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
@@ -2816,14 +2854,10 @@ function viewToday(){
   } else if(plan==='r'){
     const list0=rankRuns(), list=d.low||pauseBackOn()?['r-fartlek','r-lat','r-5d','r-lugn'].map(id=>RUNS.find(x=>x.id===id)).filter(r=>r&&list0.includes(r)).concat(list0.filter(r=>!['r-fartlek','r-lat','r-5d','r-lugn'].includes(r.id))):list0, doneRun=(()=>{const x=done.find(l=>l.type==='löpning');if(x)inHero.add(x);return x})(), r=(doneRun&&RUNS.find(x=>x.id===doneRun.rid))||list[runIdx%list.length], sp=speedHint(), prev=lastRun(r.id);
     const catTxt=r.track==='nyb'?`Steg ${RUNS_NYB.indexOf(r)+1} av ${RUNS_NYB.length}`:{1:'Intervaller',2:r.track==='5k'?'Lugnt/längre':'Kortare tempo',3:'Lättare vecka'}[r.cat];
-    hero=`<section class="card hero run pass t-r stack" aria-labelledby="h-run">${lowToggle()}
-      <div class="row between"><span class="kind r">Dagens pass · löpning</span>${did('löpning')?'<span class="pill run">Klart ✓</span>':''}</div>
-      <h2 id="h-run">${esc(r.t)}</h2>
-      <div class="row"><span class="pill run">${r.where==='band'?'Löpband':r.where==='ute'?'Utomhus':'Ute eller band'}</span><span class="pill line">${catTxt}</span><span class="small muted num">ca ${r.min} min</span></div>
+    const runBody=`<div class="row"><span class="pill run">${r.where==='band'?'Löpband':r.where==='ute'?'Utomhus':'Ute eller band'}</span><span class="pill line">${catTxt}</span><span class="small muted num">ca ${r.min} min</span></div>
       <p style="margin:0">${esc(runDesc(r))}</p>
       ${(()=>{const ne=needEasy();return (ne.loadHigh?`<div class="note waitnote">Belastningen senaste veckan är ${Math.round(ne.ratio*100)} % av ditt snitt – över 130 %. Ta ett lättare pass idag.</div>`:'')+(ne.twoHard?'<div class="note waitnote">Två tunga pass i rad – dags för ett lätt pass.</div>':'')})()}
       <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Jag.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
-      ${doneRun?`<div class="donebox">✓ Klart för idag · ${[doneRun.min?String(doneRun.min).replace('.',',')+' min':'',doneRun.km?String(doneRun.km).replace('.',',')+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · ')}</div>`:''}
       <details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(r)}<p class="small muted" style="margin:8px 0 0">Byt fart på bandet direkt när en ny del börjar – timern säger till. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p></details>
       ${''&&r.where==='band'&&(S.settings.runLevel||'10k')==='10k'?`<div class="note num">Jogg ca <strong>${sp.jog.toFixed(1).replace('.',',')} km/h</strong> · hårda bitar ca <strong>${sp.hard.toFixed(1).replace('.',',')} km/h</strong>${sp.from?' (från ditt senaste pass)':' (justera efter känsla)'}${prev?` · förra gången detta pass: ${prev.rpe?prev.rpe+'/10':esc(prev.feel||'')}`:''}</div>`:''}
       ${doneRun?`<div class="row"><button class="btn ghost sm" type="button" data-editrun="${doneRun.ts}">${CLAUDE_SAMPLE?'📷 ':''}Komplettera passet</button></div>`
@@ -2832,7 +2866,13 @@ function viewToday(){
       ${!doneRun&&runIdx%list.length!==0?RESTORE_BTN:''}
       <details><summary>Fler alternativ</summary><div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-runwhere>${r.where==='band'?'Mild dag – kör ute':'Kör på band'}</button><button class="btn ghost sm" type="button" data-dayplan="s">Styrka i stället</button></div>
       <ul class="small muted" style="margin:8px 0 0;padding-left:18px">${RUN_TIPS.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></details>
-      ${did('löpning')?'':skipBox()}
+`;
+    hero=doneRun?doneCard('pass:'+doneRun.ts,{id:'h-run',label:'Dagens pass · löpning',title:r.t,
+       result:[doneRun.min?decStr(doneRun.min)+' min':'',doneRun.km?decStr(doneRun.km)+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · '),body:runBody})
+    :`<section class="card hero run pass t-r stack" aria-labelledby="h-run">${lowToggle()}
+      <div class="row between"><span class="kind r">Dagens pass · löpning</span></div>
+      <h2 id="h-run">${esc(r.t)}</h2>
+      ${runBody}${skipBox()}
     </section>`;
   } else if(plan==='v'){
     const m=mobFor(new Date());
@@ -2844,7 +2884,16 @@ function viewToday(){
     </section>`;
   } else {
     const m=mobFor(new Date());
-    hero=`<section class="card hero pass t-m stack" aria-labelledby="h-mob">
+    const ml=done.find(l=>l.type==='rörlighet');if(ml)inHero.add(ml);
+    hero=ml?doneCard('mob:'+ml.ts,{id:'h-mob',label:'Återhämtning · rörlighet',title:ml.title||'Rörlighet',
+       result:[ml.min?decStr(ml.min)+' min':'',KAND[ml.kand]?KAND[ml.kand].toLowerCase():''].filter(Boolean).join(' · '),more:'Visa dagen',body:`<h3>Rörlighet och en lång promenad</h3>
+      <p style="margin:0" class="muted">Vilodag från tung träning. Rör dig ändå: promenad, lite yoga eller stretch.</p>
+      <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta rörlighet: ${esc(m.t)} (${m.min} min)</button>
+      ${seqInit().res===k?'<span class="pill mob">Dagen avbockad ✓</span>':'<button class="btn ghost sm" type="button" data-resolve>Klar med dagen ✓</button>'}</div>
+      <details><summary>Sugen på att träna ändå?</summary><p class="small muted" style="margin:8px 0">Kör gärna ett extra pass. Det räknas som bonus – nästa planerade pass ligger kvar och programmet fortsätter i ordning.</p>
+      <div class="row"><button class="btn ghost sm" type="button" data-dayplan="s">Styrka idag</button><button class="btn ghost sm" type="button" data-dayplan="r">Löpning idag</button></div></details>
+      ${d.plan&&seqInit().res===k?'<button class="btn ghost sm" type="button" data-undoplan>Återställ dagens plan</button>':''}`})
+    :`<section class="card hero pass t-m stack" aria-labelledby="h-mob">
       ${lowToggle()}<span class="kind m">Återhämtning</span>
       <h2 id="h-mob">Rörlighet och en lång promenad</h2>
       <p style="margin:0" class="muted">Vilodag från tung träning. Rör dig ändå: promenad, lite yoga eller stretch.</p>
@@ -4789,6 +4838,7 @@ function bind(root){
   bindCheckin(root);
   bindPast(root);bindOther(root);
   bindSettings(root);
+  root.querySelectorAll('details.donemore').forEach(d=>d.addEventListener('toggle',()=>{const k=d.dataset.donekey;d.open?doneOpen.add(k):doneOpen.delete(k);const sm=d.querySelector('summary');if(sm)sm.setAttribute('aria-expanded',String(d.open))}));
   root.querySelectorAll('[data-weekoff]').forEach(b=>b.onclick=()=>{const v=+b.dataset.weekoff;weekOff=v===0?0:Math.max(-8,Math.min(3,weekOff+v));render();try{window.scrollTo(0,0)}catch(e){}});
   root.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{dayOff=+b.dataset.peek;go('idag')});
   root.querySelectorAll('[data-progp]').forEach(b=>b.onclick=()=>{progP=b.dataset.progp;render()});
