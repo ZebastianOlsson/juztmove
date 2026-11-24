@@ -429,7 +429,7 @@ const MOBILITY = [
  {id:'mob-lop',t:'Efter löpning',min:7,items:[
   ['Vadstretch, rakt knä',60,'30 s per sida.'],['Vadstretch, böjt knä',60,'30 s per sida.'],['Framsida lår stående',60,'30 s per sida.'],
   ['Hamstring på trappsteg',60,'30 s per sida.'],['Duvan',90,'45 s per sida.'],['Höftböjare i utfall',90,'45 s per sida.']]},
- {id:'mob-kna',t:'Knästark 15',min:15,knee:1,note:'Ingen smärta över 3 av 10. Börja med kroppsvikt och öka långsamt. Har du en skada: stäm av med fysioterapeut.',
+ {id:'mob-kna',t:'Knästark 15',min:15,knee:1,note:'Ingen smärta över 3 av 10. Börja med kroppsvikt och öka långsamt.',
   items:[
   ['Bakåtgång',120,'Korta steg baklänges, tryck ifrån med framfoten. På löpband: lutning, låg fart, håll i dig.'],
   ['Tibialislyft mot vägg',60,'Rygg mot vägg, hälarna en bit ut. Lyft tårna – det ska bränna i smalbenet.'],
@@ -439,7 +439,7 @@ const MOBILITY = [
   ['Elephant walk',60,'Händerna i golvet, benen så raka du kan, böj ett knä i taget.'],
   ['Couch stretch',120,'Bakre knät mot vägg eller soffa, spänn rumpan. 60 s per sida.']]}
 ];
-MOBILITY.push({id:'mob-bal',t:'Bål & bäckenbotten',min:8,pelvic:1,note:'Gravid eller nyförlöst? Stäm av med barnmorska eller fysioterapeut innan du börjar med tung träning, hopp och löpning.',items:[
+MOBILITY.push({id:'mob-bal',t:'Bål & bäckenbotten',min:8,pelvic:1,note:'Gravid eller nyförlöst? Börja försiktigt med tung träning, hopp och löpning.',items:[
   ['Bäckenbottenknip, långa',60,'Knip och lyft inåt-uppåt, håll 5–10 s och släpp helt. Andas hela tiden.'],
   ['Bäckenbottenknip, snabba',45,'10 snabba knip, vila några sekunder, upprepa.'],
   ['Dead bug',90,'Ländryggen mot golvet. Sträck ut motsatt arm och ben långsamt.'],
@@ -2211,7 +2211,7 @@ function renderOB(){
     <div class="eyebrow" style="margin-top:12px">Vad gillar du mest?</div><div class="opts">${obOpt('runStyle','intervaller','Intervaller och korta pass')}${obOpt('runStyle','lugnt','Lugna, längre pass')}</div>`;
   if(step==='issues') body=`<h1>Något som krånglar?</h1><p class="muted">Övningar som belastar området väljs bort. Välj inget om allt känns bra.</p><div class="opts">
     ${obOpt('issues','knä','Knän','',1)}${obOpt('issues','rygg','Ländrygg','',1)}${obOpt('issues','axel','Axlar','',1)}${obOpt('issues','fot','Fötter eller vader','',1)}</div>
-    <div class="eyebrow" style="margin-top:12px">Tillägg</div><div class="opts">${obOpt('issues','bäckenbotten','Bål & bäckenbotten','Korta rutiner läggs in bland rörligheten',1)}${a.sex==='m'?'':obOpt('issues','gravid','Gravid eller nyförlöst','Inga hopp, försiktigare start. Stäm av med barnmorska eller fysioterapeut.',1)}${a.sex==='m'?'':obOpt('issues','mens','Kunna markera mensdagar','Knappen för lättare dag heter ”Mens eller låg energi”',1)}</div>
+    <div class="eyebrow" style="margin-top:12px">Tillägg</div><div class="opts">${obOpt('issues','bäckenbotten','Bål & bäckenbotten','Korta rutiner läggs in bland rörligheten',1)}${a.sex==='m'?'':obOpt('issues','gravid','Gravid eller nyförlöst','Inga hopp, försiktigare start.',1)}${a.sex==='m'?'':obOpt('issues','mens','Kunna markera mensdagar','Knappen för lättare dag heter ”Mens eller låg energi”',1)}</div>
     <div class="eyebrow" style="margin-top:12px">Knästarka benpass</div><div class="opts">${obOpt('knee',1,'Ja, gör mina benpass knästarka','Bakåtgång, step-downs, split squats med knät över tårna, tibialislyft.')}${obOpt('knee',0,'Nej, vanliga benpass')}</div>`;
   if(step==='sit') body=`<h1>Hur ser din vardag ut?</h1><p class="muted">Styr hur många rörelsepauser appen föreslår.</p><div class="opts">
     ${obOpt('sit','mycket','Jag sitter mycket','Kontor, skärm, bil')}${obOpt('sit','varierat','Blandat')}${obOpt('sit','lite','Jag rör mig mycket i jobbet')}</div>`;
@@ -2860,7 +2860,7 @@ function viewToday(){
    <div class="stack">
    ${weekStrip()}
    ${wait&&!pauseNow()&&(plan==='s'||plan==='r')?`<div class="note waitnote" role="status"><strong>Ditt pass har väntat sedan ${esc(wait.since.toLocaleDateString('sv-SE',{weekday:'long'}))}.</strong> Kör det idag, skjut upp det eller hoppa över – schemat fortsätter därifrån.<div class="row" style="margin-top:8px"><button class="btn ghost sm" type="button" data-skipwait>Hoppa över det</button></div></div>`:''}
-   ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Vila från löpning några dagar och kör bara lätt rörlighet och promenader. Blir det inte bättre – eller gör det ont i vila – sök vård, till exempel en fysioterapeut.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
+   ${(()=>{const pa=S.settings.painAlert;if(!pa||daysBetween(pa.date,today())>10)return '';return `<section class="card stack backupcard"><h3>Ont i ${esc(String(pa.area||'').toLowerCase())} (${pa.score}/10)</h3><p class="small" style="margin:0">Löppassen blir lätta och utan lutning över 8 % tills du loggar ett pass utan smärta. Styrkepassen påverkas inte.</p><div><button class="btn ghost sm" type="button" data-painok>Det känns bra nu</button></div></section>`})()}
    ${backupDue()?backupCard():syncStaleNote()}
    ${movesCard()}
    ${floorCard(k,d,goal,mobToday)}
@@ -3909,7 +3909,7 @@ function fitTxt(){const avg=passAvg3w(),lo=Math.max(0,Math.floor(avg)),hi=lo+1,N
   return lo===0?'Ett pass i veckan verkar passa dig just nu.':`${N[lo]||lo} till ${(N[hi]||String(hi)).toLowerCase()} pass i veckan verkar passa dig just nu.`}
 function renderCiResult(){
   const a=ciQ.a;const P=ciProposals(a);ciQ.P=P;ciQ.sel=ciQ.sel||new Set(P.map(p=>p.id));
-  const painNote=a.body==='ont'?(a.score>=5?`Ont i ${esc(a.area.toLowerCase())} ${a.score}/10: vila från det som gör ont några dagar. Går det inte över – sök vård, till exempel en fysioterapeut. Löppassen blir lätta tills vidare.`:a.score>=3?`Ont i ${esc(a.area.toLowerCase())} ${a.score}/10: nästa löppass blir lätt och utan brant lutning.`:''):a.body==='stel'?'Stel? Rörlighetspassen och promenaderna hjälper – ta gärna ett extra rörlighetspass i veckan.':'';
+  const painNote=a.body==='ont'?(a.score>=5?`Ont i ${esc(a.area.toLowerCase())} ${a.score}/10: vila från det som gör ont några dagar. Löppassen blir lätta tills vidare.`:a.score>=3?`Ont i ${esc(a.area.toLowerCase())} ${a.score}/10: nästa löppass blir lätt och utan brant lutning.`:''):a.body==='stel'?'Stel? Rörlighetspassen och promenaderna hjälper – ta gärna ett extra rörlighetspass i veckan.':'';
   openSheet(`<header class="top"><div><div class="date">Avstämning</div><h1>Förslag</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack">
     ${painNote?`<div class="note">${painNote}</div>`:''}
@@ -4473,7 +4473,7 @@ function saveRun(r){
   let msg=adaptRun(r,runLog.rpe,hardAct), warn='';
   if(area){const a=area.toLowerCase();st.injuries=[...new Set([...(st.injuries||[]),a])]}
   const prevPain=prev&&(+prev.pain_score||0)>=3;
-  if(pain>=5||(pain>=3&&prevPain)){st.runEase=1;st.runPainEase=1;st.noSteep=1;st.painAlert={date:today(),area,score:pain};warn=`Ont i ${area.toLowerCase()} (${pain}/10)${pain<5?' två pass i rad':''}. Vila några dagar. Går det inte över – sök vård, till exempel en fysioterapeut.`}
+  if(pain>=5||(pain>=3&&prevPain)){st.runEase=1;st.runPainEase=1;st.noSteep=1;st.painAlert={date:today(),area,score:pain};warn=`Ont i ${area.toLowerCase()} (${pain}/10)${pain<5?' två pass i rad':''}. Nästa löppass blir lätt och utan brant lutning.`}
   else if(pain>=3){st.runEase=1;st.runPainEase=1;st.noSteep=1;warn=`Ont i ${area.toLowerCase()} (${pain}/10): nästa pass blir lätt och utan lutning över 8 %.`}
   else {st.noSteep=0; if(!pain)st.painAlert=null}
   const ne=needEasy(); if(ne.twoHard){st.runEase=1;msg+=' Två tunga pass i rad – nästa blir ett lätt pass.'}
@@ -4680,7 +4680,7 @@ function viewJag(){
    ${st.sex==='k'?'<p class="small muted" style="margin:0">Styrkepassen som appen bygger lägger lite mer fokus på rumpa och ben.</p>':''}
    <div class="lab" style="font-size:14px;font-weight:600">Något som krånglar?</div><p class="small muted" style="margin:0">Övningar som belastar valda områden väljs bort. Välj inget om allt känns bra.</p>
    <div class="chips wrap">${Object.entries(ISSUE_SV).filter(([k])=>!(st.sex==='m'&&(k==='gravid'||k==='mens'))).map(([k,l])=>`<button class="chip" type="button" data-set="issue" data-val="${k}" aria-pressed="${iss.includes(k)}">${esc(l)}</button>`).join('')}</div>
-   ${iss.includes('gravid')?'<p class="small muted" style="margin:0">Försiktig start: inga hopp eller crunchar. Stäm av med barnmorska eller fysioterapeut.</p>':''}`;
+   ${iss.includes('gravid')?'<p class="small muted" style="margin:0">Försiktig start: inga hopp eller crunchar.</p>':''}`;
   const kSum=({k:'Tjej / kvinna · ',m:'Kille / man · '}[st.sex]||'')+(iss.filter(k=>ISSUE_SV[k]).length?iss.filter(k=>ISSUE_SV[k]).map(k=>ISSUE_SV[k]).join(', '):'Inget särskilt');
   /* Appen */
   const ci=ciConf().every??3;
