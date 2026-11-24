@@ -188,6 +188,7 @@ details.card>summary{cursor:pointer;list-style:none}
 .addhit .grow{min-width:0}.addhit .small{display:block}
 .addacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.addacts .btn{min-height:44px}
 .ex.flash{background:var(--accent-soft);border-radius:10px;transition:background .8s}
+.othpick .btn.sm{min-height:44px;min-width:64px}
 .slex{padding:10px 0;border-top:1px solid var(--line)}.slex:first-child{border-top:0;padding-top:0}
 .slex .nm{font-weight:600}.slsets{font-variant-numeric:tabular-nums;margin-top:2px}
 .sledit .ex{padding:12px 0;border-top:1px solid var(--line)}.sledit .ex:first-child{border-top:0}
@@ -2607,12 +2608,12 @@ function removeCustomGroup(name){const n=normName(name);S.settings.customGroup=c
 function removeCustomOther(name){const n=normName(name);S.settings.customOther=customOther().filter(x=>normName(x)!==n);markDirty('settings')}
 let oth=null;
 function showOtherLog(k,preset){const p=typeof preset==='string'?{act:preset}:(preset||{});
-  oth={k:k||today(),act:p.act==='annat'?'ny':(p.act||'lutgang'),custom:'',min:p.min!=null?String(p.min):'',int:0,kmh:p.kmh!=null?decStr(p.kmh):'5',inc:p.inc!=null?decStr(p.inc):'10',title:'',grp:'',ex:[],own:null};if(addPanel&&addPanel.ctx==='oth')addPanel=null;renderOtherLog()}
+  oth={k:k||today(),act:p.act==='annat'?'ny':(p.act||'lutgang'),custom:'',min:p.min!=null?String(p.min):'',int:0,kmh:p.kmh!=null?decStr(p.kmh):'5',inc:p.inc!=null?decStr(p.inc):'10',title:'',grp:'',ex:[],own:null,open:!p.act};if(addPanel&&addPanel.ctx==='oth')addPanel=null;renderOtherLog()}
 function othKeep(){const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y}
 function othAddEx(name){name=String(name||'').trim().replace(/\s+/g,' ').slice(0,60);if(!name)return;othRead();
   if(oth.ex.some(e=>normName(e.n)===normName(name))){toast(name+' finns redan i listan');return}
   const last=lastExLog(name),n=last&&last.sets&&last.sets.length?Math.min(6,last.sets.length):3;
-  oth.ex.push({n:name,sets:[...Array(n)].map(()=>['',''])});addPanel=null;oth.own=null;othKeep();
+  oth.ex.push({n:name,sets:[...Array(n)].map(()=>['',''])});addPanel=null;oth.own=null;oth.open=false;othKeep();
   const el=document.querySelectorAll('#sheetBody .othex')[oth.ex.length-1];if(el){try{el.scrollIntoView({block:'center'})}catch(e){}}
   toast(name+' tillagd')}
 function othExHTML(){return oth.ex.map((e,i)=>{const prev=lastSetsFor(e.n),last=lastExLog(e.n);
@@ -2627,6 +2628,8 @@ function othExHTML(){return oth.ex.map((e,i)=>{const prev=lastSetsFor(e.n),last=
    <div class="addacts"><button class="btn ghost sm" type="button" data-othaddset="${i}">+ Set</button><button class="btn ghost sm" type="button" data-othrmex="${i}">Ta bort</button></div></div>`}).join('')}
 function othRead(){if(!oth)return;const g=id=>{const e=document.getElementById(id);return e?e.value:null};
   const m=g('othMin'),t=g('othT'),v=g('othKmh'),i=g('othInc'),gr=g('othG'),ow=g('othOwn');if(m!=null)oth.min=m;if(t!=null)oth.title=t;if(v!=null)oth.kmh=v;if(i!=null)oth.inc=i;if(gr!=null)oth.grp=gr;if(ow!=null&&oth.own!=null)oth.own=ow}
+/* Vald aktivitet i kort form – rutan med alla val fälls ihop när man valt (eller lagt till en övning). */
+function othActLabel(){const a=oth.act;if(a==='egen')return oth.custom;if(a==='ny')return 'Egen aktivitet';const f=[...OTHER_DAILY,...OTHER_ACT].find(x=>x[0]===a);return f?f[1]:a}
 function renderOtherLog(){const {k,act}=oth,dt=new Date(k+'T12:00:00'),lut=act==='lutgang',cust=customOther();
   if(act==='egen'&&!cust.some(x=>normName(x)===normName(oth.custom))){oth.act='ny';return renderOtherLog()}
   const chip=(v,l,on)=>`<button class="chip" type="button" data-othact="${esc(v)}" aria-pressed="${on}">${esc(l)}</button>`;
@@ -2634,11 +2637,12 @@ function renderOtherLog(){const {k,act}=oth,dt=new Date(k+'T12:00:00'),lut=act==
   openSheet(`<header class="top"><div><div class="date cap">${esc(k===today()?'Idag':dt.toLocaleDateString('sv-SE',{weekday:'long',day:'numeric',month:'long'}))}</div><h1>Annan träning</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
    <div class="stack"><p class="small muted" style="margin:0">Räknas som extra träning. Schemat och dagens pass påverkas inte.</p>
    <section class="card stack">
-    <div class="setfield"><div class="lab">Vad gjorde du?</div>
+    ${oth.open===false?`<div class="row between othpick" style="flex-wrap:nowrap;align-items:center"><div class="grow"><div class="small muted">Vad gjorde du?</div><strong>${esc(othActLabel())}</strong></div><button class="btn ghost sm" type="button" data-othopen aria-label="Byt aktivitet">Byt</button></div>`
+    :`<div class="setfield"><div class="lab">Vad gjorde du?</div>
      ${group('Vardagsrörelse',OTHER_DAILY.map(([v,l])=>chip(v,l,act===v)).join(''))}
      ${group('Träning',OTHER_ACT.map(([v,l])=>chip(v,l,act===v)).join(''))}
      ${group('Egna',cust.map(n=>chip('egen:'+n,n,act==='egen'&&normName(oth.custom)===normName(n))).join('')+chip('ny','+ Skriv egen',act==='ny'))}
-    </div>
+    </div>`}
     ${act==='ny'?`<label class="f" for="othT">Beskriv kort<input id="othT" type="text" maxlength="${CUSTOM_LEN}" autocomplete="off" placeholder="t.ex. Bar ved" value="${esc(oth.title)}"></label><p class="small muted" style="margin:-4px 0 0">Sparas som ett eget val under Egna, så nästa gång fyller du bara i minuter.</p>`:''}
     ${act==='egen'?`<button class="btn ghost sm" type="button" data-othdel>Ta bort ‘${esc(oth.custom)}’ från listan</button>`:''}
     ${act==='grupp'?`<div class="stack" style="gap:6px"><label class="f" for="othG">Vilket pass? (valfritt)<input id="othG" type="text" maxlength="${CUSTOM_LEN}" autocomplete="off" placeholder="t.ex. spinning, cirkelträning, step" value="${esc(oth.grp)}"></label>
@@ -2707,7 +2711,8 @@ function showMoreAfter(k,sum,rts){
 function bindOther(root){
   root.querySelectorAll('[data-otherlog]').forEach(b=>b.onclick=()=>showOtherLog(b.dataset.otherlog||today(),b.dataset.otheract||''));
   root.querySelectorAll('[data-othquick]').forEach(b=>b.onclick=()=>{const [m,k]=b.dataset.othquick.split('|');showOtherLog(k,{act:'lutgang',min:+m,kmh:5,inc:10})});
-  root.querySelectorAll('[data-othact]').forEach(b=>b.onclick=()=>{othRead();const v=b.dataset.othact;if(v.startsWith('egen:')){oth.act='egen';oth.custom=v.slice(5)}else oth.act=v;const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y});
+  root.querySelectorAll('[data-othact]').forEach(b=>b.onclick=()=>{othRead();const v=b.dataset.othact;if(v.startsWith('egen:')){oth.act='egen';oth.custom=v.slice(5)}else oth.act=v;oth.open=false;renderOtherLog();const pk=document.querySelector('#sheetBody .othpick');if(pk){try{pk.scrollIntoView({block:'start'})}catch(e){}}});
+  root.querySelectorAll('[data-othopen]').forEach(b=>b.onclick=()=>{othRead();oth.open=true;othKeep()});
   root.querySelectorAll('[data-othdel]').forEach(b=>b.onclick=()=>{othRead();const n=oth.custom;removeCustomOther(n);oth.act='ny';oth.custom='';const y=$('#sheet').scrollTop;renderOtherLog();$('#sheet').scrollTop=y;toast(n+' borttagen från listan')});
   root.querySelectorAll('[data-othint]').forEach(b=>b.onclick=()=>{const n=+b.dataset.othint;oth.int=oth.int===n?0:n;root.querySelectorAll('[data-othint]').forEach(x=>x.setAttribute('aria-pressed',String(+x.dataset.othint===oth.int)))});
   root.querySelectorAll('[data-othsave]').forEach(b=>b.onclick=saveOtherLog);
