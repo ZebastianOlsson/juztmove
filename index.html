@@ -190,7 +190,7 @@ h4{margin:6px 0 0;font-size:14px;font-weight:700}
 .tiles .k{font-family:var(--display);font-size:24px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05}
 .prog-hero{}
 .ins{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
-.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cmp .k2{font-family:var(--display);font-size:20px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stepsest .k2{font-family:var(--display);font-size:24px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums}.stepsest .linkbtn{padding:0}.cmp .k2{font-family:var(--display);font-size:20px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums}
 .dl{font-size:12px;color:var(--muted);font-weight:600}.dl.up{color:var(--accent)}.dl.down{color:var(--muted)}
 .legend{display:flex;gap:12px;flex-wrap:wrap}.legend i,.hmleg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .hmleg{white-space:nowrap}.hmleg i{margin:0 1px}
@@ -430,7 +430,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='505889c8f6';
+const BUILD='public', VERSION='9e4a989119';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -2752,9 +2752,9 @@ function saveOtherLog(){othRead();const {k}=oth;let act=oth.act;const num=x=>{co
   const e={type:'annat',date:k,activity:act,title};if(min>0)e.min=Math.round(min*10)/10;
   if(ex){e.ex=ex;e.vol=ex.reduce((a,x)=>a+exVol(x),0)}
   if(oth.int)e.intensity=oth.int;
-  if(act==='lutgang'){const v=num(oth.kmh),i=num(oth.inc);if(v>0)e.kmh=v;if(i!=null&&i>=0)e.incline=i}
+  if(act==='lutgang'){const v=num(oth.kmh),i=num(oth.inc);if(v>0)e.kmh=v;if(i!=null&&i>=0)e.incline=i;if(e.kmh)applySteps(e,[{speedKmh:e.kmh,minutes:e.min,inclinePct:e.incline||0}])}
   if(k<today())e.retro=1;
-  addLog(e);oth=null;if(addPanel&&addPanel.ctx==='oth')addPanel=null;closeSheet();toast(title+(ex?' · '+exCountTxt(ex.length):'')+' sparat')}
+  addLog(e);oth=null;if(addPanel&&addPanel.ctx==='oth')addPanel=null;closeSheet();toast(title+(ex?' · '+exCountTxt(ex.length):'')+' sparat');if(e.steps)showStepsSummary(e,title)}
 /* Kort sammanfattning av passet: tid, antal set, totalvikt och nya rekord (tyngre än något tidigare pass). */
 function passSummary(L){const sets=(L.ex||[]).reduce((a,e)=>a+(e.sets||[]).length,0),recs=[];
   flatEx(L).forEach(e=>{const top=exTop(e);if(!top)return;let best=0;S.log.forEach(o=>{if(o===L||!isStrLog(o))return;flatEx(o).forEach(x=>{if(x.n===e.n)best=Math.max(best,exTop(x))})});if(best>0&&top>best)recs.push({n:e.n,kg:top,d:top-best})});
@@ -2825,10 +2825,10 @@ function saveQuickLog(){const {type,k,feel}=qlog;const num=id=>{const v=parseFlo
   const min=num('qlMin');if(!(min>0)||min>1440){toast('Fyll i hur många minuter passet tog');const el=$('#qlMin');if(el)el.focus();return}
   if(num('qlKm')<0){toast('Km kan inte vara negativt');return}
   const e={type,date:k,title,min,retro:1};
-  if(type==='löpning'){const km=num('qlKm');if(km){e.km=km;e.avg=Math.round(km/(min/60)*10)/10}e.rpe=feel}
+  if(type==='löpning'){const km=num('qlKm');if(km){e.km=km;e.avg=Math.round(km/(min/60)*10)/10}e.rpe=feel;if(e.avg)applySteps(e,[{speedKmh:km/(min/60),minutes:min,inclinePct:0}])}
   if(type==='styrka')e.rpe=feel;
   addLog(e);if(type==='rörlighet'){day(k).mob=true;markDirty('days',monthOf(k))}
-  qlog=null;closeSheet();toast('Sparat på '+new Date(k+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long'}))}
+  qlog=null;closeSheet();toast('Sparat på '+new Date(k+'T12:00:00').toLocaleDateString('sv-SE',{weekday:'long'}));if(e.steps)showStepsSummary(e)}
 function bindPast(root){
   root.querySelectorAll('[data-paststeps]').forEach(b=>b.onclick=()=>{const v=parseInt($('#pastSteps').value,10);if(v>100000){toast('Högst 100 000 steg');return}if(v>=0){saveSteps(b.dataset.paststeps,v,false);toast('Steg sparade')}else if(v<0)toast('Steg kan inte vara negativa')});
   root.querySelectorAll('[data-pasttog]').forEach(b=>b.onclick=()=>{const [f,k]=b.dataset.pasttog.split(':');setDay(k,{[f]:!day(k)[f]})});
@@ -4527,6 +4527,24 @@ window.addEventListener('offline',()=>updSync());
 $('#restStop').addEventListener('click',stopRest);
 
 let runLog={rpe:0,pain:0,area:'',actual:null};
+/* ---------- Uppskattade steg ----------
+   segments: [{speedKmh, minutes, inclinePct}]. Gång under 7 km/h: steglängd 0,415 × längd, kadens 90–130 (+5 över 8 % lutning).
+   Löpning: kadens 150 + 2,5 × (fart − 8), 150–185, sedan −3 per 5 cm över 175 cm. Summan avrundas till närmaste 100. */
+const DEF_HEIGHT=175;
+function estimateSteps(segments,heightCm){const h=+heightCm>0?+heightCm:DEF_HEIGHT;let tot=0;
+  (segments||[]).forEach(sg=>{const v=+sg.speedKmh,m=+sg.minutes,inc=+sg.inclinePct||0;if(!(v>0)||!(m>0))return;let cad;
+    if(v<7){const stepLen=0.415*h/100;cad=Math.min(130,Math.max(90,(v*1000/60)/stepLen));if(inc>8)cad+=5}
+    else{cad=Math.min(185,Math.max(150,150+2.5*(v-8)));cad+=Math.round(-3*(h-DEF_HEIGHT)/5)}
+    tot+=cad*m});
+  return Math.round(tot/100)*100}
+function userHeight(){const h=+S.settings.heightCm;return h>=100&&h<=230?h:null}
+/* Sparar steps och stepsSource på passet. Riktig data (stepsSource 'healthkit') skrivs aldrig över av en uppskattning. */
+function applySteps(l,segments){if(!l||l.stepsSource==='healthkit')return l;const n=estimateSteps(segments,userHeight());if(n>0){l.steps=n;l.stepsSource='estimated'}return l}
+function stepsHTML(l){if(!l||!(+l.steps>0))return '';const real=l.stepsSource==='healthkit';
+  return `<div class="stepsest"><div class="k2 num">${real?'':'≈ '}${(+l.steps).toLocaleString('sv-SE')} steg</div><div class="small muted">${real?'Från Hälsa':'Uppskattat utifrån fart, tid och längd'}</div>${!real&&!userHeight()?'<div class="small muted">Ange din längd för bättre uppskattning <button class="linkbtn small" type="button" data-gojag>under Jag</button></div>':''}</div>`}
+function showStepsSummary(l,title){openSheet(`<header class="top"><div><div class="date">Sparat</div><h1>${esc(title||l.title||'Bra jobbat!')}</h1></div></header>
+   <div class="stack"><section class="card stack" aria-label="Sammanfattning"><div class="small muted num">${esc([l.min?decStr(l.min)+' min':'',+l.km?decStr(l.km)+' km':'',+l.kmh?fmtK(+l.kmh)+' km/h':+l.avg?fmtK(+l.avg)+' km/h snitt':'',l.incline!=null&&l.incline!==''?decStr(l.incline)+' % lutning':''].filter(Boolean).join(' · '))}</div>${stepsHTML(l)}</section></div>`);
+  stickyBar('<button class="btn" type="button" data-close>Klar</button>')}
 /* Planerad distans: Σ fart × minuter/60 för alla delar, även uppvärmning och nedvarvning. */
 function planDistance(r){return r.seg.reduce((a,sg,i)=>a+segPlan(r,sg,i).kmh*sg[0]/60,0)}
 /* Tid, distans och snittfart: det fält som ändrades senast (distans eller snittfart) räknar ut det andra. */
@@ -4572,9 +4590,13 @@ function saveRun(r){
   const actual=runLog.actual, planned=r.seg.map((sg,i)=>{const p=segPlan(r,sg,i);return {typ:sg[1],min:sg[0],kmh:p.kmh,inc:p.inc}});
   const hardAct=actual?actual.filter(x=>x.typ==='h'&&x.sec>=40).map(x=>({kmh:x.kmh,f:x.f})):[];
   const pain=runLog.area?+runLog.pain:0, area=runLog.area;
-  addLog({type:'löpning',date:today(),rid:r.gentle?r.base:r.id,...(r.gentle?{gentle:1}:{}),title:r.t,pass_type:passTypeLabel(r),planned,actual,min,km,avg:Math.round(avg*10)/10,
+  const runEntry={type:'löpning',date:today(),rid:r.gentle?r.base:r.id,...(r.gentle?{gentle:1}:{}),title:r.t,pass_type:passTypeLabel(r),planned,actual,min,km,avg:Math.round(avg*10)/10,
     jog:Math.round(v10()*0.7*10)/10,hard:hardAct.length?Math.round(hardAct.reduce((s,x)=>s+x.kmh,0)/hardAct.length*10)/10:Math.round(v10()*10)/10,
-    rpe:runLog.rpe,load:Math.round(min*runLog.rpe),pain_location:area||null,pain_score:pain,note:($('#runNote').value||'').trim()});
+    rpe:runLog.rpe,load:Math.round(min*runLog.rpe),pain_location:area||null,pain_score:pain,note:($('#runNote').value||'').trim()};
+  /* Steg: faktiska delar om farten justerats med +/− i timern, annars planens delar. */
+  const adjusted=actual&&actual.some(x=>x.adj);
+  applySteps(runEntry,adjusted?actual.map(x=>({speedKmh:x.kmh,minutes:x.sec/60,inclinePct:x.inc})):planned.map(x=>({speedKmh:x.kmh,minutes:x.min,inclinePct:x.inc})));
+  addLog(runEntry);
   const prev=S.log.filter(l=>l.type==='löpning').slice(-2,-1)[0];
   st.runEase=0; st.runPainEase=0;
   let msg=r.gentle?'Skonsamt pass sparat. Farterna justeras inte efter det här passet.':adaptRun(r,runLog.rpe,hardAct), warn='';
@@ -4590,7 +4612,7 @@ function saveRun(r){
   markDirty('settings');
   const nx=rankRuns(true)[0];
   openSheet(`<header class="top"><div><div class="date">Sparat</div><h1>Bra jobbat!</h1></div></header>
-   <div class="stack"><div class="card stack"><div>${esc(msg)}</div>${warn?`<div class="note waitnote">${esc(warn)}</div>`:''}
+   <div class="stack"><div class="card stack">${stepsHTML(runEntry)}<div>${esc(msg)}</div>${warn?`<div class="note waitnote">${esc(warn)}</div>`:''}
    <div class="note">Nästa löppass: <strong>${esc(nx.t)}</strong> (${esc(passTypeLabel(nx))}). Din 10 km-fart räknas nu som ${fmtK(v10())} km/h${comebackOn()?' (comeback −5 %)':''}.</div></div></div>`);
   stickyBar(`<button class="btn run" type="button" data-close>Klar</button>`);
 }
@@ -4633,7 +4655,7 @@ function renderRun(){
   stickyBar(`<button class="btn ghost" type="button" data-runskip>Nästa del</button><button class="btn run" type="button" data-runplay>${run?'Pausa':'Starta'}</button>`);
 }
 function recordSeg(){const s=runState;if(s.run&&s.end)s.left=Math.ceil((s.end-Date.now())/1000);const sec=s.segTotal-Math.max(0,s.left);if(sec<=0)return;const seg=s.r.seg[s.i];const p=curPlan();
-  s.actual.push({typ:seg[1],kmh:p.kmh,inc:p.inc,sec,f:seg[1]==='h'?hFactor(s.r,seg,s.i):null})}
+  s.actual.push({typ:seg[1],kmh:p.kmh,inc:p.inc,sec,f:seg[1]==='h'?hFactor(s.r,seg,s.i):null,...(s.adj?{adj:s.adj}:{})})}
 /* Löptimern räknar mot en sluttid (s.end) så att den stämmer efter skärmlås – och går vidare flera delar om tiden passerat. */
 function runGo(){const s=runState;if(!s)return;clearInterval(s.t);s.end=Date.now()+s.left*1000;s.t=setInterval(runTick,250)}
 function runTick(){const s=runState;if(!s||!s.run||!s.end)return;let g=0;
@@ -4785,6 +4807,7 @@ function viewJag(){
   const vSum=`${(+st.stepGoal||10000).toLocaleString('sv-SE')} steg · ${+st.moveGoal||8} rörelsepauser/dag${anchors().length?' · '+pl(anchors().length,'stund','stunder'):''}`;
   /* Kroppen */
   const body=`${sOpt('sex','Vem tränar?',[['k','Tjej / kvinna'],['m','Kille / man'],['','Vill inte ange']],st.sex||'')}
+   <label class="setfield"><span class="lab">Längd (cm)</span><input type="text" inputmode="numeric" autocomplete="off" data-setin="heightCm" value="${userHeight()||''}" placeholder="t.ex. 175"><span class="small muted">Används för att uppskatta steg i löppass och gång på band.</span></label>
    ${st.sex==='k'?'<p class="small muted" style="margin:0">Styrkepassen som appen bygger lägger lite mer fokus på rumpa och ben.</p>':''}
    <div class="lab" style="font-size:14px;font-weight:600">Något som krånglar?</div><p class="small muted" style="margin:0">Övningar som belastar valda områden väljs bort. Välj inget om allt känns bra.</p>
    <div class="chips wrap">${Object.entries(ISSUE_SV).filter(([k])=>!(st.sex==='m'&&(k==='gravid'||k==='mens'))).map(([k,l])=>`<button class="chip" type="button" data-set="issue" data-val="${k}" aria-pressed="${iss.includes(k)}">${esc(l)}</button>`).join('')}</div>
@@ -4856,6 +4879,7 @@ function applySetting(k,v,silent){
     case 'issue':{const a=new Set(st.issues||[]);a.has(v)?a.delete(v):a.add(v);st.issues=[...a];st.cycle=a.has('mens');if(v==='knä'&&a.has('knä'))st.kneeFocus=true;st.genCur=null;break}
     case 'ciEvery':ciConf().every=+v;break;
     case 'sex':st.sex=v||'';st.genCur=null;st.splitIdx=0;break;
+    case 'heightCm':{const raw=String(v).trim();if(!raw){st.heightCm=null;break}const h=parseDecimal(raw);if(!(h>=100&&h<=230)){toast('Skriv din längd i cm, t.ex. 175');return}st.heightCm=Math.round(h);break}
     default:return;
   }
   markDirty('settings');sugCache=null;sugIdx=0;setSavedAt=Date.now();
@@ -4874,6 +4898,7 @@ function bindSettings(root){
 
 /* ---------- Events ---------- */
 function bind(root){
+  root.querySelectorAll('[data-gojag]').forEach(b=>b.onclick=()=>{closeSheet();go('jag')});
   bindKrets(root);
   if(root.querySelector&&root.querySelector('#ancBox'))bindAnchors(root);
   root.querySelectorAll('[data-addsteps]').forEach(b=>b.onclick=()=>{const k=today();setDay(k,{steps:Math.min(100000,Math.max(0,(+day(k).steps||0)+ +b.dataset.addsteps))})});
