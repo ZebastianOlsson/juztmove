@@ -1399,12 +1399,27 @@ const wById=id=>id?WBYID[id]||WBYID[progBase(id)]:undefined;
 /* Platsen i programmet (index i DP_SEQ för senast gjorda pass). Finns inte lastProg i programmet hoppar vi inte
    till början: vi fortsätter från senaste styrkeloggen som hör till programmet. Annars -1 (= första passet). */
 let progWarned='';
-function progPos(){
-  const id=progBase(S.settings.lastProg);let i=DP_SEQ.findIndex(w=>w.i===id);if(i>=0||!DP_SEQ.length)return i;
-  const L=S.log.filter(l=>l.type==='styrka'&&l.wid&&DP_SEQ.some(w=>w.i===progBase(l.wid))).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.ts||0)-(b.ts||0));
-  const last=L[L.length-1];if(last)i=DP_SEQ.findIndex(w=>w.i===progBase(last.wid));
-  if(id&&progWarned!==id){progWarned=id;console.warn('lastProg "'+S.settings.lastProg+'" finns inte i programmet – '+(last?'fortsätter från senaste programloggen ('+progBase(last.wid)+')':'börjar från första passet'))}
-  return i}
+/* Programloggar (styrkepass vars wid finns i programmet, även -latt), i tidsordning. settings.progSince (nytt fält):
+   loggar före den tidpunkten räknas inte – sätts när man själv väljer plats, börjar om från en programfil eller programmet går ett varv. */
+function progLogs(all){const since=all?0:+S.settings.progSince||0;
+  return S.log.filter(l=>l.type==='styrka'&&l.wid&&(l.ts||0)>=since).map(l=>({l,i:DP_SEQ.findIndex(w=>w.i===progBase(l.wid))})).filter(x=>x.i>=0)
+    .sort((a,b)=>a.l.date<b.l.date?-1:a.l.date>b.l.date?1:(a.l.ts||0)-(b.l.ts||0))}
+const progLoggedMax=()=>progLogs().reduce((m,x)=>Math.max(m,x.i),-1);
+/* Platsen = det högsta av lastProg och högsta loggade programpass (sedan progSince). Ett pass man redan kört blir därför aldrig
+   "nästa", även om det valdes i Byt-arket, loggades i efterhand, kördes via Kör igen eller ett äldre pass körts om efteråt. */
+function progPos(){if(!DP_SEQ.length)return -1;
+  const id=progBase(S.settings.lastProg),lp=DP_SEQ.findIndex(w=>w.i===id),L=progLogs(),last=L[L.length-1],li=L.reduce((m,x)=>Math.max(m,x.i),-1);
+  if(lp<0&&id&&progWarned!==id){progWarned=id;console.warn('lastProg "'+S.settings.lastProg+'" finns inte i programmet – '+(last?'fortsätter från senaste programloggen ('+progBase(last.l.wid)+')':'börjar från första passet'))}
+  return Math.max(lp,li)}
+/* Efter att ett programpass tagits bort: platsen räknas om från loggen (högsta kvarvarande programpass) i stället för att
+   stega bakåt. Finns inget kvar används värdet före passet, annars passet före det borttagna. */
+function progAfterRemove(l,before){const st=S.settings,m=progLoggedMax(),bi=before?DP_SEQ.findIndex(w=>w.i===progBase(before)):-1;
+  if(m>=0)st.lastProg=DP_SEQ[Math.max(m,bi)].i;else if(bi>=0)st.lastProg=DP_SEQ[bi].i;
+  else{const i=DP_SEQ.findIndex(w=>w.i===progBase(l.wid));if(st.lastProg===progBase(l.wid)&&i>0)st.lastProg=DP_SEQ[i-1].i}
+  markDirty('settings')}
+/* Rätta platsen: senaste loggade programpass (alla loggar), och bara loggar från och med det räknas framåt. */
+function progFix(){const L=progLogs(true),last=L[L.length-1];if(!last)return toast('Inga loggade programpass');
+  const st=S.settings;st.lastProg=DP_SEQ[last.i].i;st.progSince=last.l.ts;markDirty('settings');sugCache=null;showSettings();toast('Platsen är rättad: nästa pass '+progLabel(programNext()))}
 function programNext(){return DP_SEQ[(progPos()+1)%DP_SEQ.length]}
 /* Rättar lastProg som sparats med -latt (äldre versioner). Giltiga värden lämnas orörda. */
 function fixLastProg(){const st=S.settings;if(st&&typeof st.lastProg==='string'&&/-latt$/.test(st.lastProg)){st.lastProg=progBase(st.lastProg);return true}return false}
@@ -2300,10 +2315,14 @@ function passLineHTML(w,gen){
   if(progMode()&&w.s!=null)return `<div class="small muted num">Ditt program · ${esc(progLabel(w))}</div>`;
   return w.s!=null&&w.wk!=null?`<div class="small muted num">${esc(progLabel(w))}</div>`:''}
 /* Schemahistorik under Jag: köns senaste ändringar (settings.seqLog), nyast först. */
-function seqHistHTML(){const L=(S.settings.seqLog||[]).slice().reverse();if(!L.length)return '';const tp=x=>{const t=weekTemplate();return typeof x==='number'?({s:'styrka',r:'löpning',m:'rörlighet'})[t[((x%7)+7)%7]]||'':''};
+function progPlaceHTML(){if(!DP_SEQ.length)return '';const i=progPos();if(i<0)return `<div class="small">Plats i programmet: inget pass kört än</div>`;
+  const w=DP_SEQ[i],L=progLogs(true).filter(x=>x.i===i),d=L.length?L[L.length-1].l.date:null;
+  return `<div class="stack" style="gap:6px;margin-top:8px"><div class="small"><strong>Plats i programmet:</strong> ${esc(progLabel(w))}${d?` (senast kört ${esc(shortDate(d))})`:''} · nästa ${esc(progLabel(programNext()))}</div>
+   <button class="btn ghost sm" type="button" data-progfix>Rätta platsen</button><p class="small muted" style="margin:0">Sätter platsen till ditt senast loggade programpass.</p></div>`}
+function seqHistHTML(){const L=(S.settings.seqLog||[]).slice().reverse();if(!L.length&&!DP_SEQ.length)return '';const tp=x=>{const t=weekTemplate();return typeof x==='number'?({s:'styrka',r:'löpning',m:'rörlighet'})[t[((x%7)+7)%7]]||'':''};
   const pr=a=>`${a[0]==null?'–':esc(String(a[0]))+' ('+esc(tp(a[0]))+')'} · ${a[1]?esc(a[1]):'–'}`;
-  return `<details class="card seqhist"><summary><strong>Schemahistorik</strong> <span class="small muted">senaste ${L.length} ändringarna av passkön</span></summary>
-   <div class="list" style="margin-top:8px">${L.map(e=>`<div class="li" style="cursor:default;display:block"><div><strong>${esc(e.why||'')}</strong></div>
+  return `<details class="card seqhist"><summary><strong>Schemahistorik</strong> <span class="small muted">${DP_SEQ.length&&progPos()>=0?'plats '+esc(progLabel(DP_SEQ[progPos()]))+(L.length?' · ':''):''}${L.length?`senaste ${L.length} ändringarna av passkön`:''}</span></summary>
+   ${progPlaceHTML()}<div class="list" style="margin-top:8px">${L.map(e=>`<div class="li" style="cursor:default;display:block"><div><strong>${esc(e.why||'')}</strong></div>
     <div class="small muted num">${esc(new Date(e.t).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.dev||'')}</div>
     <div class="small muted num">Plats och senast avbockad: ${pr(e.from||[])} → ${pr(e.to||[])}</div></div>`).join('')}</div></details>`}
 /* Välj dagens pass själv: dagens plan sätts och dagen byter plats med närmaste dag av den typen, så att veckan har lika många pass av varje typ. */
@@ -3347,7 +3366,7 @@ function seSave(){
   S.log[idx]=c;markDirty('log',monthOf(orig.date));if(monthOf(date)!==monthOf(orig.date))markDirty('log',monthOf(date));
   if(orig.type==='styrka'&&orig.date===today()&&date!==today())unresolveToday();
   if(c.wobj)regW(c.wobj);sugCache=null;SE=null;showStrengthLog(c.ts);toast('Passet är uppdaterat')}
-function seDelete(){const idx=S.log.findIndex(x=>x.ts===SE.ts);if(idx<0)return;const l=S.log[idx];S.log.splice(idx,1);S.settings.delTs=[...(S.settings.delTs||[]),l.ts].slice(-300);markDirty('settings');markDirty('log',monthOf(l.date));
+function seDelete(){const idx=S.log.findIndex(x=>x.ts===SE.ts);if(idx<0)return;const l=S.log[idx];S.log.splice(idx,1);if(l.wid&&DP_SEQ.some(w=>w.i===progBase(l.wid)))progAfterRemove(l,null);S.settings.delTs=[...(S.settings.delTs||[]),l.ts].slice(-300);markDirty('settings');markDirty('log',monthOf(l.date));
   if(l.type==='styrka'&&l.date===today())unresolveToday();SE=null;sugCache=null;closeSheet();toast('Passet är borttaget')}
 function bindSE(root){
   const ix=v=>v.split(':').map(Number);
@@ -4252,10 +4271,11 @@ function resumeLog(ts){const l=S.log.find(x=>x.ts===+ts);if(!canResume(l))return
 function doResume(ts){const idx=S.log.findIndex(x=>x.ts===ts);if(idx<0||active)return;const l=S.log[idx],snap=lastSnap(ts),st=S.settings;
   let a;if(snap){a=snap.a;a.start+=Math.max(0,Date.now()-(snap.at||Date.now()));if(!WBYID[a.wid])regW(a.w)}else a=activeFromLog(l);
   /* Ångra det avslutet ändrade, men bara om inget annat har ändrat samma sak sedan dess. */
+  const wasProg=l.wid&&DP_SEQ.some(w=>w.i===progBase(l.wid)),before=snap&&snap.st?snap.st.lastProg:null;
   if(snap&&snap.after){if(st.lastProg===snap.after.lastProg)st.lastProg=snap.st.lastProg;
     if(l.wobj&&(st.splitIdx||0)===(snap.after.splitIdx||0)&&!st.genCur){st.splitIdx=snap.st.splitIdx;st.lastTheme=snap.st.lastTheme;st.genCur=snap.st.genCur;st.genOrig=snap.st.genOrig;if(st.genCur)regW(st.genCur)}}
-  else if(l.wid&&DP_SEQ.length&&st.lastProg===progBase(l.wid)){const i=DP_SEQ.findIndex(w=>w.i===progBase(l.wid));if(i>0)st.lastProg=DP_SEQ[i-1].i}
   S.log.splice(idx,1);st.delTs=[...(st.delTs||[]),l.ts].slice(-300);markDirty('settings');markDirty('log',monthOf(l.date));
+  if(wasProg)progAfterRemove(l,before);
   if(l.date===today())unresolveToday();
   try{localStorage.removeItem(LASTK)}catch(e){}
   active=a;restOpen=-1;addPanel=null;swapPick=null;saveActive();sugCache=null;closeSheet();renderActive();toast('Passet är öppet igen – avsluta när du är klar')}
@@ -4604,10 +4624,15 @@ function finishWorkout(){
     const pk=active.preKg&&active.preKg[i];if(pk){const pre=active.sets[i].map((s,j)=>pk[j]!=null&&(s[0]||s[1]||s[2])?{p:kgNum(pk[j]),f:kgNum(s[0])}:null).filter(Boolean);if(pre.length)o.pre=pre}
     return o}).filter(e=>e.sets.length);
   const min=Math.min(240,Math.max(1,Math.round((Date.now()-active.start)/60000)));
+  const pos0=DP_SEQ.length?progPos():-1;
   const st0=S.settings,snap={a:JSON.parse(JSON.stringify(active)),st:JSON.parse(JSON.stringify({lastProg:st0.lastProg,splitIdx:st0.splitIdx,lastTheme:st0.lastTheme,genCur:st0.genCur,genOrig:st0.genOrig})),at:Date.now()};
   addLog({type:'styrka',date:active.date||today(),wid:w.i,title:w.t||'Styrkepass',g:w.g,ex,vol,min,low:!!day().low,...(w.p==='GEN'?{wobj:w.x.some(isAdded)?{...w,x:w.x.filter(e=>!isAdded(e))}:w}:{})});
   if(w.p==='GEN'){const st=S.settings;if(w.focus===nextFocus())st.splitIdx=(st.splitIdx||0)+1;st.lastTheme=w.theme;st.genCur=null;st.genOrig=null;markDirty('settings')}
-  if(w.p==='DP'&&S.settings.mode==='program'&&progBase(w.i)===programNext().i){S.settings.lastProg=progBase(w.i);markDirty('settings')}
+  /* Programpass längre fram än platsen flyttar platsen dit. Ett äldre pass som körs om ändrar ingenting.
+     Sista passet → första: programmet går ett varv och tidigare loggar räknas inte längre. */
+  if(w.p==='DP'&&S.settings.mode==='program'){const wi=DP_SEQ.findIndex(x=>x.i===progBase(w.i));
+    if(wi>pos0){S.settings.lastProg=DP_SEQ[wi].i;markDirty('settings')}
+    else if(wi===0&&pos0===DP_SEQ.length-1&&DP_SEQ.length>1){S.settings.lastProg=DP_SEQ[0].i;S.settings.progSince=S.log[S.log.length-1].ts;markDirty('settings')}}
   const fdate=active.date||today(), L=S.log[S.log.length-1], sum=passSummary(L);
   snap.ts=L.ts;snap.uid=S.uid||null;snap.after={lastProg:S.settings.lastProg,splitIdx:S.settings.splitIdx};try{localStorage.setItem(LASTK,JSON.stringify(snap))}catch(e){}
   active=null; clearActive(); sugIdx=0; sugCache=null; closeSheet(); showMoreAfter(fdate,sum,L.ts);
@@ -5036,7 +5061,7 @@ function applySetting(k,v,silent){
       if(n+other>7){toast('Högst 7 pass i veckan');return}st[k]=n;st.weekPlan=null;st.genCur=null;break}
     case 'mode':st.mode=v;st.genCur=null;if(v==='program'&&!st.lastProg&&DP_SEQ.length)st.lastProg=DP_SEQ[0].i;break;
     case 'setSplit':setSplit=+v;return showSettings();
-    case 'lastProg':st.lastProg=progBase(v);setSplit=null;break;
+    case 'lastProg':st.lastProg=progBase(v);st.progSince=Date.now();setSplit=null;break;
     case 'prog':{const a=new Set(st.programs||[]);a.has(v)?a.delete(v):a.add(v);if(!a.size){toast('Välj minst ett program');return}st.programs=[...a];break}
     case 'goal':st.goal=v;st.goals=[v];st.genCur=null;st.splitIdx=0;break;
     case 'goalt':{const g=toggleGoal(goalsOf(st),v);if(!g){toast('Högst tre mål – ta bort ett först');return}if(!g.length){toast('Välj minst ett mål');return}st.goals=g;st.goal=g[0];st.genCur=null;st.splitIdx=0;break}
@@ -5207,6 +5232,7 @@ function bind(root){
   root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{const n=filledSets(),drop=()=>{active=null;clearActive();closeSheet();toast('Passet avbröts')};
     if(n)confirmBar(`Kasta passet? ${n} set är ${n===1?'ifyllt':'ifyllda'}`,'Kasta passet',drop,'Fortsätt passet');else drop()});
   root.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>{if(active)renderActive()});
+  root.querySelectorAll('[data-progfix]').forEach(b=>b.onclick=progFix);
   root.querySelectorAll('[data-resumelog]').forEach(b=>b.onclick=()=>resumeLog(b.dataset.resumelog));
   root.querySelectorAll('[data-finish]').forEach(b=>b.onclick=()=>{const a=active.sets.flat(),d=a.filter(s=>s[2]||(s[0]&&s[1])).length;
     if(d<a.length/2)confirmBar(`${d} av ${a.length} set klara – avsluta ändå?`,'Avsluta och spara',finishWorkout,'Fortsätt passet');else finishWorkout()});
@@ -5281,7 +5307,7 @@ function bind(root){
   const ss=root.querySelector('#sSplit'); if(ss) ss.onchange=()=>{$('#sLast').innerHTML=progOptions(+ss.value,'')};
   root.querySelectorAll('[data-savesettings]').forEach(b=>b.onclick=()=>{const st=S.settings;if(+$('#sStr').value!==st.strength||+$('#sCar').value!==st.cardio){st.weekPlan=null;st.genCur=null}st.strength=+$('#sStr').value;st.cardio=+$('#sCar').value;if($('#sCi'))ciConf().every=+$('#sCi').value;st.stepGoal=Math.max(1000,+$('#sSteps').value||10000);st.maxMin=+$('#sMax').value;st.runPref=$('#sRun').value;{const raw=$('#sTenK').value.trim();const tk=parseTenK(raw);if(tk&&raw!==String(st.tenK||'')){st.tenK=raw;st.v10=Math.round(600/tk*100)/100}
       const ck=parseFloat(String($('#sCoolK').value).replace(',','.'));if(ck>0)st.coolKmh=ck;const ci=parseFloat(String($('#sCoolI').value).replace(',','.'));if(ci>=0)st.coolInc=ci;
-      const cb=$('#sComeback').checked;if(cb&&!comebackOn())st.comebackUntil=dkey(addDays(new Date(),21));if(!cb)st.comebackUntil=null;}if($('#sMode')){st.mode=$('#sMode').value;st.lastProg=progBase($('#sLast').value||st.lastProg)};st.moveGoal=+$('#sMoves').value||8;
+      const cb=$('#sComeback').checked;if(cb&&!comebackOn())st.comebackUntil=dkey(addDays(new Date(),21));if(!cb)st.comebackUntil=null;}if($('#sMode')){st.mode=$('#sMode').value;{const nv=progBase($('#sLast').value||st.lastProg);if(nv!==progBase(st.lastProg))st.progSince=Date.now();st.lastProg=nv}};st.moveGoal=+$('#sMoves').value||8;
     if(DP_SEQ.length){st.programs=[...document.querySelectorAll('[data-prog]')].filter(c=>c.checked).map(c=>c.dataset.prog);if(!st.programs.length)st.programs=Object.keys(PROG);}
     markDirty('settings');sugCache=null;sugIdx=0;closeSheet();toast('Inställningar sparade')});
   root.querySelectorAll('[data-libfile]').forEach(inp=>inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;
@@ -5290,8 +5316,13 @@ function bind(root){
     toast('Läser in programmet …');
     try{await sbFetch('/rest/v1/user_docs',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{user_id:SBUSER.id,doc:'library',body:{lib},updated_at:new Date().toISOString()}])})}catch(e){toast('Kunde inte spara: '+e.message);return}
     setLibrary(lib);try{localStorage.setItem(LIBK,JSON.stringify({uid:SBUSER.id,lib}))}catch(e){}
-    const st=S.settings;st.programs=lib.programs.map(p=>p.k);if(DP_SEQ.length){st.mode='program';if(j.lastProg&&WBYID[progBase(j.lastProg)])st.lastProg=progBase(j.lastProg);else if(wById(st.lastProg))st.lastProg=progBase(st.lastProg);else st.lastProg=(programNext()&&DP_SEQ[progPos()]||DP_SEQ[0]).i;st.progKey='DP'}else st.mode='mix';
-    st.genCur=null;markDirty('settings');showSettings();toast(`Klart – ${WORKOUTS.length} pass inlästa. Nästa pass: ${DP_SEQ.length?wTitle(programNext()):''}`)});
+    const st=S.settings;st.programs=lib.programs.map(p=>p.k);let askFile=null;if(DP_SEQ.length){st.mode='program';const fl=j.lastProg&&WBYID[progBase(j.lastProg)]?progBase(j.lastProg):null,has=progLogs().length>0;
+      /* Filens plats skriver bara över om du inte har några programloggar – annars får du välja. */
+      if(fl&&!has){st.lastProg=fl;st.progSince=Date.now()}
+      else{if(wById(st.lastProg))st.lastProg=progBase(st.lastProg);else st.lastProg=DP_SEQ[Math.max(0,progPos())].i;if(fl&&fl!==DP_SEQ[Math.max(0,progPos())].i)askFile=fl}
+      st.progKey='DP'}else st.mode='mix';
+    st.genCur=null;markDirty('settings');showSettings();toast(`Klart – ${WORKOUTS.length} pass inlästa. Nästa pass: ${DP_SEQ.length?wTitle(programNext()):''}`);
+    if(askFile)confirmBar(`Filen anger en annan plats (${progLabel(WBYID[askFile])}). Du har redan loggade programpass, så din plats behålls.`,'Börja om från filens plats',()=>{S.settings.lastProg=askFile;S.settings.progSince=Date.now();markDirty('settings');sugCache=null;showSettings();toast('Nästa pass: '+wTitle(programNext()))},'Behåll min plats')});
   root.querySelectorAll('[data-libremove]').forEach(b=>b.onclick=()=>confirmBar('Ta bort programmet? Passen försvinner ur appen. Dina loggar finns kvar.','Ta bort programmet',async()=>{
     try{await sbFetch('/rest/v1/user_docs?doc=eq.library',{method:'DELETE'})}catch(e){toast('Kunde inte ta bort: '+e.message);return}
     try{localStorage.removeItem(LIBK)}catch(e){}S.settings.mode='gen';S.settings.genCur=null;markDirty('settings');lsSave();toast('Programmet är borttaget');setTimeout(()=>location.reload(),800)},'Behåll'));
