@@ -235,11 +235,6 @@ input[type=email],input[type=password]{background:var(--bg);border:1px solid var
 .sugg{margin-top:6px;font-size:14px;font-weight:500;padding:6px 10px;border-radius:8px;background:var(--bg)}
 .sugg.up{background:var(--accent-soft)}
 .sugg.down{background:var(--run-soft)}
-.rtable{display:flex;flex-direction:column;margin-top:8px;border-top:1px solid var(--line)}
-.rtable .rh,.rtable .rr{display:grid;grid-template-columns:62px 1fr 92px;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);align-items:start}
-.rtable .rh{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.rtable .rr span:last-child{text-align:right}
-.rtable .t-h{background:var(--run-soft);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px}
 .setspeed{font-size:22px}.setspeed strong{font-family:var(--display);font-size:32px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums}
 .day.chg{border-style:dashed}
 .day:disabled{opacity:.75;cursor:default}
@@ -357,12 +352,60 @@ input[type=number],input[type=text],input[type=search],input[type=date],select,t
 .sets .wide{grid-column:2 / span 2}
 .toast.on{display:block}
 .mobtimer{font-family:var(--display);font-size:56px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
-/* Löptimern liggande: samma vy, bara CSS. Tid till vänster, fart och knappar till höger. */
+/* Fartprofil (översikt och tidslinje) */
+.rprof{position:relative;color:var(--muted)}
+.rp-bars{position:relative;height:var(--rph,72px)}.rp-bars svg{display:block;width:100%;height:100%}
+.rp-easy{fill:var(--run);fill-opacity:.38}.rp-hard{fill:var(--run)}.rp-cool{fill:var(--muted);fill-opacity:.4}
+.rprof.live .rp-base rect{fill-opacity:.16}.rprof.live .rp-base .rp-hard{fill-opacity:.28}
+.rp-mark{position:absolute;top:-5px;bottom:-5px;width:3px;margin-left:-1.5px;background:var(--ink);border-radius:2px;box-shadow:0 0 0 2px var(--surface)}
+.rp-incl,.rp-axis{position:relative;height:14px;font-size:11px;line-height:14px;white-space:nowrap}
+.rp-incl span,.rp-axis span{position:absolute;top:0;transform:translateX(-50%)}.rp-incl span{transform:none}.rp-incl span.r,.rp-axis span.r{transform:translateX(-100%)}.rp-axis span.l{transform:none}
+.rp-incs{display:block;width:100%;height:12px;margin-bottom:2px}
+.rsum.tiles{grid-template-columns:repeat(4,1fr)}
+.rlist{display:flex;flex-direction:column}
+.rseg{display:grid;grid-template-columns:92px minmax(0,1fr) 50px 40px;gap:8px;align-items:baseline;padding:7px 0 7px 10px;border-bottom:1px solid var(--line);border-left:4px solid transparent}
+.rseg.k-hard{border-left-color:var(--run)}.rseg.k-easy{border-left-color:color-mix(in srgb,var(--run) 38%,transparent)}.rseg.k-cool{border-left-color:color-mix(in srgb,var(--muted) 45%,transparent)}
+.rseg .rs-t{font-size:13px;color:var(--muted);white-space:nowrap}.rseg .rs-n{min-width:0}.rseg .rs-v{text-align:right;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.02em}.rseg .rs-i{text-align:right;font-size:13px;color:var(--muted)}
+.rseg.rs-h{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:0}.rseg.rs-h .rs-v{font-family:var(--body);font-size:11px;font-weight:400;letter-spacing:.04em}
+.rgrp>summary{list-style:none;cursor:pointer}.rgrp>summary::-webkit-details-marker{display:none}.rgrp>summary .chev{transition:transform .15s}.rgrp[open]>summary .chev{transform:rotate(90deg)}
+.rgrp>summary .rs-n strong{color:var(--ink)}.rgrp>div.rseg{padding-left:22px;background:color-mix(in srgb,var(--line) 35%,transparent)}
+/* Passvyn: stora siffror, hög kontrast */
+.rtop{align-items:center;margin-bottom:8px}.rtop .date{font-size:14px;color:var(--ink);font-weight:600}
+.runview{display:flex;flex-direction:column;gap:10px}
+.runmain{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;border-top:8px solid var(--muted);padding:14px 16px 16px}
+.runmain.k-hard{border-top-color:var(--run)}.runmain.k-easy{border-top-color:color-mix(in srgb,var(--run) 45%,var(--surface))}
+.rv-name{display:flex;flex-direction:column;align-items:center;gap:0}.rv-typ{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.rv-name strong{font-size:18px}
+.rv-speed{display:flex;align-items:baseline;justify-content:center;gap:6px;color:var(--ink);margin-top:2px}
+.rv-big{font-family:var(--display);font-weight:800;font-size:clamp(84px,26vw,120px);line-height:.95;letter-spacing:-.04em}
+.rv-unit{font-size:20px;font-weight:600;color:var(--muted)}.rv-inc{font-size:17px;color:var(--muted)}.rv-inc strong{color:var(--ink);font-size:20px}
+.rv-time{font-family:var(--display);font-weight:800;font-size:clamp(56px,17vw,80px);line-height:1;letter-spacing:-.02em;margin-top:6px;color:var(--ink)}
+.rv-feel{font-size:14px;color:var(--muted)}
+.rv-adj{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}.rv-adj .btn{min-height:52px;font-size:19px;font-weight:700;font-family:var(--display);background:var(--surface)}
+.rv-el strong{color:var(--ink);font-weight:600}
+.rv-next{border:2px solid var(--line);border-radius:var(--r);padding:12px 16px;background:var(--surface);display:flex;flex-direction:column;gap:2px;transition:background .2s,color .2s,border-color .2s}
+.rv-next .nx-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.rv-next .nx-lab{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.rv-next .nx-now{display:none}
+.rv-next .nx-in{font-family:var(--display);font-weight:800;font-size:22px}
+.rv-next .nx-v{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em}.rv-next .nx-v small{font-size:15px;font-weight:600}.rv-next .nx-i{font-size:18px}
+.rv-next .nx-n{font-size:14px;color:var(--muted);text-align:right;min-width:0}
+.rv-next.soon{background:var(--run);border-color:var(--run);color:var(--on-run)}.rv-next.soon .nx-lab,.rv-next.soon .nx-n{color:var(--on-run)}
+.rv-next.now .nx-pre{display:none}.rv-next.now .nx-now{display:inline;font-weight:800}
+.rv-next.now{animation:rvpulse 1s ease-in-out infinite}
+@keyframes rvpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
+.rv-line{padding:10px 14px 8px}.rv-line .rprof{--rph:56px}.rv-el{margin-top:2px}
+/* Liggande: samma vy, bara CSS. Större siffror bredvid varandra, tidslinjen i full bredd. */
 @media (orientation: landscape) and (max-height: 560px){
- #sheetBody:has(.runview) header.top{margin-bottom:6px}#sheetBody:has(.runview) h1{font-size:22px}
- .runview .runmain{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-flow:row dense;column-gap:16px;row-gap:6px;align-items:center;padding:12px 16px}
- .runview .runmain>*{grid-column:2;margin:0}.runview .runmain>.rv-l{grid-column:1}
- .runview .rv-time{font-size:72px;line-height:1;grid-row:span 4}.runview .runmain h2{font-size:20px}}
+ #sheetBody:has(.runview){max-width:none;padding:calc(6px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+ .rtop{margin-bottom:4px}.rtop .btn{min-height:32px}
+ .runview{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,3fr);grid-template-areas:"main next" "main adj" "ask ask" "line line" "wl wl";gap:8px}
+ .runmain{grid-area:main;display:grid;grid-template-columns:auto auto;justify-content:space-around;align-items:center;column-gap:20px;row-gap:0;padding:8px 14px;border-top-width:6px}
+ .runmain .rv-name{grid-column:1 / -1;flex-direction:row;gap:8px;align-items:baseline}.runmain .rv-feel{display:none}
+ .rv-speed{grid-column:1;grid-row:2}.rv-inc{grid-column:1;grid-row:3}.rv-time{grid-column:2;grid-row:2 / span 2;margin:0}
+ .rv-big,.rv-time{font-size:clamp(56px,min(27vh,11.4vw),128px)}.rv-unit{font-size:17px}.rv-inc{font-size:15px}.rv-inc strong{font-size:17px}
+ .rv-next{grid-area:next;justify-content:center;padding:8px 14px}.rv-next .nx-v{font-size:28px;white-space:nowrap}.rv-next .nx-n{display:none}
+ .rv-adj{grid-area:adj}.rv-adj .btn{min-height:44px;font-size:20px}.rv-adj .adj-u{display:none}.rv-next .nx-v{font-size:26px}.rv-ask{grid-area:ask}.rv-wl{grid-area:wl}
+ .rv-line{grid-area:line;padding:4px 12px 2px}.rv-line .rprof{--rph:38px}.rv-line .rv-el{display:none}
+ body:has(.runview) .sticky{padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}}
 details summary{cursor:pointer;color:var(--muted);font-size:13px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -436,7 +479,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 <script>
 "use strict";
 /* ---------- Data ---------- */
-const BUILD='public', VERSION='3634d02797';
+const BUILD='public', VERSION='840e5b1805';
 const LIB = JSON.parse(document.getElementById('lib').textContent);
 const PROG = Object.fromEntries(LIB.programs.map(p=>[p.k,p]));
 const WORKOUTS = LIB.workouts;
@@ -1238,11 +1281,44 @@ function segText(r,i){const sg=r.seg[i];if(!r.progStep||sg[1]!=='s')return sg[2]
   const prev=r.seg.slice(0,i).map((x,j)=>[x,j]).filter(([x])=>x[1]==='s').pop();if(!prev)return sg[2];
   const d=Math.round((segPlan(r,sg,i).kmh-segPlan(r,prev[0],prev[1]).kmh)*10)/10;return (d>=0?'+':'−')+fmtK(Math.abs(d))+' km/h'}
 function runDesc(r){if(r.descFn){try{const t=r.descFn(r);if(t&&!/null|undefined/.test(t))return t}catch(e){}}return r.desc}
-function runTable(r){
-  let t=0; const band=r.where!=='ute'&&runWhere()!=='ute';
-  return `<div class="rtable" role="table"><div class="rh" role="row"><span>Tid</span><span>Vad</span><span>${band?'Bandet':'Tempo'}</span></div>${r.seg.map((sg,i)=>{const p=segPlan(r,sg,i);const a=t;t+=sg[0];
-   return `<div class="rr t-${sg[1]}" role="row"><span class="num">${fmtMin(a)}–${fmtMin(t)}</span><span><strong>${esc(segText(r,i))}</strong><br><span class="small muted">${esc(p.feel)}</span></span><span class="num"><strong>${band?fmtK(p.kmh)+' km/h':pace(p.kmh)+' /km'}</strong><br><span class="small muted">${band?String(p.inc).replace('.',',')+' % lutning':fmtK(p.kmh)+' km/h'}</span></span></div>`}).join('')}</div>`;
-}
+/* ---------- Löppassets fartprofil, segmentlista och sammanfattning ----------
+   Delarna räknas från planen (eller från timerns state: justerad fart och ändrade längder). Intensitet styr färgen:
+   easy = uppvärmning/jogg/lugn fart, hard = hårda delar och jämn fart från 85 % av 10 km-farten, cool = nedvarvning. */
+function runKind(typ,kmh){return typ==='c'?'cool':typ==='h'?'hard':typ==='s'&&kmh>=0.85*v10()?'hard':'easy'}
+function runSegs(r,st){let t=0;return r.seg.map((sg,i)=>{const p=st?runPlanAt(r,st,i):segPlan(r,sg,i),sec=st?Math.round(st.durs[i]/1000):Math.round(sg[0]*60);
+  const o={i,typ:sg[1],name:segText(r,i),sec,kmh:p.kmh,inc:p.inc,feel:p.feel,kind:runKind(sg[1],p.kmh),from:t,to:t+sec};t+=sec;return o})}
+const durTxt=sec=>(Math.round(sec/6)/10).toString().replace('.',',')+' min';
+/* Fartprofil som löpbandets graf: x = tid, y = fart. live = tidslinje med markör och fyllda (avklarade) delar. */
+function runProfileHTML(segs,o={}){
+  const T=Math.max(1,segs.reduce((a,x)=>Math.max(a,x.to),0)),act=segs.filter(x=>x.sec>0),ks=act.map(x=>x.kmh);if(!ks.length)return '';
+  const lo=Math.max(0,Math.floor(Math.min(...ks))-2),hi=Math.max(...ks),H=k=>hi>lo?14+86*(k-lo)/(hi-lo):60,X=t=>t/T*1000,gap=T>2400?2:3;
+  const bars=act.map(x=>{const x0=X(x.from)+(x.from?gap:0),w=Math.max(1,X(x.to)-x0);return `<rect class="rp-${x.kind}" x="${x0.toFixed(1)}" width="${w.toFixed(1)}" y="${(100-H(x.kmh)).toFixed(1)}" height="${H(x.kmh).toFixed(1)}"/>`}).join('');
+  let inc='';if(o.band){let last=-99,prev=null;const labs=[];act.forEach(x=>{const pc=X(x.from)/10;if(x.inc!==prev&&pc-last>=9){labs.push(`<span style="left:${pc.toFixed(1)}%"${pc>88?' class="r"':''}>${decStr(x.inc)} %</span>`);last=pc}prev=x.inc});
+    const yi=v=>(12-Math.min(15,Math.max(0,v))/15*10).toFixed(1),pts=act.map(x=>`${X(x.from).toFixed(1)},${yi(x.inc)} ${X(x.to).toFixed(1)},${yi(x.inc)}`).join(' ');
+    inc=`<div class="rp-incl" aria-hidden="true">${labs.join('')}</div><svg class="rp-incs" viewBox="0 0 1000 14" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-opacity=".6" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`}
+  const step=T<=1800?300:T<=3600?600:900;let ax='';for(let t=0;t<T-step*0.4;t+=step)ax+=`<span style="left:${(X(t)/10).toFixed(1)}%"${t?'':' class="l"'}>${t/60}</span>`;ax+=`<span class="r" style="left:100%">${mmss(T)}</span>`;
+  const el=Math.min(T,Math.max(0,o.el||0));
+  return `<div class="rprof${o.live?' live':''}" role="img" aria-label="Fartprofil: ${mmss(T)} min, ${fmtK(Math.min(...ks))}–${fmtK(hi)} km/h">${inc}
+   <div class="rp-bars"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">${o.live?`<defs><clipPath id="rpClip"><rect id="rpClipR" x="0" y="0" height="100" width="${X(el).toFixed(1)}"/></clipPath></defs><g class="rp-base">${bars}</g><g clip-path="url(#rpClip)">${bars}</g>`:bars}</svg>${o.live?`<div class="rp-mark" id="rpMark" style="left:${(X(el)/10).toFixed(2)}%"></div>`:''}</div>
+   <div class="rp-axis num" aria-hidden="true">${ax}</div></div>`}
+/* Upprepade block (t.ex. 6 × 3 min hårt + 1,5 min jogg) grupperas; ett sista varv utan vila räknas med. */
+function runGroups(segs){const key=x=>x.typ+'|'+x.sec+'|'+x.kmh+'|'+x.inc,out=[],act=segs.filter(x=>x.sec>0);let i=0;
+  while(i<act.length){let best=null;
+    for(let L=1;L<=3;L++){let k=0;while(i+(k+1)*L<=act.length&&act.slice(i+k*L,i+(k+1)*L).every((x,m)=>key(x)===key(act[i+m])))k++;let n=k*L;
+      if(L>1&&k>=1&&act[i].kind==='hard'){let m=0;while(m<L-1&&i+n+m<act.length&&key(act[i+n+m])===key(act[i+m]))m++;if(m>0){k++;n+=m}}
+      if(k>=2&&(!best||n>best.n))best={L,k,n}}
+    if(best){out.push({k:best.k,pat:act.slice(i,i+best.L),segs:act.slice(i,i+best.n)});i+=best.n}else{out.push({seg:act[i]});i++}}
+  return out}
+function runSpeedBig(x,band){return band?fmtK(x.kmh):pace(x.kmh)}
+function runListHTML(segs,band){
+  const row=x=>`<div class="rseg k-${x.kind}"><span class="rs-t num">${mmss(x.from)}–${mmss(x.to)}</span><span class="rs-n">${esc(x.name)}</span><span class="rs-v num">${runSpeedBig(x,band)}</span><span class="rs-i num">${band?decStr(x.inc)+' %':''}</span></div>`;
+  return `<div class="rlist"><div class="rseg rs-h"><span>Tid</span><span>Del</span><span class="rs-v">${band?'km/h':'/km'}</span><span class="rs-i">${band?'lutn.':''}</span></div>${runGroups(segs).map(g=>{if(g.seg)return row(g.seg);
+    const incDiff=band&&new Set(g.pat.map(x=>x.inc)).size>1,first=g.segs[0],lastS=g.segs[g.segs.length-1];
+    const lab=`${g.k} × (${g.pat.map(x=>`${durTxt(x.sec)} ${runSpeedBig(x,band)}${incDiff?' · '+decStr(x.inc)+' %':''}`).join(' / ')})`;
+    return `<details class="rgrp"><summary class="rseg k-${g.pat.some(x=>x.kind==='hard')?'hard':first.kind}"><span class="rs-t num">${mmss(first.from)}–${mmss(lastS.to)}</span><span class="rs-n"><strong>${esc(lab)}</strong></span><span class="rs-v chev" aria-hidden="true">›</span><span></span></summary>${g.segs.map(row).join('')}</details>`}).join('')}</div>`}
+function runSummaryHTML(r,segs){const act=segs.filter(x=>x.sec>0),T=act.reduce((a,x)=>a+x.sec,0),km=act.reduce((a,x)=>a+x.kmh*x.sec/3600,0),hard=act.filter(x=>x.kind==='hard').reduce((a,x)=>a+x.sec,0);
+  return `<div class="tiles rsum"><div><div class="k num">${Math.round(T/60)}</div><div class="small muted">min totalt</div></div><div><div class="k num">≈ ${fmtK(km)}</div><div class="small muted">km</div></div><div><div class="k num">${(Math.round(hard/30)/2).toString().replace('.',',')}</div><div class="small muted">min hårt</div></div><div><div class="k num">${String(rpeTarget(r)).replace('.',',')}/10</div><div class="small muted">ansträngning</div></div></div>`}
+function runOverviewHTML(r){const segs=runSegs(r),band=runBand(r);return `<div class="rover stack">${runProfileHTML(segs,{band})}${runSummaryHTML(r,segs)}${runListHTML(segs,band)}</div>`}
 /* Belastning: minuter × ansträngning. Akut (7 d) mot kronisk (snitt per vecka, 28 d). */
 function runLoad(){const now=new Date(today()+'T12:00:00');let a=0,c=0,oldest=0;const wk=new Set();
   S.log.forEach(l=>{if(l.type!=='löpning')return;const age=(now-new Date(l.date+'T12:00:00'))/864e5;if(age<0)return;oldest=Math.max(oldest,age);const load=(+l.min||0)*(+l.rpe||6);if(age<7)a+=load;if(age<28){c+=load;wk.add(Math.floor(age/7))}});
@@ -2854,7 +2930,7 @@ function viewAhead(){
     else body=`<h2>${esc(a.focus||'Styrkepass')}</h2><p class="small muted" style="margin:0">Övningarna väljs när dagen kommer, så att de skiljer sig från passen innan.</p>`;
   } else if(a.typ==='r'){
     const rOn=!!a.r&&!!painNow()&&gentleSel('r');if(rOn)a.r=gentleRun(a.r);
-    if(a.r) body=`<h2>${esc(a.r.t)}</h2>${painNow()?gentleRowR(rOn):''}<div class="row"><span class="pill run">${esc(passTypeLabel(a.r))}</span><span class="small muted num">ca ${a.r.min} min</span></div><p style="margin:0">${esc(runDesc(a.r))}</p><details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(a.r)}</details><p class="small muted" style="margin:0">Farterna kan justeras efter hur passen innan känns.</p>`;
+    if(a.r) body=`<h2>${esc(a.r.t)}</h2>${painNow()?gentleRowR(rOn):''}<div class="row"><span class="pill run">${esc(passTypeLabel(a.r))}</span><span class="small muted num">ca ${a.r.min} min</span></div><p style="margin:0">${esc(runDesc(a.r))}</p>${runOverviewHTML(a.r)}<p class="small muted" style="margin:0">Farterna kan justeras efter hur passen innan känns.</p>`;
     else body=`<h2>Löppass</h2><p class="small muted" style="margin:0">Vilket pass det blir bestäms av hur de närmaste passen går.</p>`;
   } else if(a.typ==='m'){body=`<h2>${esc(a.m.t)}</h2><p class="small muted" style="margin:0">Återhämtningsdag: rörlighet, promenad och rörelsepauser. Rörlighetspasset:</p>${peekList(a.m.items.map(it=>[it[0],mmss(it[1])+(it[2]?' · '+it[2]:'')]))}<button class="btn ghost" type="button" data-mobpeek="${a.m.id}">Titta igenom rörelserna</button>`}
   else body=`<h2>Vila</h2>`;
@@ -2915,7 +2991,7 @@ function viewToday(){
       <p style="margin:0">${esc(runDesc(r))}</p>
       ${(()=>{const ne=needEasy();return (ne.loadHigh?`<div class="note waitnote">Belastningen senaste veckan är ${Math.round(ne.ratio*100)} % av ditt snitt – över 130 %. Ta ett lättare pass idag.</div>`:'')+(ne.twoHard?'<div class="note waitnote">Två tunga pass i rad – dags för ett lätt pass.</div>':'')})()}
       <div class="note num">Din 10 km-fart: <strong>${fmtK(sp.v10)} km/h</strong>${comebackOn()?' (comeback −5 %)':''} · mål för passet: <strong>${String(rpeTarget(r)).replace('.',',')}/10</strong><br><span class="small muted">${sp.from==='plan'?'Kalibrerad efter dina loggade pass.':sp.from==='tenk'?'Räknad från din 10 km-tid – kalibreras efter några pass.':sp.from==='fivek'?'Räknad från din 5 km-tid – kalibreras efter några pass.':`Startvärde – ange din ${S.settings.runLevel==='5k'?'5':'10'} km-tid under Jag.`}${S.settings.runEase?' Lättare pass idag.':''}${S.settings.noSteep?' Ingen lutning över 8 % efter smärta.':''}</span></div>
-      <details class="plan"><summary>Så här kör du – minut för minut</summary>${runTable(r)}<p class="small muted" style="margin:8px 0 0">Byt fart på bandet direkt när en ny del börjar – timern säger till. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p></details>
+      ${runOverviewHTML(r)}<p class="small muted" style="margin:0">Timern säger till 5 sekunder innan farten ska ändras. Känns en hård del omöjlig: sänk 0,5 km/h och håll den farten resten av passet.</p>
       ${''&&r.where==='band'&&(S.settings.runLevel||'10k')==='10k'?`<div class="note num">Jogg ca <strong>${sp.jog.toFixed(1).replace('.',',')} km/h</strong> · hårda bitar ca <strong>${sp.hard.toFixed(1).replace('.',',')} km/h</strong>${sp.from?' (från ditt senaste pass)':' (justera efter känsla)'}${prev?` · förra gången detta pass: ${prev.rpe?prev.rpe+'/10':esc(prev.feel||'')}`:''}</div>`:''}
       ${doneRun?`<div class="row"><button class="btn ghost sm" type="button" data-editrun="${doneRun.ts}">${CLAUDE_SAMPLE?'📷 ':''}Komplettera passet</button></div>`
       :`<div class="row"><button class="btn run big" type="button" data-runstart="${r.id}">Starta passet</button><button class="btn ghost" type="button" data-nextrun>Annat förslag</button>
@@ -4671,26 +4747,38 @@ function runRestore(){if(runState)return true;const v=runStoreLoad();if(!v)retur
 function curPlan(){const s=runState,r=runR(),p=runPos(s.durs,runElapsed(s,Date.now()));return runPlanAt(r,s,Math.min(p.i,r.seg.length-1))}
 function hFactor(r,seg,idx){const p=segPlan(r,seg,idx);return p.kmh/v10()}
 function renderRun(){
-  const s=runState,r=runR();if(!s||!r)return;const now=Date.now(),pos=runPos(s.durs,runElapsed(s,now)),i=Math.min(pos.i,r.seg.length-1),run=runRunning(s);
-  const left=Math.ceil((pos.done?0:pos.left)/1000), seg=r.seg[i], nxt=r.seg[i+1], p=runPlanAt(r,s,i), pn=nxt?runPlanAt(r,s,i+1):null, band=runBand(r), adj=+(s.adj[i])||0;
-  const typ={w:'Uppvärmning',h:'Hårt',j:'Vila',c:'Nedvarvning',s:'Jämn fart'}[seg[1]];
-  const col=seg[1]==='h'?'var(--run)':seg[1]==='j'||seg[1]==='c'?'var(--mob)':'var(--c-s)';
-  const sp=x=>band?`${fmtK(x.kmh)} km/h · ${String(x.inc).replace('.',',')} %`:`${pace(x.kmh)} /km`;
+  const s=runState,r=runR();if(!s||!r)return;const now=Date.now(),el=runElapsed(s,now),pos=runPos(s.durs,el),i=Math.min(pos.i,r.seg.length-1),run=runRunning(s);
+  const left=Math.ceil((pos.done?0:pos.left)/1000), segs=runSegs(r,s), cur=segs[i], nx=segs.slice(i+1).find(x=>x.sec>0), band=runBand(r), adj=+(s.adj[i])||0;
+  const typ={w:'Uppvärmning',h:'Hårt',j:'Vila',c:'Nedvarvning',s:'Jämn fart'}[cur.typ];
   sheetCtx={t:'run'};
-  openSheet(`<header class="top"><div><div class="date num">Del ${i+1} av ${r.seg.length}</div><h1>${esc(r.t)}</h1></div><button class="btn ghost sm" type="button" data-runclose>Avsluta</button></header>
-   <div class="stack runview"><div class="card stack runmain" style="text-align:center;border-top:6px solid ${col}">
-    <span class="eyebrow rv-l">${typ}</span><h2 class="rv-l">${esc(segText(r,i))}</h2>
-    <div class="mobtimer rv-l rv-time" id="runT">${mmss(left)}</div>
-    <div class="setspeed num">${band?`<strong>${fmtK(p.kmh)}</strong> km/h · <strong>${String(p.inc).replace('.',',')}</strong> %`:`<strong>${pace(p.kmh)}</strong> /km`}</div>
-    <div class="row" style="justify-content:center"><button class="btn ghost sm" type="button" data-adj="-0.5">−0,5</button><span class="small muted">${adj?`justerat ${adj>0?'+':''}${fmtK(adj)} km/h`:'justera farten'}</span><button class="btn ghost sm" type="button" data-adj="0.5">+0,5</button></div>
-    <div class="muted">${esc(p.feel)}</div>
-    <div class="prealert" id="preA" ${s.pre===i&&pn?'':'hidden'}>${pn?`Om några sekunder: ${esc(sp(pn))}`:''}</div>
-    ${s.ask?`<div class="note stack" style="text-align:left"><strong>${mmss(left)} kvar av den här delen.</strong><div class="row"><button class="btn sm" type="button" data-skipmode="carry">Lägg resten på nästa del</button><button class="btn ghost sm" type="button" data-skipmode="drop">Hoppa över resten</button></div></div>`:''}
-    ${nxt?`<div class="nextbox">Sedan: <strong>${esc(segText(r,i+1))}</strong> – ${esc(sp(pn))} (${mmss(Math.round(s.durs[i+1]/1000))})</div>`:'<div class="small muted">Sista delen!</div>'}
-    ${'wakeLock' in navigator?'':'<div class="small muted">Håll skärmen tänd under passet</div>'}</div>
-   <details class="card runall"><summary>Hela passet</summary><div class="list">${r.seg.map((x,j)=>`<div class="li" style="cursor:default;padding:6px 0;${j===i?'font-weight:600':''}${j<i?';opacity:.5':''}"><span class="dot ${x[1]==='h'?'r':x[1]==='s'||x[1]==='w'?'s':'m'}" style="margin-top:6px"></span><div class="grow">${esc(segText(r,j))}</div><span class="small muted num">${band?fmtK(runPlanAt(r,s,j).kmh):pace(runPlanAt(r,s,j).kmh)} · ${mmss(Math.round(s.durs[j]/1000))}</span></div>`).join('')}</div></details></div>`);
-  stickyBar(`<button class="btn ghost" type="button" data-runskip>Nästa del</button><button class="btn run" type="button" data-runplay>${run?'Pausa':s.startedAt==null?'Starta':'Fortsätt'}</button>`);
+  openSheet(`<header class="top rtop"><div class="date num">Del ${i+1} av ${r.seg.length} · ${esc(r.t)}</div><button class="btn ghost sm" type="button" data-runclose>Avsluta</button></header>
+   <div class="runview">
+    <section class="card runmain k-${cur.kind}" aria-live="polite">
+     <div class="rv-name"><span class="rv-typ">${typ}</span><strong>${esc(cur.name)}</strong></div>
+     <div class="rv-speed num"><span class="rv-big">${runSpeedBig(cur,band)}</span><span class="rv-unit">${band?'km/h':'/km'}</span></div>
+     <div class="rv-inc num">${band?`<strong>${decStr(cur.inc)} %</strong> lutning`:`${fmtK(cur.kmh)} km/h`}${adj?` · justerat ${adj>0?'+':'−'}${fmtK(Math.abs(adj))}`:''}</div>
+     <div class="rv-time num" id="runT" aria-label="Kvar av delen">${mmss(left)}</div>
+     <div class="rv-feel">${esc(cur.feel||'')}</div>
+    </section>
+    <div class="rv-adj"><button class="btn ghost" type="button" data-adj="-0.5" aria-label="Sänk farten 0,5 km/h">−0,5<span class="adj-u"> km/h</span></button><button class="btn ghost" type="button" data-adj="0.5" aria-label="Höj farten 0,5 km/h">+0,5<span class="adj-u"> km/h</span></button></div>
+    <section class="rv-next k-${nx?nx.kind:'cool'}" id="runNext">${nx?`<div class="nx-row"><span class="nx-lab"><span class="nx-pre">Nästa</span><span class="nx-now">Byt fart nu</span></span><span class="nx-in num" id="runNextIn">om ${mmss(left)}</span></div>
+      <div class="nx-row"><strong class="nx-v num">${runSpeedBig(nx,band)} <small>${band?'km/h':'/km'}</small>${band?` <span class="nx-i">· ${decStr(nx.inc)} %</span>`:''}</strong><span class="nx-n">${esc(nx.name)} · ${durTxt(nx.sec)}</span></div>`
+      :'<div class="nx-row"><strong>Sista delen</strong><span class="nx-in num" id="runNextIn">klar om '+mmss(left)+'</span></div>'}</section>
+    ${s.ask?`<div class="note stack rv-ask"><strong>${mmss(left)} kvar av den här delen.</strong><div class="row"><button class="btn sm" type="button" data-skipmode="carry">Lägg resten på nästa del</button><button class="btn ghost sm" type="button" data-skipmode="drop">Hoppa över resten</button></div></div>`:''}
+    <section class="card rv-line">${runProfileHTML(segs,{live:true,el:el/1000,band})}<div class="row between small muted num rv-el"><span>Gått <strong id="runEl">${mmss(Math.floor(el/1000))}</strong></span><span>Kvar <strong id="runLeftAll">${mmss(Math.max(0,segs[segs.length-1].to-Math.floor(el/1000)))}</strong></span></div></section>
+    ${'wakeLock' in navigator?'':'<p class="small muted rv-wl">Håll skärmen tänd under passet</p>'}
+   </div>`);
+  stickyBar(`<button class="btn ghost" type="button" data-runskip>Hoppa till nästa</button><button class="btn run" type="button" data-runplay>${run?'Paus':s.startedAt==null?'Starta':'Fortsätt'}</button>`);
+  runLive(s,r,pos);
 }
+/* Uppdaterar det som ändras varje sekund utan att rita om vyn: nedräkning, Nästa, markering de sista 10 s och tidslinjen. */
+function runLive(s,r,pos){const left=Math.ceil(pos.left/1000),run=runRunning(s),el=runElapsed(s,Date.now()),T=s.durs.reduce((a,b)=>a+b,0)||1;
+  const t=$('#runT');if(t)t.textContent=mmss(left);
+  const nx=$('#runNext'),hasNext=s.durs.slice(pos.i+1).some(d=>d>0);
+  if(nx){nx.classList.toggle('soon',run&&hasNext&&left<=10);nx.classList.toggle('now',run&&hasNext&&left<=5)}
+  const ni=$('#runNextIn');if(ni)ni.textContent=hasNext?(run&&left<=5?'byt nu':'om '+mmss(left)):'klar om '+mmss(left);
+  const x=Math.min(1,el/T),cr=$('#rpClipR');if(cr)cr.setAttribute('width',(x*1000).toFixed(1));const mk=$('#rpMark');if(mk)mk.style.left=(x*100).toFixed(2)+'%';
+  const e=$('#runEl');if(e)e.textContent=mmss(Math.floor(el/1000));const la=$('#runLeftAll');if(la)la.textContent=mmss(Math.max(0,Math.ceil((T-el)/1000)))}
 /* Räknar om läget från tidsstämplarna. back = efter bakgrund/omladdning: missade delbyten visas med en toast. */
 function runSync(back){const s=runState;if(!s){clearInterval(runT);runT=null;return}const r=runR();if(!r){runState=null;runSave();clearInterval(runT);return}
   const now=Date.now(),pos=runPos(s.durs,runElapsed(s,now));
@@ -4698,8 +4786,8 @@ function runSync(back){const s=runState;if(!s){clearInterval(runT);runT=null;ret
   if(pos.i!==s.lastIdx){const jumped=pos.i-s.lastIdx;s.lastIdx=pos.i;s.pre=-1;s.ask=false;runSave();
     if(back||jumped>1)toast(`Du är nu i: ${segText(r,pos.i)} – ${runSpeedTxt(r,runPlanAt(r,s,pos.i))}`);else signal('seg');
     if(sheetCtx&&sheetCtx.t==='run')renderRun();return}
-  const el=$('#runT'),left=Math.ceil(pos.left/1000);if(el)el.textContent=mmss(left);
-  if(runRunning(s)&&left<=7&&left>0&&s.pre!==pos.i&&r.seg[pos.i+1]){s.pre=pos.i;runSave();const pa=$('#preA');if(pa)pa.hidden=false;signal('pre')}}
+  runLive(s,r,pos);const left=Math.ceil(pos.left/1000);
+  if(runRunning(s)&&left<=5&&left>0&&s.pre!==pos.i&&s.durs.slice(pos.i+1).some(d=>d>0)){s.pre=pos.i;runSave();signal('pre')}}
 function runFinish(now){const s=runState,r=runR();clearInterval(runT);runT=null;const act=r?runActual(s,r,now):[],rid=s.rid;runState=null;runSave();wakeSync();signal('done');if(r)showRunLog(rid,null,act);else closeSheet()}
 let mobState=null;
 function showMobility(id){
@@ -5112,7 +5200,7 @@ function bind(root){
     markDirty('log',monthOf(l.date));closeSheet();toast('Passet är uppdaterat')});
   root.querySelectorAll('[data-saverun]').forEach(b=>b.onclick=()=>saveRun(runById(b.dataset.saverun)));
   root.querySelectorAll('[data-runstart]').forEach(b=>b.onclick=()=>startRun(b.dataset.runstart));
-  root.querySelectorAll('[data-runplay]').forEach(b=>b.onclick=()=>{const s=runState;if(!s)return;audioInit();const now=Date.now();runRunning(s)?runPauseAt(s,now):runPlay(s,now);runSave();wakeSync();b.textContent=runRunning(s)?'Pausa':'Fortsätt';runSync(false)});
+  root.querySelectorAll('[data-runplay]').forEach(b=>b.onclick=()=>{const s=runState;if(!s)return;audioInit();const now=Date.now();runRunning(s)?runPauseAt(s,now):runPlay(s,now);runSave();wakeSync();b.textContent=runRunning(s)?'Paus':'Fortsätt';runSync(false)});
   root.querySelectorAll('[data-runskip]').forEach(b=>b.onclick=()=>{const s=runState,r=runR();if(!s||!r)return;const now=Date.now(),p=runPos(s.durs,runElapsed(s,now));
     if(p.left>10000&&r.seg[p.i+1]&&s.startedAt!=null){s.ask=true;runSave();renderRun();return}runSkip(s,now,'drop');runSave();runSync(false)});
   root.querySelectorAll('[data-skipmode]').forEach(b=>b.onclick=()=>{const s=runState;if(!s)return;const now=Date.now(),p=runPos(s.durs,runElapsed(s,now)),carry=b.dataset.skipmode==='carry';s.ask=false;runSkip(s,now,carry?'carry':'drop');runSave();runSync(false);if(carry&&p.left>0)toast(`${mmss(Math.round(p.left/1000))} läggs på nästa del`)});

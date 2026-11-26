@@ -74,7 +74,7 @@ function serve() {
   // 2. I appen: bakgrund, rotation, omladdning
   await page.evaluate(() => { S.settings.v10 = 11.5; S.settings.comebackUntil = null; S.settings.runPref = 'band'; startRun('r-prog') });
   await page.click('[data-runplay]'); await page.waitForTimeout(300);
-  ok(await page.textContent('[data-runplay]') === 'Pausa', 'Starta → Pausa');
+  ok(await page.textContent('[data-runplay]') === 'Paus', 'Starta → Paus');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rs-run')));
   ok(saved && saved.rid === 'r-prog' && saved.startedAt && saved.pausedAt === null, 'state sparas i localStorage vid start');
   // Bakgrund: 5 min 30 s utan att intervallet hinner köra
@@ -84,14 +84,14 @@ function serve() {
   ok(/Del 2 av 6/.test(t), 'tillbaka från bakgrunden: hoppar till del 2');
   ok(/Du är nu i: \+0,5 km\/h – 9,0 km\/h/.test(toastT), `toast om missat delbyte: "${toastT}"`);
   ok(/^4:[23]\d$/.test(await page.textContent('#runT')), `nedräkning härledd från elapsed: ${await page.textContent('#runT')}`);
-  ok(await page.textContent('[data-runplay]') === 'Pausa', 'passet pausades inte automatiskt i bakgrunden');
+  ok(await page.textContent('[data-runplay]') === 'Paus', 'passet pausades inte automatiskt i bakgrunden');
   // Rotation: samma DOM-nod, timern fortsätter
   await page.evaluate(() => { document.getElementById('runT').dataset.mark = '1' });
   const before = await page.textContent('#runT');
   await page.setViewportSize({ width: 844, height: 390 }); await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.evaluate(() => window.__adv(3000)); await page.waitForTimeout(400);
   ok(await page.evaluate(() => document.getElementById('runT').dataset.mark === '1'), 'rotation: passvyn ritas inte om (samma element)');
-  ok(await page.textContent('#runT') !== before && await page.textContent('[data-runplay]') === 'Pausa', `rotation: timern fortsätter (${before} → ${await page.textContent('#runT')})`);
+  ok(await page.textContent('#runT') !== before && await page.textContent('[data-runplay]') === 'Paus', `rotation: timern fortsätter (${before} → ${await page.textContent('#runT')})`);
   ok(await page.evaluate(() => getComputedStyle(document.querySelector('.runmain')).display === 'grid' && getComputedStyle(document.querySelector('.runmain')).gridTemplateColumns.split(' ').length === 2), 'liggande layout med CSS (två kolumner i samma vy)');
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || '/tmp', 'lopetimer-liggande.png') });
   await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(200);
@@ -110,7 +110,7 @@ function serve() {
   t = await page.textContent('#sheetBody');
   const st2 = await page.evaluate(() => runState && ({ rid: runState.rid, startedAt: runState.startedAt, pausedTotalMs: runState.pausedTotalMs, lastIdx: runState.lastIdx }));
   ok(st2 && st2.rid === 'r-prog' && st2.startedAt === st1.startedAt && st2.pausedTotalMs === st1.pausedTotalMs, 'state återställs från localStorage efter omladdning');
-  ok(/Progressivt pass/.test(t) && /Del 2 av 6/.test(t) && await page.textContent('[data-runplay]') === 'Pausa', `passvyn öppnas igen och går vidare (${await page.textContent('#runT')} kvar av del 2)`);
+  ok(/Progressivt pass/.test(t) && /Del 2 av 6/.test(t) && await page.textContent('[data-runplay]') === 'Paus', `passvyn öppnas igen och går vidare (${await page.textContent('#runT')} kvar av del 2)`);
   ok(/^3:2\d$/.test(await page.textContent('#runT')), 'minuten under omladdningen räknas med');
   // Hela passet går klart i bakgrunden → loggformuläret
   await page.evaluate(() => { window.__adv(40 * 60000); document.dispatchEvent(new Event('visibilitychange')) }); await page.waitForTimeout(300);
