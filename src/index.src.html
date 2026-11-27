@@ -345,7 +345,9 @@ input[type=number],input[type=text],input[type=search],input[type=date],select,t
 .updnote{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;background:var(--accent-soft);color:var(--ink);font-size:14px;font-weight:500}
 .exacts .linkbtn{min-height:44px;display:inline-flex;align-items:center}
 .sets .wide{grid-column:2 / span 2}
-.toast.on{display:block}
+.toast.on{display:block}.toast.act{display:flex;align-items:center;gap:12px;pointer-events:auto}
+.toastbtn{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;min-height:44px;padding:0 4px;cursor:pointer}
+.dayedit .opt .cons{display:block;margin-top:2px}
 .mobtimer{font-family:var(--display);font-size:56px;letter-spacing:-.02em;font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 /* Fartprofil (översikt och tidslinje) */
 .rprof{position:relative;color:var(--muted)}
@@ -666,7 +668,7 @@ const BOOT_AT=Date.now();
 /* Toasten ligger ovanför fliklisten/knappraden (och vilotimern), så att den inte täcker rubriken och Inställningar-knappen. */
 function toastPos(){try{const t=$('#toast'),bar=document.querySelector('.sticky')||document.querySelector('.tabs'),rt=$('#restTimer');let top=bar?bar.getBoundingClientRect().top:innerHeight;
     if(rt&&rt.classList.contains('on'))top=Math.min(top,rt.getBoundingClientRect().top);t.style.bottom=Math.max(12,innerHeight-top+10)+'px'}catch(e){}}
-function toast(msg){const t=$('#toast');t.textContent=msg;toastPos();
+function toast(msg){const t=$('#toast');t.classList.remove('act');t.textContent=msg;toastPos();
   t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),Math.max(2200,Math.min(5000,String(msg).length*60)))}
 /* Tempo bara när raden har tempo angivet. Gissat tempo (e[7]) räknas inte som angivet och visas inte. */
 function exTempo(e){return e&&e[4]&&!e[7]?String(e[4]).trim():''}
@@ -725,7 +727,8 @@ function baseSave(){try{localStorage.setItem(BK,JSON.stringify({uid:S.uid||null,
 (function(){try{const v=JSON.parse(localStorage.getItem(DK)||'null');if(v&&Array.isArray(v.k)&&(v.uid||null)===(S.uid||null)){v.k.forEach(k=>dirty.add(k));(v.nm||[]).forEach(k=>noMerge.add(k))}
   const b=JSON.parse(localStorage.getItem(BK)||'null');if(b&&b.days&&typeof b.days==='object'&&(b.uid||null)===(S.uid||null))dayBase=b.days}catch(e){}})();
 function monthOf(k){return k.slice(0,7)}
-function markDirty(kind,month){dirty.add(kind==='settings'?'settings':kind+'-'+month);lsSave();dirtySave();clearTimeout(saveTimer);saveTimer=setTimeout(flush,800);updSync()}
+let SIM=false; // simulering av en ändring (konsekvensrader i Ändra-arket) – sparar ingenting
+function markDirty(kind,month){if(SIM)return;dirty.add(kind==='settings'?'settings':kind+'-'+month);lsSave();dirtySave();clearTimeout(saveTimer);saveTimer=setTimeout(flush,800);updSync()}
 async function flush(){
   if(SB&&SBUSER) return flushSB();
   if(!DB||!UID||saving)return; saving=true;
@@ -1410,7 +1413,8 @@ const progLoggedMax=()=>progLogs().reduce((m,x)=>Math.max(m,x.i),-1);
 function progPos(){if(!DP_SEQ.length)return -1;
   const id=progBase(S.settings.lastProg),lp=DP_SEQ.findIndex(w=>w.i===id),L=progLogs(),last=L[L.length-1],li=L.reduce((m,x)=>Math.max(m,x.i),-1);
   if(lp<0&&id&&progWarned!==id){progWarned=id;console.warn('lastProg "'+S.settings.lastProg+'" finns inte i programmet – '+(last?'fortsätter från senaste programloggen ('+progBase(last.l.wid)+')':'börjar från första passet'))}
-  return Math.max(lp,li)}
+  const since=+S.settings.progSince||0,sk=(S.settings.progSkips||[]).filter(x=>x&&x.wid&&(x.ts||0)>=since).reduce((m,x)=>Math.max(m,DP_SEQ.findIndex(w=>w.i===progBase(x.wid))),-1);
+  return Math.max(lp,li,sk)}
 /* Efter att ett programpass tagits bort: platsen räknas om från loggen (högsta kvarvarande programpass) i stället för att
    stega bakåt. Finns inget kvar används värdet före passet, annars passet före det borttagna. */
 function progAfterRemove(l,before){const st=S.settings,m=progLoggedMax(),bi=before?DP_SEQ.findIndex(w=>w.i===progBase(before)):-1;
@@ -2319,10 +2323,13 @@ function progPlaceHTML(){if(!DP_SEQ.length)return '';const i=progPos();if(i<0)re
   const w=DP_SEQ[i],L=progLogs(true).filter(x=>x.i===i),d=L.length?L[L.length-1].l.date:null;
   return `<div class="stack" style="gap:6px;margin-top:8px"><div class="small"><strong>Plats i programmet:</strong> ${esc(progLabel(w))}${d?` (senast kört ${esc(shortDate(d))})`:''} · nästa ${esc(progLabel(programNext()))}</div>
    <button class="btn ghost sm" type="button" data-progfix>Rätta platsen</button><p class="small muted" style="margin:0">Sätter platsen till ditt senast loggade programpass.</p></div>`}
-function seqHistHTML(){const L=(S.settings.seqLog||[]).slice().reverse();if(!L.length&&!DP_SEQ.length)return '';const tp=x=>{const t=weekTemplate();return typeof x==='number'?({s:'styrka',r:'löpning',m:'rörlighet'})[t[((x%7)+7)%7]]||'':''};
+/* Hoppade pass (Kör nästa pass istället) – visas i Schemahistorik, räknas aldrig som träning. */
+function progSkipsHTML(){const K=(S.settings.progSkips||[]).slice(-10).reverse();if(!K.length)return '';
+  return `<div class="stack" style="gap:4px;margin-top:8px"><div class="small"><strong>Hoppade pass</strong></div>${K.map(x=>`<div class="small muted num">Hoppade över ${esc(x.wid?shortProg(WBYID[progBase(x.wid)]||{t:x.wid}):(x.focus||'styrkepass'))}, ${esc(shortDate(x.date))}</div>`).join('')}</div>`}
+function seqHistHTML(){const L=(S.settings.seqLog||[]).slice().reverse();if(!L.length&&!DP_SEQ.length&&!(S.settings.progSkips||[]).length)return '';const tp=x=>{const t=weekTemplate();return typeof x==='number'?({s:'styrka',r:'löpning',m:'rörlighet'})[t[((x%7)+7)%7]]||'':''};
   const pr=a=>`${a[0]==null?'–':esc(String(a[0]))+' ('+esc(tp(a[0]))+')'} · ${a[1]?esc(a[1]):'–'}`;
   return `<details class="card seqhist"><summary><strong>Schemahistorik</strong> <span class="small muted">${DP_SEQ.length&&progPos()>=0?'plats '+esc(progLabel(DP_SEQ[progPos()]))+(L.length?' · ':''):''}${L.length?`senaste ${L.length} ändringarna av passkön`:''}</span></summary>
-   ${progPlaceHTML()}<div class="list" style="margin-top:8px">${L.map(e=>`<div class="li" style="cursor:default;display:block"><div><strong>${esc(e.why||'')}</strong></div>
+   ${progPlaceHTML()}${progSkipsHTML()}<div class="list" style="margin-top:8px">${L.map(e=>`<div class="li" style="cursor:default;display:block"><div><strong>${esc(e.why||'')}</strong></div>
     <div class="small muted num">${esc(new Date(e.t).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.dev||'')}</div>
     <div class="small muted num">Plats och senast avbockad: ${pr(e.from||[])} → ${pr(e.to||[])}</div></div>`).join('')}</div></details>`}
 /* Välj dagens pass själv: dagens plan sätts och dagen byter plats med närmaste dag av den typen, så att veckan har lika många pass av varje typ. */
@@ -3057,15 +3064,15 @@ function viewToday(){
        result:[doneW.min?decStr(doneW.min)+' min':'',+doneW.vol?Math.round(+doneW.vol).toLocaleString('sv-SE')+' kg':'',KAND[doneW.kand]?KAND[doneW.kand].toLowerCase():''].filter(Boolean).join(' · '),
        body:`${workoutSummary(w)}<div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
        <div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Öppna passet</button>${canResume(doneW)&&!active?`<button class="btn ghost sm" type="button" data-resumelog="${doneW.ts}">Fortsätt passet</button>`:''}<button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`})
-    :`<section class="card hero pass t-s stack" aria-labelledby="h-pass">${lowToggle()}
+    :`<section class="card hero pass t-s stack" aria-labelledby="h-pass">${lowNote()}
       <div class="row between"><span class="kind s">Dagens pass · styrka</span></div>
       ${!w&&swapped(gen)?swapBackHTML(gen):''}
       ${w?`<h2 id="h-pass">${esc(w.t?wTitle(w):'Styrkepass')}</h2>${gk?gentleRowS(gOn):''}${doneW?'':passLineHTML(w,gen)}${doneW?'':[w.why,(kgEase()||{}).why].filter(Boolean).map(t=>`<div class="why1">${esc(t)}</div>`).join('')}${workoutSummary(w)}
       <div class="small muted">${aw.x.slice(0,5).map(e=>esc(e[0])+(exTempo(e)?` <span class="tempotag num">tempo ${esc(exTempo(e))}</span>`:'')).join(' · ')}${aw.x.length>5?' …':''}</div>
       ${doneW?`<div class="donebox">✓ Klart för idag${doneW.min?` · ${doneW.min} min`:''}${doneW.vol?` · ${Math.round(doneW.vol).toLocaleString('sv-SE')} kg totalt`:''}</div><div class="row"><button class="btn ghost sm" type="button" data-slog="${doneW.ts}">Visa passet</button>${canResume(doneW)&&!active?`<button class="btn ghost sm" type="button" data-resumelog="${doneW.ts}">Fortsätt passet</button>`:''}<button class="linkbtn small tall" type="button" data-open="${w.i}">Visa passmallen</button></div>`
-      :`<div class="row">${active?resumeBtn():`<button class="btn big" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-swappass>Byt</button></div><div class="row between"><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa övningar</button></div>`}`
-      :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button></div>`}
-      ${did('styrka')?'':skipBox()}
+      :`${progSkipToday()?`<div class="small muted">Du hoppade över ${esc(progSkipToday().mode==='g'?progSkipToday().label:shortProg(WBYID[progSkipToday().wid]))} idag. <button class="linkbtn small tall" type="button" data-progskipundo>Ångra</button></div>`:''}
+      <div class="row">${active?resumeBtn():`<button class="btn big" type="button" data-start="${w.i}">Starta passet</button>`}<button class="btn ghost" type="button" data-dayedit>Ändra</button></div><div class="row between"><button class="linkbtn small tall" type="button" data-open="${w.i}">Visa övningar</button></div>`}`
+      :`<p class="muted">Inga pass matchar valet. Tryck ”Byt pass” och välj ett annat fokus, eller fler program i inställningarna.</p><div class="row"><button class="btn ghost" type="button" data-swappass>Byt pass</button><button class="btn ghost" type="button" data-dayedit>Ändra</button></div>`}
     </section>`;
   } else if(plan==='r'){
     const list0=rankRuns(), list=d.low||pauseBackOn()?['r-fartlek','r-lat','r-5d','r-lugn'].map(id=>RUNS.find(x=>x.id===id)).filter(r=>r&&list0.includes(r)).concat(list0.filter(r=>!['r-fartlek','r-lat','r-5d','r-lugn'].includes(r.id))):list0, doneRun=(()=>{const x=done.find(l=>l.type==='löpning');if(x)inHero.add(x);return x})(), r0=(doneRun&&RUNS.find(x=>x.id===doneRun.rid))||list[runIdx%list.length], rGk=!doneRun&&!!painNow(), rOn=rGk&&gentleSel('r'), r=rOn?gentleRun(r0):r0, sp=speedHint(), prev=lastRun(r.id);
@@ -3085,11 +3092,11 @@ function viewToday(){
 `;
     hero=doneRun?doneCard('pass:'+doneRun.ts,{id:'h-run',label:'Dagens pass · löpning',title:r.t,
        result:[doneRun.min?decStr(doneRun.min)+' min':'',doneRun.km?decStr(doneRun.km)+' km':'',doneRun.avg?fmtK(+doneRun.avg)+' km/h snitt':'',doneRun.rpe?doneRun.rpe+'/10':''].filter(Boolean).join(' · '),body:runBody})
-    :`<section class="card hero run pass t-r stack" aria-labelledby="h-run">${lowToggle()}
+    :`<section class="card hero run pass t-r stack" aria-labelledby="h-run">${lowNote()}
       <div class="row between"><span class="kind r">Dagens pass · löpning</span></div>
       <h2 id="h-run">${esc(r.t)}</h2>
       ${rGk?gentleRowR(rOn):''}
-      ${runBody}${skipBox()}
+      ${runBody}<div class="row"><button class="btn ghost" type="button" data-dayedit>Ändra</button></div>
     </section>`;
   } else if(plan==='v'){
     const m=mobFor(new Date());
@@ -3111,7 +3118,7 @@ function viewToday(){
       <div class="row"><button class="btn ghost sm" type="button" data-daychoice>Byt dagens pass</button><button class="btn ghost sm" type="button" data-dayplan="s">Styrka idag</button><button class="btn ghost sm" type="button" data-dayplan="r">Löpning idag</button></div></details>
       ${d.plan&&seqInit().res===k?'<button class="btn ghost sm" type="button" data-undoplan>Återställ dagens plan</button>':''}`})
     :`<section class="card hero pass t-m stack" aria-labelledby="h-mob">
-      ${lowToggle()}<span class="kind m">Återhämtning</span>
+      ${lowNote()}<span class="kind m">Återhämtning</span>
       <h2 id="h-mob">Rörlighet och en lång promenad</h2>
       <p style="margin:0" class="muted">Vilodag från tung träning. Rör dig ändå: promenad, lite yoga eller stretch.</p>
       <div class="row"><button class="btn mob" type="button" data-mob="${m.id}">Starta rörlighet: ${esc(m.t)} (${m.min} min)</button>
@@ -3119,7 +3126,7 @@ function viewToday(){
       <details><summary>Sugen på att träna ändå?</summary><p class="small muted" style="margin:8px 0">Kör gärna ett extra pass. Det räknas som bonus – nästa planerade pass ligger kvar och programmet fortsätter i ordning.</p>
       <div class="row"><button class="btn ghost sm" type="button" data-daychoice>Byt dagens pass</button><button class="btn ghost sm" type="button" data-dayplan="s">Styrka idag</button><button class="btn ghost sm" type="button" data-dayplan="r">Löpning idag</button></div></details>
       ${d.plan&&seqInit().res===k?'<button class="btn ghost sm" type="button" data-undoplan>Återställ dagens plan</button>':''}
-      ${seqInit().res===k?'':skipBox()}
+      ${seqInit().res===k?'':'<div class="row"><button class="btn ghost" type="button" data-dayedit>Ändra</button></div>'}
     </section>`;
   }
   const mobToday=mobFor(new Date());
@@ -3250,6 +3257,53 @@ async function doBackup(){try{await navigator.clipboard.writeText(JSON.stringify
 /* "Inte på topp": bara idag (days.low) eller några dagar (settings.pause). Öppnar ett ark med valen. */
 function lowToggle(){const d=day(),on=!!d.low||!!pauseNow();
   return `<div class="row between" style="flex-wrap:nowrap"><span class="small muted">${d.low?'Lättare variant idag – lyssna på kroppen.':pauseBackOn()?'Första veckan tillbaka: lite lättare.':''}</span><button class="chip" type="button" data-pause aria-pressed="${on}">${S.settings.cycle?'Mens eller inte på topp':'Inte på topp'}</button></div>`}
+/* ---------- Ändra dagens pass ----------
+   Kör nästa pass istället: dagens programpass hoppas över (settings.progSkips, nytt fält) och platsen flyttas dit, så att nästa
+   pass blir dagens. Veckoschemat (seq) ändras inte. Hoppade pass loggas inte som träning. Ångra samma dag: settings.progSkipUndo. */
+const shortProg=w=>w&&w.p==='DP'&&w.s!=null?`Split ${w.s} · v${w.wk} · d${w.d}`:(w&&(w.t?wTitle(w):w.focus))||'Styrkepass';
+const shortVD=w=>w&&w.p==='DP'&&w.s!=null?`v${w.wk} d${w.d}`:shortProg(w);
+function dayLab(off){const x=aheadInfo(off);if(x.typ==='s')return x.w?shortProg(x.w):x.focus||'Styrka';return {r:'Löpning',m:'Rörlighet',v:'Vila',done:'Klart'}[x.typ]||'Vila'}
+function simulate(fn,read){const s0=S.settings,d0=S.days,sc=sugCache,si=sugIdx,sf=sugFocus;SIM=true;S.settings=JSON.parse(JSON.stringify(s0));S.days=JSON.parse(JSON.stringify(d0));sugCache=null;
+  try{fn();return read()}catch(e){return ''}finally{S.settings=s0;S.days=d0;sugCache=sc;sugIdx=si;sugFocus=sf;SIM=false}}
+const genMode=()=>S.settings.mode==='gen'||!WORKOUTS.length;
+const progSkipToday=()=>{const u=S.settings.progSkipUndo;return u&&u.date===today()?u:null};
+function applyNextInstead(){const st=S.settings,t=today();
+  if(genMode()){const w=genCurrent();st.progSkipUndo={date:t,mode:'g',splitIdx:st.splitIdx||0,genCur:st.genCur?JSON.parse(JSON.stringify(st.genCur)):null,label:w?shortProg(w):''};
+    st.progSkips=[...(st.progSkips||[]),{focus:w&&w.focus||'',date:t,ts:Date.now()}].slice(-100);st.splitIdx=(st.splitIdx||0)+1;st.genCur=null;return {from:w,to:genCurrent()}}
+  const cur=programNext();st.progSkipUndo={date:t,mode:'p',lastProg:st.lastProg,progSince:st.progSince??null,wid:cur.i};
+  st.progSkips=[...(st.progSkips||[]),{wid:cur.i,date:t,ts:Date.now()}].slice(-100);st.lastProg=cur.i;sugCache=null;sugIdx=0;sugFocus='';return {from:cur,to:programNext()}}
+function nextInstead(){if(S.settings.mode!=='program'&&!genMode())return;const r=applyNextInstead();markDirty('settings');closeSheet();render();
+  toastUndo(`Hoppade över ${shortVD(r.from)} – idag: ${shortVD(r.to)}`,undoNextInstead)}
+function undoNextInstead(){const u=progSkipToday(),st=S.settings;if(!u)return;
+  if(u.mode==='g'){st.splitIdx=u.splitIdx;st.genCur=u.genCur;if(st.genCur)regW(st.genCur);st.progSkips=(st.progSkips||[]).filter((x,i,a)=>!(i===a.length-1&&!x.wid&&x.date===u.date))}
+  else{st.lastProg=u.lastProg;if(u.progSince==null)delete st.progSince;else st.progSince=u.progSince;const i=(st.progSkips||[]).map(x=>x.wid).lastIndexOf(u.wid);if(i>=0)st.progSkips=st.progSkips.filter((_,j)=>j!==i)}
+  st.progSkipUndo=null;sugCache=null;sugIdx=0;markDirty('settings');render();toast('Ångrat – dagens pass är tillbaka')}
+function toastUndo(msg,fn){const t=$('#toast');t.innerHTML=`<span>${esc(msg)}</span><button class="toastbtn" type="button">Ångra</button>`;toastPos();t.classList.add('on','act');
+  t.querySelector('button').onclick=()=>{t.classList.remove('on','act');clearTimeout(toast._t);fn()};clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on','act'),7000)}
+/* Vad har ändrats idag (för "Tillbaka till schemat"). */
+function dayChanges(){const d=day(),out=[];const lab={s:'styrka',r:'löpning',m:'rörlighet',v:'vila'};
+  if(d.plan)out.push('Dagen ändrad till '+(lab[d.plan]||d.plan));if(progSkipToday())out.push('Hoppade över '+(progSkipToday().mode==='g'?progSkipToday().label:shortProg(WBYID[progSkipToday().wid])));
+  if(plannedFor(new Date())==='s'&&swapped(genMode()))out.push('Annat pass valt i Byt');return out}
+function showDayEdit(){const t=today(),T=plannedFor(new Date()),strength=T==='s',st=S.settings,canNext=strength&&(st.mode==='program'&&DP_SEQ.length||genMode());
+  const nm={s:'styrkedag',r:'löpdag',m:'rörlighetsdag'}[T]||'dag';
+  const nextTxt=canNext?simulate(applyNextInstead,()=>`Idag: ${dayLab(0)} · Imorgon: ${dayLab(1)}`):'';
+  const restTxt=simulate(()=>{const d=day(t);d.plan='v'},()=>`Idag: vila · Imorgon: ${dayLab(1)}`);
+  const skipTxt=simulate(()=>{const q=seqInit();q.pos+=1;q.res=t;q.doneType=T;day(t).did='skip'},()=>{let nx=null;for(let i=1;i<=14;i++){if(aheadInfo(i).typ===T){nx=i;break}}
+    return `Schemat går vidare. Passet väntar till nästa ${nm}${nx?` (${wdName(dkey(addDays(new Date(),nx)))})`:''}. Imorgon: ${dayLab(1)}`});
+  const ch=dayChanges(),cur=strength?(genMode()?(genCurrent()&&shortProg(genCurrent())):shortProg(programNext())):'';
+  const opt=(attr,title,cons)=>`<button class="opt" type="button" ${attr}><strong>${title}</strong><span class="small muted cons">${esc(cons)}</span></button>`;
+  openSheet(`<header class="top"><div><div class="date">${strength?'Dagens styrkepass':T==='r'?'Dagens löppass':'Dagens rörlighet'}</div><h1 class="h1sm">Ändra dagens pass</h1></div><button class="btn ghost sm" type="button" data-close>Stäng</button></header>
+   <div class="opts dayedit">
+    ${canNext?opt('data-nextinstead','Kör nästa pass istället',nextTxt):''}
+    ${strength?opt('data-editswap','Välj ett annat pass idag',genMode()?`Annat fokus idag · schemat står kvar på ${cur}`:`Valfritt pass från biblioteket · programmet står kvar på ${cur}`):T==='r'?opt('data-editswaprun','Välj ett annat löppass idag','Ett annat förslag · löpschemat står kvar'):''}
+    ${opt('data-editrest','Vila idag – passet väntar',restTxt)}
+    ${opt('data-editskip','Stryk dagen',skipTxt)}
+    ${opt('data-editlow',S.settings.cycle?'Lättare idag / Mens eller inte på topp':'Lättare idag / Inte på topp','Ett set mindre och lägre vikt idag, eller pausa några dagar.')}
+    ${ch.length?opt('data-editback','Tillbaka till schemat',ch.join(' · ')):''}
+   </div>`);
+}
+function undoDayEdits(){const d=day();if(progSkipToday())undoNextInstead();if(d.plan)setPlan(today(),null);if(plannedFor(new Date())==='s'&&swapped(genMode()))swapBack();sugCache=null;render();toast('Tillbaka till schemat')}
+function lowNote(){const d=day();return d.low?'<div class="small muted">Lättare variant idag – lyssna på kroppen.</div>':pauseBackOn()?'<div class="small muted">Första veckan tillbaka: lite lättare.</div>':''}
 function skipBox(){
   return `<div class="skiprow stack" style="gap:6px;border-top:1px solid var(--line);padding-top:12px">
    <div class="row"><button class="btn ghost sm" type="button" data-dayplan="v">Skjut upp till imorgon</button><button class="btn ghost sm" type="button" data-skipday>Hoppa över idag</button>${day().plan?'<button class="btn ghost sm" type="button" data-undoplan>Återställ</button>':''}</div>
@@ -5180,6 +5234,17 @@ function bind(root){
   root.querySelectorAll('[data-low]').forEach(b=>b.onclick=()=>{const d=day();setDay(today(),{low:!d.low});toast(!d.low?'Normal dag':'Lättare pass idag: ett set mindre, ca 10 % lägre vikt och enklare upplägg')});
   root.querySelectorAll('[data-restore]').forEach(b=>b.onclick=restoreToday);
   root.querySelectorAll("[data-swappass]").forEach(b=>b.onclick=showSwap);
+  root.querySelectorAll('[data-dayedit]').forEach(b=>b.onclick=showDayEdit);
+  root.querySelectorAll('[data-nextinstead]').forEach(b=>b.onclick=nextInstead);
+  root.querySelectorAll('[data-progskipundo]').forEach(b=>b.onclick=undoNextInstead);
+  root.querySelectorAll('[data-editswap]').forEach(b=>b.onclick=showSwap);
+  root.querySelectorAll('[data-editswaprun]').forEach(b=>b.onclick=()=>{runIdx++;closeSheet();render()});
+  root.querySelectorAll('[data-editrest]').forEach(b=>b.onclick=()=>{swap=null;closeSheet();setDay(today(),{plan:'v'});toastUndo('Vila idag – passet väntar till imorgon',()=>{setPlan(today(),null);render()})});
+  root.querySelectorAll('[data-editskip]').forEach(b=>b.onclick=()=>{closeSheet();const d=day(),q=seqInit(),t=today();if(q.res===t)return;
+    S.settings.seqUndo={date:t,pos:q.pos,res:q.res??null,doneType:q.doneType??null,plan:d.plan||null};if(d.plan)setPlan(t,null);
+    if(!resolveDay('skip')){S.settings.seqUndo=null;return render()}markDirty('settings');render();toastUndo(`Dagen struken – imorgon: ${dayLab(1)}`,()=>{if(undoSkip()){render();toast('Ångrat – dagens pass är tillbaka')}})});
+  root.querySelectorAll('[data-editlow]').forEach(b=>b.onclick=()=>{pz=null;showPause()});
+  root.querySelectorAll('[data-editback]').forEach(b=>b.onclick=()=>{closeSheet();undoDayEdits()});
   root.querySelectorAll('[data-swback]').forEach(b=>b.onclick=swapBack);
   root.querySelectorAll('[data-swfocus]').forEach(b=>b.onclick=()=>{sugFocus=b.dataset.swfocus;sugIdx=0;sugCache=null;closeSheet()});
   root.querySelectorAll('[data-swgen]').forEach(b=>b.onclick=()=>{keepOrig();S.settings.genCur=genWorkout(b.dataset.swgen);markDirty('settings');regW(S.settings.genCur);closeSheet()});
